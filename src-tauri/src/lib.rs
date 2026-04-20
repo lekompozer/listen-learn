@@ -130,8 +130,8 @@ async fn copy_files_to_playlist_dir(
 pub fn run() {
     let builder = tauri::Builder::default();
 
-    // tauri-plugin-localhost only needed in production to serve ../out/ at port 3001.
-    // In dev mode, Next.js already runs on port 3001 — adding the plugin would cause a port conflict.
+    // tauri-plugin-localhost only needed in production to serve ../out/ at port 3002.
+    // In dev mode, Next.js already runs on port 3002 — adding the plugin would cause a port conflict.
     #[cfg(not(dev))]
     let builder = builder.plugin(tauri_plugin_localhost::Builder::new(3002).build());
 
@@ -145,12 +145,12 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            // In production, tauri-plugin-localhost serves ../out/ via HTTP at port 3001.
+            // In production, tauri-plugin-localhost serves ../out/ via HTTP at port 3002.
             // Using ExternalUrl makes window.location.origin = "http://localhost:3002"
-            // which is the same origin as dev mode — YouTube IFrame API accepts this.
-            // Both dev and prod load via http://localhost:3001.
-            // In prod: tauri-plugin-localhost serves ../out/ at port 3001.
-            // In dev: Next.js dev server runs at port 3001 (started by beforeDevCommand).
+            // which is the same origin as dev mode.
+            // Both dev and prod load via http://localhost:3002.
+            // In prod: tauri-plugin-localhost serves ../out/ at port 3002.
+            // In dev: Next.js dev server runs at port 3002 (started by beforeDevCommand).
             // WebviewUrl::App("index.html") would load /index.html which 404s in Next.js dev server.
             let webview_url = WebviewUrl::External(
                 "http://localhost:3002".parse().expect("invalid localhost url"),
