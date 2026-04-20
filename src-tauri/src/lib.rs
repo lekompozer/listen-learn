@@ -48,6 +48,7 @@ async fn download_and_install_update(app: tauri::AppHandle) -> Result<(), String
 }
 
 #[tauri::command]
+#[allow(dead_code)]
 fn read_audio_files_in_dir(dir_path: String) -> Result<Vec<serde_json::Value>, String> {
     let audio_ext = ["mp3", "flac", "m4a", "wav", "ogg", "aac", "opus", "wma", "aiff",
                       "mp4", "mov", "webm", "mkv", "m4v"];
@@ -78,6 +79,7 @@ fn read_audio_files_in_dir(dir_path: String) -> Result<Vec<serde_json::Value>, S
 /// Creates `{app_data_dir}/playlists/{playlist_id}/` if it doesn't exist.
 /// Returns the destination paths so the caller can build asset:// URLs.
 #[tauri::command]
+#[allow(dead_code)]
 async fn copy_files_to_playlist_dir(
     app: tauri::AppHandle,
     playlist_id: String,
@@ -193,7 +195,9 @@ pub fn run() {
             download_and_install_update,
             open_url,
             google_auth::open_google_auth,
+            read_audio_files_in_dir,
+            copy_files_to_playlist_dir,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running WynAI Listen & Learn");
+        .expect("error while running Listen & Learn");
 }

@@ -1,4 +1,4 @@
-name: Build WynAI Listen & Learn Desktop
+name: Build Listen & Learn Desktop
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
 
           # Windows x64
           - platform: windows-latest
-            args: ''
+            args: '--bundles nsis'
             rust_target: ''
             artifact_name: WynAI-ListenLearn-windows
             bundle_path: src-tauri/target/release/bundle
@@ -113,9 +113,9 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro' }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'WynAI Listen & Learn ${{ github.ref_name }}'
+          releaseName: 'Listen & Learn ${{ github.ref_name }}'
           releaseBody: |
-            ## WynAI Listen & Learn ${{ github.ref_name }}
+            ## Listen & Learn ${{ github.ref_name }}
 
             ### Download
             - 🍎 **macOS Apple Silicon**: `WynAI-ListenLearn-mac-arm64.dmg`
@@ -126,7 +126,7 @@ jobs:
             ### Install notes (macOS)
             App is ad-hoc signed. If blocked by Gatekeeper:
             ```
-            xattr -d com.apple.quarantine "/Applications/WynAI Listen & Learn.app"
+            xattr -d com.apple.quarantine "/Applications/Listen & Learn.app"
             ```
           releaseDraft: true
           prerelease: false
@@ -251,7 +251,7 @@ jobs:
           cat > /tmp/latest.json <<EOF
           {
             "version": "${VERSION}",
-            "notes": "WynAI Listen & Learn ${VERSION}",
+            "notes": "Listen & Learn ${VERSION}",
             "pub_date": "${PUB_DATE}",
             "platforms": {
               "darwin-aarch64": { "url": "${CDN}/WynAI-ListenLearn-mac-arm64.dmg" },
