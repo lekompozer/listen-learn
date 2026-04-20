@@ -21,5 +21,5 @@ fn main() {
         env::set_var("GTK_MODULES", "");
     }
 
-    wordai_music_lib::run()
+    listen_learn_lib::run()
 }
