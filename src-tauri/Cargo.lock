@@ -2047,6 +2047,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
+name = "listen-learn"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "log",
+ "open",
+ "rand 0.8.6",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-localhost",
+ "tauri-plugin-log",
+ "tauri-plugin-shell",
+ "tauri-plugin-updater",
+ "tokio",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
 name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5926,30 +5950,6 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser",
-]
-
-[[package]]
-name = "wordai-music"
-version = "0.1.5"
-dependencies = [
- "base64 0.22.1",
- "log",
- "open",
- "rand 0.8.6",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-localhost",
- "tauri-plugin-log",
- "tauri-plugin-shell",
- "tauri-plugin-updater",
- "tokio",
- "url",
- "urlencoding",
 ]
 
 [[package]]
