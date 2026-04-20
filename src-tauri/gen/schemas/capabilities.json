@@ -1,0 +1,1 @@
+{"main":{"identifier":"main","description":"WordAI Music capabilities","remote":{"urls":["http://localhost:3001/**"]},"local":true,"windows":["main"],"permissions":["core:default","core:event:default","core:event:allow-listen","core:event:allow-unlisten","core:event:allow-emit","core:window:allow-start-dragging","shell:allow-open","updater:default","dialog:allow-open"]}}
