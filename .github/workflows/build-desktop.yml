@@ -1,0 +1,270 @@
+name: Build WynAI Listen & Learn Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'          # Trigger on version tags: v0.1.0, v1.0.0 etc.
+  workflow_dispatch:  # Manual trigger from GitHub Actions UI
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS Apple Silicon (arm64)
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+            rust_target: aarch64-apple-darwin
+            artifact_name: WynAI-ListenLearn-mac-arm64
+            bundle_path: src-tauri/target/aarch64-apple-darwin/release/bundle
+
+          # macOS Intel (x64)
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+            rust_target: x86_64-apple-darwin
+            artifact_name: WynAI-ListenLearn-mac-x64
+            bundle_path: src-tauri/target/x86_64-apple-darwin/release/bundle
+
+          # Windows x64
+          - platform: windows-latest
+            args: ''
+            rust_target: ''
+            artifact_name: WynAI-ListenLearn-windows
+            bundle_path: src-tauri/target/release/bundle
+
+          # Linux x64
+          - platform: ubuntu-22.04
+            args: ''
+            rust_target: ''
+            artifact_name: WynAI-ListenLearn-linux
+            bundle_path: src-tauri/target/release/bundle
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libglib2.0-dev \
+            libsoup-3.0-dev
+
+      - name: Install Node dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build Next.js
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro' }}
+        run: npm run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro' }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'WynAI Listen & Learn ${{ github.ref_name }}'
+          releaseBody: |
+            ## WynAI Listen & Learn ${{ github.ref_name }}
+
+            ### Download
+            - 🍎 **macOS Apple Silicon**: `WynAI-ListenLearn-mac-arm64.dmg`
+            - 🍎 **macOS Intel**: `WynAI-ListenLearn-mac-x64.dmg`
+            - 🪟 **Windows**: `WynAI-ListenLearn-windows-setup.exe`
+            - 🐧 **Linux**: `WynAI-ListenLearn-linux.AppImage`
+
+            ### Install notes (macOS)
+            App is ad-hoc signed. If blocked by Gatekeeper:
+            ```
+            xattr -d com.apple.quarantine "/Applications/WynAI Listen & Learn.app"
+            ```
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.bundle_path }}/dmg/*.dmg
+            ${{ matrix.bundle_path }}/macos/*.app
+            ${{ matrix.bundle_path }}/nsis/*.exe
+            ${{ matrix.bundle_path }}/msi/*.msi
+            ${{ matrix.bundle_path }}/appimage/*.AppImage
+            ${{ matrix.bundle_path }}/deb/*.deb
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload macOS arm64 DMG to R2
+        if: matrix.rust_target == 'aarch64-apple-darwin'
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          DMG=$(find src-tauri/target -name "*.dmg" 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then echo "❌ No DMG found"; exit 1; fi
+          echo "📦 Uploading $DMG → desktop-ll/WynAI-ListenLearn-mac-arm64.dmg"
+          aws s3 cp "$DMG" "s3://${R2_BUCKET_NAME}/desktop-ll/WynAI-ListenLearn-mac-arm64.dmg" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --content-type "application/x-apple-diskimage" \
+            --cache-control "public, max-age=3600"
+          echo "✅ Uploaded arm64 DMG"
+
+      - name: Upload macOS x64 DMG to R2
+        if: matrix.rust_target == 'x86_64-apple-darwin'
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          DMG=$(find src-tauri/target -name "*.dmg" 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then echo "❌ No DMG found"; exit 1; fi
+          echo "📦 Uploading $DMG → desktop-ll/WynAI-ListenLearn-mac-x64.dmg"
+          aws s3 cp "$DMG" "s3://${R2_BUCKET_NAME}/desktop-ll/WynAI-ListenLearn-mac-x64.dmg" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --content-type "application/x-apple-diskimage" \
+            --cache-control "public, max-age=3600"
+          echo "✅ Uploaded x64 DMG"
+
+      - name: Upload Windows installer to R2
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          EXE=$(find src-tauri/target -name "*-setup.exe" 2>/dev/null | head -1)
+          if [ -z "$EXE" ]; then EXE=$(find src-tauri/target -name "*.msi" 2>/dev/null | head -1); fi
+          if [ -z "$EXE" ]; then echo "❌ No Windows installer found"; exit 1; fi
+          KEY="desktop-ll/WynAI-ListenLearn-windows-setup.exe"
+          CT="application/x-msdownload"
+          if [[ "$EXE" == *.msi ]]; then KEY="desktop-ll/WynAI-ListenLearn-windows-setup.msi"; CT="application/x-msi"; fi
+          echo "📦 Uploading $EXE → $KEY"
+          aws s3 cp "$EXE" "s3://${R2_BUCKET_NAME}/${KEY}" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --content-type "$CT" \
+            --cache-control "public, max-age=3600"
+          echo "✅ Uploaded Windows installer"
+
+      - name: Upload Linux AppImage to R2
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          APP=$(find src-tauri/target -name "*.AppImage" 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then echo "❌ No AppImage found"; exit 1; fi
+          echo "📦 Uploading $APP → desktop-ll/WynAI-ListenLearn-linux.AppImage"
+          aws s3 cp "$APP" "s3://${R2_BUCKET_NAME}/desktop-ll/WynAI-ListenLearn-linux.AppImage" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --content-type "application/x-executable" \
+            --cache-control "public, max-age=3600"
+          echo "✅ Uploaded Linux AppImage"
+
+# ── Generate latest.json update manifest (runs after all platform builds) ──
+  update-manifest:
+    needs: build
+    runs-on: ubuntu-22.04
+    name: Update manifest (latest.json)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate and upload latest.json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          NEXT_PUBLIC_R2_PUBLIC_URL: ${{ secrets.NEXT_PUBLIC_R2_PUBLIC_URL }}
+        run: |
+          VERSION=$(node -e "const c=require('./src-tauri/tauri.conf.json'); console.log(c.version)")
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          R2_BASE="${NEXT_PUBLIC_R2_PUBLIC_URL:-https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev}"
+          CDN="${R2_BASE}/desktop-ll"
+          cat > /tmp/latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": "WynAI Listen & Learn ${VERSION}",
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-aarch64": { "url": "${CDN}/WynAI-ListenLearn-mac-arm64.dmg" },
+              "darwin-x86_64":  { "url": "${CDN}/WynAI-ListenLearn-mac-x64.dmg" },
+              "windows-x86_64": { "url": "${CDN}/WynAI-ListenLearn-windows-setup.exe" },
+              "linux-x86_64":   { "url": "${CDN}/WynAI-ListenLearn-linux.AppImage" }
+            }
+          }
+          EOF
+          echo "📋 latest.json:"
+          cat /tmp/latest.json
+          aws s3 cp /tmp/latest.json "s3://${R2_BUCKET_NAME}/desktop-ll/latest.json" \
+            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --content-type "application/json" \
+            --cache-control "public, max-age=300"
+          echo "✅ latest.json uploaded to R2 at desktop-ll/latest.json"
