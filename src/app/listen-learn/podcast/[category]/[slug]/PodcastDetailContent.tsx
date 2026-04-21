@@ -68,6 +68,8 @@ interface PodcastDetailContentProps {
     practiceUrl: string;
     categorySlug: string;
     videoTurns: VideoTurn[];
+    /** When provided, related episode clicks call this instead of navigating via Link */
+    onSelectEpisode?: (podcastId: string) => void;
 }
 
 function toDate(d: string | number | undefined | null): Date {
@@ -134,6 +136,7 @@ export default function PodcastDetailContent({
     practiceUrl,
     categorySlug,
     videoTurns,
+    onSelectEpisode,
 }: PodcastDetailContentProps) {
     const { isDark } = useTheme();
     const { isVietnamese } = useLanguage();
@@ -332,32 +335,61 @@ export default function PodcastDetailContent({
                             </h2>
                             <div className="space-y-2">
                                 {moreEpisodes.map((ep) => (
-                                    <Link
-                                        key={ep.podcast_id}
-                                        href={`/listen-learn/podcast/${categorySlug}/${ep.slug ?? ep.podcast_id}`}
-                                        className={`group flex gap-3 rounded-xl p-2 transition-colors ${isDark ? 'hover:bg-gray-800/60' : 'hover:bg-gray-100'}`}
-                                    >
-                                        {ep.image_url && (
-                                            <div className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
-                                                <Image
-                                                    src={cfImage(ep.image_url)}
-                                                    alt={ep.title}
-                                                    width={64}
-                                                    height={64}
-                                                    unoptimized
-                                                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                                />
+                                    onSelectEpisode ? (
+                                        <button
+                                            key={ep.podcast_id}
+                                            onClick={() => onSelectEpisode(ep.podcast_id)}
+                                            className={`group flex w-full gap-3 rounded-xl p-2 text-left transition-colors ${isDark ? 'hover:bg-gray-800/60' : 'hover:bg-gray-100'}`}
+                                        >
+                                            {ep.image_url && (
+                                                <div className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                                                    <Image
+                                                        src={cfImage(ep.image_url)}
+                                                        alt={ep.title}
+                                                        width={64}
+                                                        height={64}
+                                                        unoptimized
+                                                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <p className={`mb-1 line-clamp-2 text-xs font-semibold leading-snug transition-colors ${isDark ? 'text-gray-200 group-hover:text-teal-400' : 'text-gray-800 group-hover:text-teal-600'}`}>
+                                                    {ep.title}
+                                                </p>
+                                                <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${getLevelColor(ep.level)}`}>
+                                                    {getLevelLabel(ep.level, isVietnamese)}
+                                                </span>
                                             </div>
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                            <p className={`mb-1 line-clamp-2 text-xs font-semibold leading-snug transition-colors ${isDark ? 'text-gray-200 group-hover:text-teal-400' : 'text-gray-800 group-hover:text-teal-600'}`}>
-                                                {ep.title}
-                                            </p>
-                                            <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${getLevelColor(ep.level)}`}>
-                                                {getLevelLabel(ep.level, isVietnamese)}
-                                            </span>
-                                        </div>
-                                    </Link>
+                                        </button>
+                                    ) : (
+                                        <Link
+                                            key={ep.podcast_id}
+                                            href={`/listen-learn/podcast/${categorySlug}/${ep.slug ?? ep.podcast_id}`}
+                                            className={`group flex gap-3 rounded-xl p-2 transition-colors ${isDark ? 'hover:bg-gray-800/60' : 'hover:bg-gray-100'}`}
+                                        >
+                                            {ep.image_url && (
+                                                <div className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                                                    <Image
+                                                        src={cfImage(ep.image_url)}
+                                                        alt={ep.title}
+                                                        width={64}
+                                                        height={64}
+                                                        unoptimized
+                                                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <p className={`mb-1 line-clamp-2 text-xs font-semibold leading-snug transition-colors ${isDark ? 'text-gray-200 group-hover:text-teal-400' : 'text-gray-800 group-hover:text-teal-600'}`}>
+                                                    {ep.title}
+                                                </p>
+                                                <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${getLevelColor(ep.level)}`}>
+                                                    {getLevelLabel(ep.level, isVietnamese)}
+                                                </span>
+                                            </div>
+                                        </Link>
+                                    )
                                 ))}
                             </div>
                             <div className="mt-4">

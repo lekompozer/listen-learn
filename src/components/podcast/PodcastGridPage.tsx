@@ -13,7 +13,7 @@ import {
     type PodcastEpisode,
     type PodcastTopic,
 } from '@/services/podcastService';
-import PodcastContent from './PodcastContent';
+import PodcastDetailView from './PodcastDetailView';
 
 const cfImage = (url: string) =>
     /\.(?:jpg|jpeg|png|webp|avif|gif)(?:[?#]|$)/i.test(url)
@@ -153,7 +153,10 @@ export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageP
                     </button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                    <PodcastContent podcastId={selectedPodcastId} isDarkMode={isDark} />
+                    <PodcastDetailView
+                        podcastId={selectedPodcastId}
+                        onSelectEpisode={setSelectedPodcastId}
+                    />
                 </div>
             </div>
         );
