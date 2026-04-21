@@ -287,8 +287,8 @@ function VocabNavRail({ isDark, section, onSelect }: {
                     <button
                         onClick={() => onSelect('daily-vocab')}
                         className={`w-full rounded-2xl p-4 text-left transition-all border ${section === 'daily-vocab'
-                                ? (isDark ? 'bg-teal-900/40 border-teal-700/40' : 'bg-teal-50 border-teal-200')
-                                : (isDark ? 'bg-gray-800 border-gray-700 hover:border-teal-700/40' : 'bg-gray-100 border-gray-200 hover:border-teal-200')
+                            ? (isDark ? 'bg-teal-900/40 border-teal-700/40' : 'bg-teal-50 border-teal-200')
+                            : (isDark ? 'bg-gray-800 border-gray-700 hover:border-teal-700/40' : 'bg-gray-100 border-gray-200 hover:border-teal-200')
                             }`}
                     >
                         <div className="flex items-center gap-2 mb-2">
