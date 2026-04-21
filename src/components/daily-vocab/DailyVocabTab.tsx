@@ -45,9 +45,9 @@ const WYNCODE_URLS: Record<string, string> = {
 };
 
 // ─── Download section (mirrors /download page card) ───────────────────────────
-function DownloadSection({ isDark, name, subtitle, description, accentFrom, accentTo, iconEmoji, urls }: {
+function DownloadSection({ isDark, name, subtitle, description, accentFrom, accentTo, iconEmoji, iconSrc, urls }: {
     isDark: boolean; name: string; subtitle: string; description: string;
-    accentFrom: string; accentTo: string; iconEmoji: string;
+    accentFrom: string; accentTo: string; iconEmoji?: string; iconSrc?: string;
     urls: Record<string, string>;
 }) {
     const openUrl = useCallback(async (url: string, platformLabel: string, platformKey: string) => {
@@ -82,8 +82,10 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
                     <div className="px-6 py-8 space-y-8">
                         {/* Product header */}
                         <div className="flex items-center gap-4">
-                            <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${accentFrom} ${accentTo} text-white shadow-lg flex-shrink-0`}>
-                                <span className="text-2xl">{iconEmoji}</span>
+                            <div className={`flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${accentFrom} ${accentTo} text-white shadow-lg flex-shrink-0 overflow-hidden`}>
+                                {iconSrc
+                                    ? <img src={iconSrc} alt={name} className="h-16 w-16 object-contain" />
+                                    : <span className="text-2xl">{iconEmoji ?? '⬇'}</span>}
                             </div>
                             <div>
                                 <p className={`text-sm font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>{subtitle}</p>
@@ -161,7 +163,7 @@ function VocabNavRail({ isDark, section, onSelect }: {
     const inactive = isDark ? 'text-gray-300 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900';
 
     return (
-        <aside className={`h-full w-[220px] flex-shrink-0 flex flex-col border-r overflow-hidden ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/95 border-gray-200'}`}>
+        <aside className={`h-full w-[220px] flex-shrink-0 flex flex-col border-r overflow-hidden ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}>
             <div className="flex flex-col h-full overflow-y-auto px-4 py-5">
                 {/* Logo */}
                 <div className={`pb-4 mb-2 border-b ${isDark ? 'border-gray-700/60' : 'border-gray-100'}`}>
@@ -251,7 +253,7 @@ export function DailyVocabTab({ isDark }: DailyVocabTabProps) {
                         description="Nghe nhạc, playlist và lyrics theo phong cách desktop native, tối ưu cho học ngôn ngữ và giải trí. Không quảng cáo, không giới hạn."
                         accentFrom="from-orange-400"
                         accentTo="to-orange-600"
-                        iconEmoji="♪"
+                        iconSrc="/icon-WynAI-Music.png"
                         urls={MUSIC_URLS}
                     />
                 )}
@@ -264,7 +266,7 @@ export function DailyVocabTab({ isDark }: DailyVocabTabProps) {
                         description="Code editor với AI, local mode và cloud sync. Hỗ trợ Python, JavaScript, SQL, C++, Rust và nhiều ngôn ngữ khác."
                         accentFrom="from-violet-500"
                         accentTo="to-purple-600"
-                        iconEmoji="⌨️"
+                        iconSrc="/icon-WynCodeAI-Header.png"
                         urls={WYNCODE_URLS}
                     />
                 )}
