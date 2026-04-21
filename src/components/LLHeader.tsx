@@ -106,7 +106,7 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                     await getCurrentWindow().startDragging();
                 } catch { /* web fallback */ }
             }}
-            className={`flex-shrink-0 flex items-center justify-between pl-[72px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-white/90 border-gray-200/60'}`}
+            className={`flex-shrink-0 flex items-center justify-between pl-[72px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-[#c6d4d4]/95 border-black/10'}`}
         >
             {/* Left: sidebar toggle + app title */}
             <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
@@ -141,8 +141,8 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                             onClick={() => onTabChange(tab.id)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
                                 ${isActive
-                                    ? 'bg-purple-600 text-white'
-                                    : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                                    ? 'bg-gradient-to-r from-[#007574] to-[#189593] text-white'
+                                    : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-black/10'}`}
                         >
                             <Icon className="w-3.5 h-3.5" />
                             <span>{isVietnamese ? tab.labelVi : tab.labelEn}</span>

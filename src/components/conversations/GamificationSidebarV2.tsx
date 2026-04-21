@@ -218,13 +218,13 @@ export default function GamificationSidebar({ isDarkMode, onConversationSelect, 
         }
     };
 
-    const bgColor = isDarkMode ? 'bg-gray-900/60 backdrop-blur-2xl' : 'bg-teal-50/90 backdrop-blur-2xl';
+    const bgColor = isDarkMode ? 'bg-gray-900/60 backdrop-blur-2xl' : 'bg-white/85 backdrop-blur-xl';
     const textColor = isDarkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-    const borderColor = isDarkMode ? 'border-white/10' : 'border-teal-200/60';
+    const borderColor = isDarkMode ? 'border-white/10' : 'border-gray-200/70';
     const cardBg = isDarkMode
         ? 'bg-gray-800/40 backdrop-blur-xl border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)]'
-        : 'bg-white/60 backdrop-blur-xl border-teal-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)]';
+        : 'bg-white/80 backdrop-blur-xl border-gray-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)]';
 
     // Debug logging
     return (

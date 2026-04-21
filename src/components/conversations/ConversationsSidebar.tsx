@@ -267,12 +267,12 @@ export default function ConversationsSidebar({
         }
     };
 
-    const bgColor = isDarkMode ? 'bg-gray-900/60 backdrop-blur-2xl' : 'bg-teal-50/90 backdrop-blur-2xl';
+    const bgColor = isDarkMode ? 'bg-gray-900/60 backdrop-blur-2xl' : 'bg-white/85 backdrop-blur-xl';
     const textColor = isDarkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-    const borderColor = isDarkMode ? 'border-white/10' : 'border-teal-200/60';
-    const hoverBg = isDarkMode ? 'hover:bg-white/8' : 'hover:bg-teal-100/60';
-    const inputBg = isDarkMode ? 'bg-gray-800/60' : 'bg-white/70';
+    const borderColor = isDarkMode ? 'border-white/10' : 'border-gray-200/70';
+    const hoverBg = isDarkMode ? 'hover:bg-white/8' : 'hover:bg-gray-100';
+    const inputBg = isDarkMode ? 'bg-gray-800/60' : 'bg-gray-100';
     const tealBtn = 'bg-gradient-to-r from-teal-600 to-teal-500 text-white hover:from-teal-700 hover:to-teal-600';
 
     const getLevelCardStyle = (level: string) => {
@@ -332,7 +332,7 @@ export default function ConversationsSidebar({
     const sidebar = (
         <div className={`h-full flex flex-col ${bgColor} ${isDarkMode ? 'sidebar-scrollbar-dark' : 'sidebar-scrollbar-light'}`}>
             {/* Header with Title and View Icons */}
-            <div className={`p-4 border-b ${borderColor} bg-gradient-to-b ${isDarkMode ? 'from-gray-800/80 to-transparent' : 'from-teal-100/60 to-transparent'}`}>
+            <div className={`p-4 border-b ${borderColor} bg-gradient-to-b ${isDarkMode ? 'from-gray-800/80 to-transparent' : 'from-white/50 to-transparent'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <h2 className={`text-lg font-semibold ${textColor}`}>
                         {t('Học qua Hội thoại', 'Learn Conversations')}
