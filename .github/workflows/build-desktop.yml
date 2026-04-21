@@ -130,6 +130,7 @@ jobs:
             ```
           releaseDraft: true
           prerelease: false
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
       - name: Upload artifacts

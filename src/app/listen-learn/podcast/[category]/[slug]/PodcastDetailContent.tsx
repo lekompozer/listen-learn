@@ -171,14 +171,8 @@ export default function PodcastDetailContent({
             </div>
 
             <div className={`sticky top-0 z-20 hidden border-b backdrop-blur-sm sm:block ${border} ${isDark ? 'bg-[#0b0f19]/90' : 'bg-white/90'}`}>
-                <div className="mx-auto flex max-w-6xl min-w-0 items-center gap-2 px-4 py-3 text-sm">
-                    <Link href="/" className="flex-shrink-0 font-bold text-teal-400 transition-colors hover:text-teal-300">WordAI</Link>
-                    <span className={`${textMuted} flex-shrink-0`}>/</span>
-                    <Link href="/listen-learn/podcast" className={`flex-shrink-0 transition-colors ${textMuted} ${isDark ? 'hover:text-white' : 'hover:text-gray-900'}`}>
-                        Podcast
-                    </Link>
-                    <span className={`${textMuted} flex-shrink-0`}>/</span>
-                    <span className={`truncate min-w-0 ${textMuted}`}>{episode.title}</span>
+                <div className="mx-auto flex max-w-6xl min-w-0 items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <span className={`truncate min-w-0 font-semibold ${textPri}`}>{episode.title}</span>
                     <PodcastLangToggle />
                 </div>
             </div>
