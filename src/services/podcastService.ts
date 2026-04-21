@@ -43,6 +43,9 @@ export interface PodcastEpisode {
 export interface PodcastTranscriptTurn {
     speaker: string;
     text: string;
+    text_vi?: string;    // inline VI translation (BBC Work English, BBC 6 Min, etc.)
+    start_sec?: number;
+    end_sec?: number;
 }
 
 export interface PodcastTedTranscriptSegment {

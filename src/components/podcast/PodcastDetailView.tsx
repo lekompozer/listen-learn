@@ -100,7 +100,9 @@ export default function PodcastDetailView({ podcastId, onSelectEpisode }: Podcas
     const videoTurns = (episode.transcript_turns ?? []).map((turn, i) => ({
         speaker: turn.speaker,
         text: turn.text,
-        viText: viLines[i],
+        viText: turn.text_vi ?? viLines[i],
+        start_sec: turn.start_sec,
+        end_sec: turn.end_sec,
     }));
 
     // Cast episode to the shape PodcastDetailContent expects
