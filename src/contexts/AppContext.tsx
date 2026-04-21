@@ -28,20 +28,31 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    // Music app is always dark — light mode removed.
-    const [isDark] = useState(true);
+    const [isDark, setIsDarkState] = useState(false); // default light
     const [accentIndex, setAccentIndexState] = useState<number | null>(null);
 
     useEffect(() => {
-        // Persist + load accent selection; ignore old theme key
+        const saved = localStorage.getItem('ll-theme');
+        const prefersDark = saved === 'dark';
+        setIsDarkState(prefersDark);
+        document.documentElement.classList.toggle('dark', prefersDark);
+
         const savedAccent = localStorage.getItem('wordai-music-accent');
         if (savedAccent !== null) {
             const n = parseInt(savedAccent, 10);
             if (!isNaN(n) && n >= 0 && n <= 11) setAccentIndexState(n);
         }
-        // Always enforce dark
-        document.documentElement.classList.add('dark');
     }, []);
+
+    const applyTheme = (dark: boolean) => {
+        setIsDarkState(dark);
+        localStorage.setItem('ll-theme', dark ? 'dark' : 'light');
+        document.documentElement.classList.toggle('dark', dark);
+    };
+
+    const toggleTheme = () => applyTheme(!isDark);
+    const setIsDark = (v: boolean) => applyTheme(v);
+    const setTheme = (theme: 'light' | 'dark') => applyTheme(theme === 'dark');
 
     const setAccentIndex = (i: number | null) => {
         setAccentIndexState(i);
@@ -51,11 +62,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('wordai-music-accent', String(i));
         }
     };
-
-    // Keep legacy setters as no-ops so existing callers don't break
-    const setIsDark = (_v: boolean) => { /* always dark */ };
-    const toggleTheme = () => { /* always dark */ };
-    const setTheme = (_t: 'light' | 'dark') => { /* always dark */ };
 
     return (
         <ThemeContext.Provider value={{ isDark, toggleTheme, setIsDark, setTheme, accentIndex, setAccentIndex }}>

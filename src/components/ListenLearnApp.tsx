@@ -9,7 +9,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import LLHeader from './LLHeader';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
-import { useLanguage } from '@/contexts/AppContext';
+import { useLanguage, useTheme } from '@/contexts/AppContext';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const SongLearningTab = dynamic(() => import('@/components/songs/SongLearningTab').then(m => ({ default: m.SongLearningTab })), { ssr: false });
@@ -28,6 +29,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 export default function ListenLearnApp() {
     const { user } = useWordaiAuth();
     const { isVietnamese } = useLanguage();
+    const { isDark } = useTheme();
 
     const t = (vi: string, en: string) => isVietnamese ? vi : en;
 
@@ -189,7 +191,7 @@ export default function ListenLearnApp() {
     };
 
     return (
-        <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-900 text-white">
+        <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
             {/* macOS traffic lights area — 28px padding above header */}
             <div className="pt-[28px]" data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
                 <LLHeader
@@ -211,7 +213,7 @@ export default function ListenLearnApp() {
                 {/* Songs Tab */}
                 {activeTab === 'songs' && (
                     <SongLearningTab
-                        isDark={true}
+                        isDark={isDark}
                         language={isVietnamese ? 'vi' : 'en'}
                         onSongOpenChange={setHasSongOpen}
                     />
@@ -225,19 +227,29 @@ export default function ListenLearnApp() {
                 {/* Conversations Tab */}
                 {activeTab === 'conversations' && (
                     <div className="flex h-full">
+                        {/* Left sidebar toggle strip */}
+                        <div className="flex flex-col items-center justify-center w-5 flex-shrink-0">
+                            <button
+                                onClick={() => setIsSidebarVisible(v => !v)}
+                                className={`flex items-center justify-center h-14 w-5 rounded-r transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200/60'}`}
+                                title={isSidebarVisible ? 'Hide conversations sidebar' : 'Show conversations sidebar'}
+                            >
+                                {isSidebarVisible ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </button>
+                        </div>
                         {isSidebarVisible && (
                             <ConversationsSidebar
                                 selectedConversationId={selectedConversationId}
                                 onConversationSelect={(id) => {
                                     setSelectedConversationId(id);
                                 }}
-                                isDarkMode={true}
+                                isDarkMode={isDark}
                             />
                         )}
                         <div className="flex-1 overflow-hidden">
                             <ConversationContent
                                 conversationId={selectedConversationId}
-                                isDarkMode={true}
+                                isDarkMode={isDark}
                                 onToggleGamification={() => setIsGamificationVisible(v => !v)}
                                 isGamificationVisible={isGamificationVisible}
                                 onUpgradeRequired={() => setShowConversationsUpgradeModal(true)}
@@ -246,18 +258,28 @@ export default function ListenLearnApp() {
                         </div>
                         {isGamificationVisible && (
                             <GamificationSidebar
-                                isDarkMode={true}
+                                isDarkMode={isDark}
                                 onConversationSelect={(id) => setSelectedConversationId(id)}
                                 refreshKey={gamificationRefreshKey}
                             />
                         )}
+                        {/* Right sidebar toggle strip */}
+                        <div className="flex flex-col items-center justify-center w-5 flex-shrink-0">
+                            <button
+                                onClick={() => setIsGamificationVisible(v => !v)}
+                                className={`flex items-center justify-center h-14 w-5 rounded-l transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200/60'}`}
+                                title={isGamificationVisible ? 'Hide learning path' : 'Show learning path'}
+                            >
+                                {isGamificationVisible ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                            </button>
+                        </div>
                     </div>
                 )}
 
                 {/* Podcast Tab */}
                 {activeTab === 'podcast' && (
                     <PodcastGridPage
-                        isDarkMode={true}
+                        isDarkMode={isDark}
                     />
                 )}
             </div>
@@ -268,7 +290,7 @@ export default function ListenLearnApp() {
                     isOpen={showSubscriptionModal}
                     onClose={() => setShowSubscriptionModal(false)}
                     onSelectPlan={handleSelectPlan}
-                    isDark={true}
+                    isDark={isDark}
                     language={isVietnamese ? 'vi' : 'en'}
                 />
             )}
@@ -276,7 +298,7 @@ export default function ListenLearnApp() {
                 <ConversationsUpgradeModal
                     isOpen={showConversationsUpgradeModal}
                     onClose={() => setShowConversationsUpgradeModal(false)}
-                    isDarkMode={true}
+                    isDarkMode={isDark}
                 />
             )}
         </div>

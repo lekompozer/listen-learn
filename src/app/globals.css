@@ -9,6 +9,18 @@ body {
     /* Music player is fullscreen — no page scroll */
 }
 
+/* Light mode defaults */
+html {
+    background: #f9fafb;
+    color: #111827;
+}
+
+/* Dark mode */
+html.dark {
+    background: #111827;
+    color: #ffffff;
+}
+
 /* Fix: WKWebView applies UA background/text color to form elements.
    Always inherit color from Tailwind text-* classes.
    Individual inputs use [color-scheme:dark/light] to prevent UA white backgrounds. */
@@ -16,4 +28,33 @@ input,
 textarea,
 select {
     -webkit-text-fill-color: currentColor;
+}
+
+/* ─── Thin custom scrollbars ──────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.28);
+}
+html.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+html.dark * {
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
