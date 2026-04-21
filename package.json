@@ -24,11 +24,14 @@
     "dexie": "^4.4.2",
     "firebase": "^11.8.1",
     "framer-motion": "^12.38.0",
+    "katex": "^0.16.45",
     "lucide-react": "^0.511.0",
     "next": "15.5.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-hot-toast": "^2.6.0"
+    "react-hot-toast": "^2.6.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",
