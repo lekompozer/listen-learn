@@ -115,19 +115,20 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
     const activeIdx = findActiveIndex(enSegments, transcriptSec);
 
     // ─── Auto-scroll ────────────────────────────────────────────────────────
+    // No isPlaying guard — scroll whenever activeIdx changes regardless of play state
+    // (isPlaying may lag behind due to postMessage timing in WKWebView)
     useEffect(() => {
-        if (!autoScroll || !isPlaying || activeIdx < 0) return;
+        if (!autoScroll || activeIdx < 0) return;
         const el = lineRefs.current[activeIdx];
         const container = scrollContainerRef.current;
         if (el && container) {
             const elRect = el.getBoundingClientRect();
             const containerRect = container.getBoundingClientRect();
-            // Position active line as 2nd item from top (~1 line-height from top edge)
-            const scrollTarget = container.scrollTop + elRect.top - containerRect.top
-                - el.offsetHeight * 1.2;
+            // Position active line ~40px from top (≈ 2nd item from top of panel)
+            const scrollTarget = container.scrollTop + elRect.top - containerRect.top - 40;
             container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
         }
-    }, [activeIdx, autoScroll, isPlaying]);
+    }, [activeIdx, autoScroll]);
 
     // ─── postMessage helpers ────────────────────────────────────────────────
     const sendCmd = useCallback((func: string, args: unknown[] = []) => {
