@@ -263,7 +263,12 @@ export default function PodcastVideoPlayer({ audioUrl, imageUrl, title, turns, d
             <div className="absolute inset-x-0 bottom-0 h-[70%] pointer-events-none"
                 style={{ background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.75) 43%, rgba(0,0,0,0.90) 100%)' }} />
 
-            {/* ── Scrolling bilingual text ── */}
+            {/* ── Scrolling bilingual text (or "no transcript" notice) ── */}
+            {turns.length === 0 && (
+                <div className="absolute inset-x-0 bottom-[30%] flex items-center justify-center pointer-events-none z-10">
+                    <p className="text-white/50 text-sm px-6 text-center">Transcript chưa có cho tập này</p>
+                </div>
+            )}
             {turns.length > 0 && (
                 <div
                     className="absolute inset-0 overflow-hidden pointer-events-none"

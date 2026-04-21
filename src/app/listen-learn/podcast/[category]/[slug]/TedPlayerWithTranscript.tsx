@@ -69,6 +69,7 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     const [playerReady, setPlayerReady] = useState(false);
+    const [ytError, setYtError] = useState<number | null>(null);
     const [currentSec, setCurrentSec] = useState(0);
     const [secondLang, setSecondLang] = useState<string | null>(null);
     const [autoScroll, setAutoScroll] = useState(true);
@@ -79,17 +80,16 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
     const [isEditingOffset, setIsEditingOffset] = useState(false);
     const [offsetInput, setOffsetInput] = useState('12');
 
-    // ─── YouTube embed origin — computed client-side only ─────────────────
+    // ─── YouTube embed origin — computed synchronously (same pattern as WynAI Music) ─
     // tauri-plugin-localhost serves at http://localhost:3002 in both dev and prod.
-    // window.location.origin is already "http://localhost:3002" in that case.
+    // In dev, Next.js is at http://localhost:3002. In prod, tauri-plugin-localhost
+    // serves at http://localhost:3002. Either way origin.startsWith('http') is true.
     // Fallback covers any case where it's still "tauri://localhost".
-    const [ytEmbedOrigin, setYtEmbedOrigin] = useState('http://localhost:3002');
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const o = window.location.origin;
-            setYtEmbedOrigin(o.startsWith('http') ? o : 'http://localhost:3002');
-        }
-    }, []);
+    const ytEmbedOrigin = typeof window !== 'undefined'
+        ? (window.location.origin.startsWith('http')
+            ? window.location.origin
+            : ((window as unknown as Record<string, unknown>).__TAURI_DESKTOP__ ? 'http://localhost:3002' : window.location.origin))
+        : 'http://localhost:3002';
 
     const saveOffset = () => {
         const v = parseFloat(offsetInput);
@@ -152,6 +152,8 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
     useEffect(() => {
         if (!youtubeId) return;
         const handleMsg = (e: MessageEvent) => {
+            // Only handle messages from YouTube origins
+            if (!String(e.origin).includes('youtube.com')) return;
             if (typeof e.data !== 'string') return;
             let d: Record<string, unknown>;
             try { d = JSON.parse(e.data); } catch { return; }
@@ -159,11 +161,16 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
             const info = d.info;
             if (ev === 'onReady') {
                 setPlayerReady(true);
+                setYtError(null);
                 try { iframeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch { }
+            }
+            if (ev === 'onError') {
+                const code = typeof info === 'number' ? info : Number((info as Record<string, unknown>)?.errorCode ?? info);
+                setYtError(code || -1);
             }
             if (ev === 'onStateChange') {
                 const state = typeof info === 'number' ? info : (info as Record<string, unknown>)?.playerState;
-                if (state === 1) startPolling(); else stopPolling();
+                if (state === 1) { setYtError(null); startPolling(); } else stopPolling();
             }
             if (ev === 'infoDelivery' && info && typeof info === 'object') {
                 const ct = (info as Record<string, unknown>).currentTime;
@@ -182,7 +189,8 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
     };
 
     const hasTranscript = enSegments.length > 0;
-    const iframeSrc = `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=0&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(ytEmbedOrigin)}`;
+    // No encodeURIComponent — YouTube reads origin as a plain URL value (same as WynAI Music)
+    const iframeSrc = `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=0&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${ytEmbedOrigin}`;
 
     return (
         <div className="flex flex-col gap-2">
@@ -204,7 +212,32 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
                     />
                 </div>
                 <div className={`px-4 py-2 flex items-center justify-between border-t ${isDark ? 'bg-gray-800/80 border-gray-700/50' : 'bg-gray-100 border-gray-200'}`}>
-                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>TED Talk · YouTube {playerReady && <span className="text-teal-500">● Live</span>}</span>
+                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        TED Talk · YouTube{' '}
+                        {playerReady && !ytError && <span className="text-teal-500">● Live</span>}
+                        {ytError !== null && (
+                            <span className="text-red-400">
+                                {' '}⚠ Error {ytError} — video cannot be embedded.{' '}
+                                <a
+                                    href={`https://www.youtube.com/watch?v=${youtubeId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={async (e) => {
+                                        e.preventDefault();
+                                        try {
+                                            const { invoke } = await import('@tauri-apps/api/core');
+                                            await invoke('open_url', { url: `https://www.youtube.com/watch?v=${youtubeId}` });
+                                        } catch {
+                                            window.open(`https://www.youtube.com/watch?v=${youtubeId}`, '_blank');
+                                        }
+                                    }}
+                                    className="underline hover:text-red-300 cursor-pointer"
+                                >
+                                    Xem trên YouTube ↗
+                                </a>
+                            </span>
+                        )}
+                    </span>
                     <button
                         onClick={() => setAutoScroll(v => !v)}
                         className={`text-xs font-medium transition-colors ${autoScroll ? 'text-teal-400 hover:text-teal-300' : (isDark ? 'text-gray-500 hover:text-gray-400' : 'text-gray-500 hover:text-gray-700')}`}
