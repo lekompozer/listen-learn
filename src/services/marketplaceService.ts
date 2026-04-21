@@ -78,28 +78,46 @@ export interface BrowseTestsResponse {
 }
 
 export interface TopTest {
+    rank: number;
     test_id: string;
-    test_title: string;
+    title: string;
     slug?: string;
-    submission_count?: number;
-    total_participants?: number;
-    creator_name?: string;
-    thumbnail_url?: string;
-    category?: string;
+    stats: {
+        total_completions: number;
+        total_purchases: number;
+        average_rating: number;
+    };
+    cover_image: {
+        thumbnail: string;
+    };
 }
 
 export interface TopUser {
+    rank: number;
     user_id: string;
     display_name: string;
-    avatar_url?: string | null;
-    test_count?: number;
-    total_score?: number;
-    average_score?: number;
+    avatar_url: string;
+    stats: {
+        total_completions: number;
+        unique_tests_completed: number;
+        average_score: number;
+        perfect_scores: number;
+    };
+    achievements: Array<{
+        badge: string;
+        title: string;
+        description: string;
+    }>;
 }
 
 export interface PopularTag {
     tag: string;
-    count: number;
+    test_count: number;
+    category_breakdown: {
+        [category: string]: number;
+    };
+    avg_rating: number;
+    total_purchases: number;
 }
 
 export interface PopularTagsResponse {

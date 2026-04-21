@@ -209,7 +209,7 @@ export const CommunityTestsMarketplace: React.FC<CommunityTestsMarketplaceProps>
             const transformedTests = popularTestsData.map((test, index) => ({
                 rank: index + 1,
                 test_id: test.test_id,
-                test_title: test.test_title,
+                title: test.test_title,
                 slug: test.slug,
                 stats: {
                     total_completions: test.submission_count,
