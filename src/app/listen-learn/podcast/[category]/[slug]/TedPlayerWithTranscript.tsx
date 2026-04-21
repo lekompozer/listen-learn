@@ -122,8 +122,9 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
         if (el && container) {
             const elRect = el.getBoundingClientRect();
             const containerRect = container.getBoundingClientRect();
+            // Position active line as 2nd item from top (~1 line-height from top edge)
             const scrollTarget = container.scrollTop + elRect.top - containerRect.top
-                - container.clientHeight / 2 + el.offsetHeight / 2;
+                - el.offsetHeight * 1.2;
             container.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
         }
     }, [activeIdx, autoScroll, isPlaying]);
