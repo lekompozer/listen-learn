@@ -1,20 +1,19 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Radio, ChevronDown, Headphones, Tag, X } from 'lucide-react';
+import { Search, Radio, ChevronDown, Headphones, Tag, X, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '@/contexts/AppContext';
 import {
     listPodcasts,
     getLevelLabel,
     getLevelColor,
-    podcastPublicPath,
     fetchPodcastTopics,
     type PodcastEpisode,
     type PodcastTopic,
 } from '@/services/podcastService';
+import PodcastContent from './PodcastContent';
 
 const cfImage = (url: string) =>
     /\.(?:jpg|jpeg|png|webp|avif|gif)(?:[?#]|$)/i.test(url)
@@ -50,8 +49,8 @@ interface PodcastGridPageProps {
 }
 
 export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageProps) {
-    const router = useRouter();
     const { isVietnamese } = useLanguage();
+    const [selectedPodcastId, setSelectedPodcastId] = useState<string | null>(null);
     const t = (vi: string, en: string) => isVietnamese ? vi : en;
 
     const [activeCategory, setActiveCategory] = useState('all');
@@ -139,6 +138,26 @@ export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageP
         ? 'bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700 hover:text-white'
         : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100';
     const chipActive = 'bg-teal-600 text-white border-teal-600 shadow-md';
+
+    // ── Inline detail view ──────────────────────────────────────────────────
+    if (selectedPodcastId) {
+        return (
+            <div className={`h-full flex flex-col ${bg}`}>
+                <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b ${isDark ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
+                    <button
+                        onClick={() => setSelectedPodcastId(null)}
+                        className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        {isVietnamese ? 'Quay lại' : 'Back'}
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                    <PodcastContent podcastId={selectedPodcastId} isDarkMode={isDark} />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={`h-full overflow-y-auto ${bg}`}>
@@ -253,10 +272,7 @@ export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageP
                         {episodes.map(ep => (
                             <button
                                 key={ep.podcast_id}
-                                onClick={() => router.push(podcastPublicPath(
-                                    ep.slug ?? ep.podcast_id,
-                                    ep.category ?? 'BBC 6 Minute English'
-                                ))}
+                                onClick={() => setSelectedPodcastId(ep.podcast_id)}
                                 className={`${cardBg} rounded-xl overflow-hidden border ${border} hover:border-teal-500/60 hover:shadow-lg transition-all text-left group`}
                             >
                                 {/* Landscape thumbnail 315×177 */}
