@@ -6,6 +6,8 @@ import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
     Download, ExternalLink, BookOpen, Loader2, ArrowUpRight,
 } from 'lucide-react';
+import { logEvent } from 'firebase/analytics';
+import { analytics } from '@/lib/wordai-firebase';
 
 const DailyVocabClient = dynamic(
     () => import('@/components/daily-vocab/DailyVocabClient'),
@@ -21,22 +23,22 @@ interface DailyVocabTabProps {
 // ─── Platform data (mirrors wordai /download) ─────────────────────────────────
 const PLATFORMS = [
     { key: 'darwin-aarch64', label: 'macOS Apple Silicon', notes: 'Mac M1 / M2 / M3 / M4', badge: 'ARM64' },
-    { key: 'darwin-x86_64',  label: 'macOS Intel',         notes: 'Older Intel Macs',      badge: 'x64'   },
-    { key: 'windows-x86_64', label: 'Windows 10 / 11',     notes: '64-bit installer',      badge: 'EXE'   },
-    { key: 'linux-x86_64',   label: 'Linux',               notes: 'Ubuntu, Debian, Fedora', badge: 'AppImage' },
+    { key: 'darwin-x86_64', label: 'macOS Intel', notes: 'Older Intel Macs', badge: 'x64' },
+    { key: 'windows-x86_64', label: 'Windows 10 / 11', notes: '64-bit installer', badge: 'EXE' },
+    { key: 'linux-x86_64', label: 'Linux', notes: 'Ubuntu, Debian, Fedora', badge: 'AppImage' },
 ];
 
 const MUSIC_URLS: Record<string, string> = {
     'darwin-aarch64': 'https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-music/WordAI-Music-mac-arm64.dmg',
-    'darwin-x86_64':  'https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-music/WordAI-Music-mac-x64.dmg',
+    'darwin-x86_64': 'https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-music/WordAI-Music-mac-x64.dmg',
     'windows-x86_64': 'https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-music/WordAI-Music-windows-setup.exe',
-    'linux-x86_64':   'https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-music/WordAI-Music-linux.AppImage',
+    'linux-x86_64': 'https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-music/WordAI-Music-linux.AppImage',
 };
 const WYNCODE_URLS: Record<string, string> = {
     'darwin-aarch64': 'https://static.wynai.pro/desktop-wyncode/WynCode-mac-arm64.dmg',
-    'darwin-x86_64':  'https://static.wynai.pro/desktop-wyncode/WynCode-mac-x64.dmg',
+    'darwin-x86_64': 'https://static.wynai.pro/desktop-wyncode/WynCode-mac-x64.dmg',
     'windows-x86_64': 'https://static.wynai.pro/desktop-wyncode/WynCode-windows-setup.exe',
-    'linux-x86_64':   'https://static.wynai.pro/desktop-wyncode/WynCode-linux.AppImage',
+    'linux-x86_64': 'https://static.wynai.pro/desktop-wyncode/WynCode-linux.AppImage',
 };
 
 // ─── Download section (mirrors /download page card) ───────────────────────────
@@ -45,14 +47,26 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
     accentFrom: string; accentTo: string; iconEmoji: string;
     urls: Record<string, string>;
 }) {
-    const openUrl = useCallback(async (url: string) => {
+    const openUrl = useCallback(async (url: string, platformLabel: string, platformKey: string) => {
+        if (analytics) {
+            try {
+                logEvent(analytics, 'download_desktop_app', {
+                    app_name: name,
+                    platform_label: platformLabel,
+                    platform_key: platformKey,
+                    file_url: url
+                });
+            } catch (e) {
+                console.error('Analytics err', e);
+            }
+        }
         try {
             const { invoke } = await import('@tauri-apps/api/core');
             await invoke('open_url', { url });
         } catch {
             window.open(url, '_blank');
         }
-    }, []);
+    }, [name]);
 
     return (
         <div className="h-full overflow-y-auto">
@@ -93,7 +107,7 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
                                         </div>
                                         <div className="mt-auto">
                                             <button
-                                                onClick={() => openUrl(url)}
+                                                onClick={() => openUrl(url, p.label, p.key)}
                                                 className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r ${accentFrom} ${accentTo} px-4 py-3 text-sm font-semibold text-white transition-all active:scale-95 hover:opacity-90`}
                                             >
                                                 <Download className="h-4 w-4" />
@@ -144,10 +158,10 @@ function AppPanelSection({ isDark, url, title, description, icon: Icon, accentCo
         return () => {
             // Optionally close panel when navigating away
             import('@tauri-apps/api/core').then(({ invoke }) => {
-                invoke('close_app_panel').catch(() => {});
+                invoke('close_app_panel').catch(() => { });
             });
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
@@ -213,10 +227,10 @@ const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType
     { id: 'usage-plan', label: 'Usage & Plan', icon: FileText },
 ];
 const TOOLS_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
-    { id: 'ai-chat',      label: 'AI Chat',                icon: MessageCircle },
-    { id: 'wynai-music',  label: 'WynAI Music',            icon: Music },
-    { id: 'ai-learning',  label: 'AI Learning Assistant',  icon: GraduationCap },
-    { id: 'wyncode',      label: 'WynCode AI',             icon: Code2 },
+    { id: 'ai-chat', label: 'AI Chat', icon: MessageCircle },
+    { id: 'wynai-music', label: 'WynAI Music', icon: Music },
+    { id: 'ai-learning', label: 'AI Learning Assistant', icon: GraduationCap },
+    { id: 'wyncode', label: 'WynCode AI', icon: Code2 },
 ];
 
 function VocabNavRail({ isDark, section, onSelect }: {
@@ -272,11 +286,10 @@ function VocabNavRail({ isDark, section, onSelect }: {
                 <div className="mt-auto pt-4">
                     <button
                         onClick={() => onSelect('daily-vocab')}
-                        className={`w-full rounded-2xl p-4 text-left transition-all border ${
-                            section === 'daily-vocab'
+                        className={`w-full rounded-2xl p-4 text-left transition-all border ${section === 'daily-vocab'
                                 ? (isDark ? 'bg-teal-900/40 border-teal-700/40' : 'bg-teal-50 border-teal-200')
                                 : (isDark ? 'bg-gray-800 border-gray-700 hover:border-teal-700/40' : 'bg-gray-100 border-gray-200 hover:border-teal-200')
-                        }`}
+                            }`}
                     >
                         <div className="flex items-center gap-2 mb-2">
                             <BookOpen className={`w-4 h-4 ${isDark ? 'text-teal-400' : 'text-teal-600'}`} />
