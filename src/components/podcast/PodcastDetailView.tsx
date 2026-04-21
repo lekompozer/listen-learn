@@ -50,11 +50,33 @@ function splitSentences(text: string): string[] {
 
 interface PodcastDetailViewProps {
     podcastId: string;
+    slug?: string;  // URL slug — used for by-slug endpoint (same as web, returns full transcript)
     /** Called when the user clicks a related episode */
     onSelectEpisode: (id: string) => void;
 }
 
-export default function PodcastDetailView({ podcastId, onSelectEpisode }: PodcastDetailViewProps) {
+/**
+ * Mirror web page.tsx fetchEpisodeBySlug logic:
+ * 1. Try by-slug/{slug} first (returns full transcript_turns with text_vi)
+ * 2. If turns/transcript missing, fall back to /{id} endpoint
+ */
+async function fetchEpisodeDetail(podcastId: string, slug?: string): Promise<PodcastEpisodeDetail> {
+    // Step 1: try by-slug if we have a slug (same as web's fetchEpisodeBySlug)
+    if (slug) {
+        const res = await fetch(`${API_BASE_URL}/api/v1/podcasts/by-slug/${encodeURIComponent(slug)}`);
+        if (res.ok) {
+            const basic: PodcastEpisodeDetail = await res.json();
+            const hasTurns = (basic.transcript_turns?.length ?? 0) > 0;
+            if (hasTurns || basic.transcript_en || basic.transcript_vi) {
+                return basic;
+            }
+        }
+    }
+    // Step 2: fall back to direct ID endpoint
+    return getPodcastDetail(podcastId);
+}
+
+export default function PodcastDetailView({ podcastId, slug, onSelectEpisode }: PodcastDetailViewProps) {
     const { isDark } = useTheme();
     const [episode, setEpisode] = useState<PodcastEpisodeDetail | null>(null);
     const [moreEpisodes, setMoreEpisodes] = useState<PodcastEpisodeDetail[]>([]);
@@ -67,7 +89,7 @@ export default function PodcastDetailView({ podcastId, onSelectEpisode }: Podcas
         setError(false);
         setEpisode(null);
 
-        getPodcastDetail(podcastId)
+        fetchEpisodeDetail(podcastId, slug)
             .then(async (ep) => {
                 setEpisode(ep);
                 // Fetch related episodes
@@ -90,7 +112,7 @@ export default function PodcastDetailView({ podcastId, onSelectEpisode }: Podcas
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false));
-    }, [podcastId]);
+    }, [podcastId, slug]);
 
     if (loading) {
         return (

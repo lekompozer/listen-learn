@@ -51,6 +51,7 @@ interface PodcastGridPageProps {
 export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageProps) {
     const { isVietnamese } = useLanguage();
     const [selectedPodcastId, setSelectedPodcastId] = useState<string | null>(null);
+    const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
     const t = (vi: string, en: string) => isVietnamese ? vi : en;
 
     const [activeCategory, setActiveCategory] = useState('all');
@@ -145,7 +146,7 @@ export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageP
             <div className={`h-full flex flex-col ${bg}`}>
                 <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b ${isDark ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-gray-50'}`}>
                     <button
-                        onClick={() => setSelectedPodcastId(null)}
+                        onClick={() => { setSelectedPodcastId(null); setSelectedSlug(null); }}
                         className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
                     >
                         <ArrowLeft className="w-4 h-4" />
@@ -155,7 +156,12 @@ export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageP
                 <div className="flex-1 overflow-y-auto">
                     <PodcastDetailView
                         podcastId={selectedPodcastId}
-                        onSelectEpisode={setSelectedPodcastId}
+                        slug={selectedSlug ?? undefined}
+                        onSelectEpisode={(id) => {
+                            const ep = episodes.find(e => e.podcast_id === id);
+                            setSelectedSlug(ep?.slug ?? null);
+                            setSelectedPodcastId(id);
+                        }}
                     />
                 </div>
             </div>
@@ -275,7 +281,7 @@ export default function PodcastGridPage({ isDarkMode: isDark }: PodcastGridPageP
                         {episodes.map(ep => (
                             <button
                                 key={ep.podcast_id}
-                                onClick={() => setSelectedPodcastId(ep.podcast_id)}
+                                onClick={() => { setSelectedSlug(ep.slug ?? null); setSelectedPodcastId(ep.podcast_id); }}
                                 className={`${cardBg} rounded-xl overflow-hidden border ${border} hover:border-teal-500/60 hover:shadow-lg transition-all text-left group`}
                             >
                                 {/* Landscape thumbnail 315×177 */}
