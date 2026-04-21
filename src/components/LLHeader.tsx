@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Download, RefreshCw, Sun, Moon,
+    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
@@ -40,9 +40,11 @@ interface LLHeaderProps {
     onTabChange: (tab: TabType) => void;
     isPremium: boolean;
     onUpgradeClick: () => void;
+    isSidebarVisible?: boolean;
+    onToggleSidebar?: () => void;
 }
 
-export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeClick }: LLHeaderProps) {
+export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeClick, isSidebarVisible, onToggleSidebar }: LLHeaderProps) {
     const { user, isLoading, signIn, signOut } = useWordaiAuth();
     const { isVietnamese, toggleLanguage } = useLanguage();
     const { isDark, toggleTheme } = useTheme();
@@ -106,8 +108,21 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
             }}
             className={`flex-shrink-0 flex items-center justify-between pl-[72px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-white/90 border-gray-200/60'}`}
         >
-            {/* Left: app title */}
-            <div className="flex items-center gap-2 pointer-events-none">
+            {/* Left: sidebar toggle + app title */}
+            <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+                {onToggleSidebar && (
+                    <button
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={onToggleSidebar}
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                        title={isSidebarVisible ? t('Ẩn thư viện', 'Hide library', isVietnamese) : t('Hiện thư viện', 'Show library', isVietnamese)}
+                    >
+                        {isSidebarVisible
+                            ? <PanelLeftClose className="w-4 h-4" />
+                            : <PanelLeftOpen className="w-4 h-4" />}
+                    </button>
+                )}
                 <span className={`text-xs font-semibold hidden sm:block ${isDark ? 'text-white/70' : 'text-gray-700'}`}>Listen &amp; Learn by WynAI</span>
             </div>
 

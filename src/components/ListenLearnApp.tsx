@@ -5,12 +5,11 @@
  * Renders: LLHeader (draggable title bar) + main tabbed content.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import LLHeader from './LLHeader';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const SongLearningTab = dynamic(() => import('@/components/songs/SongLearningTab').then(m => ({ default: m.SongLearningTab })), { ssr: false });
@@ -44,6 +43,50 @@ export default function ListenLearnApp() {
     const [isGamificationVisible, setIsGamificationVisible] = useState(true);
     const [gamificationRefreshKey, setGamificationRefreshKey] = useState(0);
     const [hasSongOpen, setHasSongOpen] = useState(false);
+
+    // Resizable sidebar widths
+    const [convSidebarWidth, setConvSidebarWidth] = useState(260);
+    const [gamifSidebarWidth, setGamifSidebarWidth] = useState(280);
+    const convResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+    const gamifResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+    const convWidthRef = useRef(260);
+    const gamifWidthRef = useRef(280);
+    useEffect(() => { convWidthRef.current = convSidebarWidth; }, [convSidebarWidth]);
+    useEffect(() => { gamifWidthRef.current = gamifSidebarWidth; }, [gamifSidebarWidth]);
+
+    const startConvResize = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        convResizeRef.current = { startX: e.clientX, startWidth: convWidthRef.current };
+        const onMove = (ev: MouseEvent) => {
+            if (!convResizeRef.current) return;
+            const delta = ev.clientX - convResizeRef.current.startX;
+            setConvSidebarWidth(Math.max(160, Math.min(420, convResizeRef.current.startWidth + delta)));
+        };
+        const onUp = () => {
+            convResizeRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, []);
+
+    const startGamifResize = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        gamifResizeRef.current = { startX: e.clientX, startWidth: gamifWidthRef.current };
+        const onMove = (ev: MouseEvent) => {
+            if (!gamifResizeRef.current) return;
+            const delta = gamifResizeRef.current.startX - ev.clientX;
+            setGamifSidebarWidth(Math.max(180, Math.min(420, gamifResizeRef.current.startWidth + delta)));
+        };
+        const onUp = () => {
+            gamifResizeRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, []);
 
     const checkPremiumStatus = useCallback(async () => {
         if (!user) return;
@@ -205,6 +248,8 @@ export default function ListenLearnApp() {
                             setShowSubscriptionModal(true);
                         }
                     }}
+                    isSidebarVisible={isSidebarVisible}
+                    onToggleSidebar={() => setIsSidebarVisible(v => !v)}
                 />
             </div>
 
@@ -215,6 +260,8 @@ export default function ListenLearnApp() {
                     <SongLearningTab
                         isDark={isDark}
                         language={isVietnamese ? 'vi' : 'en'}
+                        isSidebarVisible={isSidebarVisible}
+                        onToggleSidebar={() => setIsSidebarVisible(v => !v)}
                         onSongOpenChange={setHasSongOpen}
                     />
                 )}
@@ -226,27 +273,30 @@ export default function ListenLearnApp() {
 
                 {/* Conversations Tab */}
                 {activeTab === 'conversations' && (
-                    <div className="flex h-full">
-                        {/* Left sidebar toggle strip */}
-                        <div className="flex flex-col items-center justify-center w-5 flex-shrink-0">
-                            <button
-                                onClick={() => setIsSidebarVisible(v => !v)}
-                                className={`flex items-center justify-center h-14 w-5 rounded-r transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200/60'}`}
-                                title={isSidebarVisible ? 'Hide conversations sidebar' : 'Show conversations sidebar'}
-                            >
-                                {isSidebarVisible ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                            </button>
-                        </div>
+                    <div className="flex h-full overflow-hidden">
+                        {/* Left sidebar (Conversations) — resizable */}
                         {isSidebarVisible && (
-                            <ConversationsSidebar
-                                selectedConversationId={selectedConversationId}
-                                onConversationSelect={(id) => {
-                                    setSelectedConversationId(id);
-                                }}
-                                isDarkMode={isDark}
+                            <div
+                                style={{ width: convSidebarWidth, flexShrink: 0 }}
+                                className="h-full overflow-hidden"
+                            >
+                                <ConversationsSidebar
+                                    selectedConversationId={selectedConversationId}
+                                    onConversationSelect={(id) => setSelectedConversationId(id)}
+                                    isDarkMode={isDark}
+                                />
+                            </div>
+                        )}
+                        {/* Left resize handle */}
+                        {isSidebarVisible && (
+                            <div
+                                className={`w-[3px] flex-shrink-0 cursor-col-resize transition-colors hover:bg-purple-400/40 active:bg-purple-500/50 ${isDark ? 'bg-white/5' : 'bg-gray-200/60'}`}
+                                onMouseDown={startConvResize}
                             />
                         )}
-                        <div className="flex-1 overflow-hidden">
+
+                        {/* Main content */}
+                        <div className="flex-1 overflow-hidden min-w-0">
                             <ConversationContent
                                 conversationId={selectedConversationId}
                                 isDarkMode={isDark}
@@ -256,23 +306,40 @@ export default function ListenLearnApp() {
                                 onGapSubmitted={() => setGamificationRefreshKey(k => k + 1)}
                             />
                         </div>
+
+                        {/* Right resize handle */}
                         {isGamificationVisible && (
-                            <GamificationSidebar
-                                isDarkMode={isDark}
-                                onConversationSelect={(id) => setSelectedConversationId(id)}
-                                refreshKey={gamificationRefreshKey}
+                            <div
+                                className={`w-[3px] flex-shrink-0 cursor-col-resize transition-colors hover:bg-purple-400/40 active:bg-purple-500/50 ${isDark ? 'bg-white/5' : 'bg-gray-200/60'}`}
+                                onMouseDown={startGamifResize}
                             />
                         )}
-                        {/* Right sidebar toggle strip */}
-                        <div className="flex flex-col items-center justify-center w-5 flex-shrink-0">
-                            <button
-                                onClick={() => setIsGamificationVisible(v => !v)}
-                                className={`flex items-center justify-center h-14 w-5 rounded-l transition-colors ${isDark ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200/60'}`}
-                                title={isGamificationVisible ? 'Hide learning path' : 'Show learning path'}
+                        {/* Right sidebar (Learning Path) — resizable */}
+                        {isGamificationVisible && (
+                            <div
+                                style={{ width: gamifSidebarWidth, flexShrink: 0 }}
+                                className="h-full overflow-hidden"
                             >
-                                {isGamificationVisible ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                                <GamificationSidebar
+                                    isDarkMode={isDark}
+                                    onConversationSelect={(id) => setSelectedConversationId(id)}
+                                    refreshKey={gamificationRefreshKey}
+                                    onToggle={() => setIsGamificationVisible(false)}
+                                />
+                            </div>
+                        )}
+                        {/* Right edge toggle (show Learning Path when hidden) */}
+                        {!isGamificationVisible && (
+                            <button
+                                onClick={() => setIsGamificationVisible(true)}
+                                className={`flex-shrink-0 w-6 h-full flex items-center justify-center transition-colors ${isDark ? 'text-gray-600 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100/60'}`}
+                                title={isVietnamese ? 'Hiện Learning Path' : 'Show Learning Path'}
+                            >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
+                                </svg>
                             </button>
-                        </div>
+                        )}
                     </div>
                 )}
 

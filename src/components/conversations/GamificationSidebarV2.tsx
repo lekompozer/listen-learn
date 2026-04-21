@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Target, Flame, Zap, Award, TrendingUp, History, MapPin, ChevronRight, RotateCcw } from 'lucide-react';
+import { Target, Flame, Zap, Award, TrendingUp, History, MapPin, ChevronRight, RotateCcw, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/AppContext';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import {
@@ -48,6 +48,7 @@ interface GamificationSidebarProps {
     isDarkMode: boolean;
     onConversationSelect: (conversationId: string) => void;
     refreshKey?: number;
+    onToggle?: () => void;
 }
 
 // Map English achievement names → Vietnamese equivalents
@@ -112,7 +113,7 @@ function detectNewAchievements(earned: AchievementEarnedRecord[], uid?: string):
     }
 }
 
-export default function GamificationSidebar({ isDarkMode, onConversationSelect, refreshKey }: GamificationSidebarProps) {
+export default function GamificationSidebar({ isDarkMode, onConversationSelect, refreshKey, onToggle }: GamificationSidebarProps) {
     const { isVietnamese } = useLanguage();
     const { user } = useWordaiAuth();
     const t = (vi: string, en: string) => isVietnamese ? vi : en;
@@ -217,13 +218,13 @@ export default function GamificationSidebar({ isDarkMode, onConversationSelect, 
         }
     };
 
-    const bgColor = isDarkMode ? 'bg-gray-900/60 backdrop-blur-2xl' : 'bg-white/60 backdrop-blur-2xl';
+    const bgColor = isDarkMode ? 'bg-gray-900/60 backdrop-blur-2xl' : 'bg-teal-50/90 backdrop-blur-2xl';
     const textColor = isDarkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-    const borderColor = isDarkMode ? 'border-white/10' : 'border-gray-200/50';
+    const borderColor = isDarkMode ? 'border-white/10' : 'border-teal-200/60';
     const cardBg = isDarkMode
         ? 'bg-gray-800/40 backdrop-blur-xl border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)]'
-        : 'bg-white/60 backdrop-blur-xl border-gray-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)]';
+        : 'bg-white/60 backdrop-blur-xl border-teal-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)]';
 
     // Debug logging
     return (
@@ -240,7 +241,17 @@ export default function GamificationSidebar({ isDarkMode, onConversationSelect, 
             />
             <div className={`h-full flex flex-col ${bgColor} ${isDarkMode ? 'sidebar-scrollbar-dark' : 'sidebar-scrollbar-light'}`}>
                 {/* Tabs */}
-                <div className={`border-b ${borderColor} flex`}>
+                <div className={`border-b ${borderColor} flex items-stretch`}>
+                    {/* Collapse button */}
+                    {onToggle && (
+                        <button
+                            onClick={onToggle}
+                            className={`px-2 flex items-center justify-center border-r ${borderColor} transition-colors ${isDarkMode ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-teal-100/60'}`}
+                            title={t('Thu gọn', 'Collapse')}
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab('path')}
                         className={`flex-1 px-4 py-3 font-medium text-sm transition-all ${activeTab === 'path'
