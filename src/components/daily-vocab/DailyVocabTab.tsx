@@ -1,11 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
-    Download, ExternalLink, BookOpen, Loader2, ArrowUpRight,
+    Download, ExternalLink, BookOpen,
 } from 'lucide-react';
+import { AIChatEmbed } from '@/components/embeds/AIChatEmbed';
+import { UsagePlanEmbed } from '@/components/embeds/UsagePlanEmbed';
+import { AILearningEmbed } from '@/components/embeds/AILearningEmbed';
 import { logEvent } from 'firebase/analytics';
 import { analytics } from '@/lib/wordai-firebase';
 
@@ -130,97 +133,7 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
     );
 }
 
-// ─── App panel launcher (for pages that can't be iframed) ─────────────────────
-function AppPanelSection({ isDark, url, title, description, icon: Icon, accentColor }: {
-    isDark: boolean; url: string; title: string; description: string;
-    icon: React.ElementType; accentColor: string;
-}) {
-    const [status, setStatus] = useState<'idle' | 'opening' | 'open' | 'error'>('idle');
-    const openedRef = useRef(false);
-
-    const openPanel = useCallback(async () => {
-        setStatus('opening');
-        try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('open_app_panel', { url, title });
-            setStatus('open');
-        } catch (e) {
-            console.error('[AppPanel] Failed to open:', e);
-            setStatus('error');
-        }
-    }, [url, title]);
-
-    // Auto-open when this section mounts
-    useEffect(() => {
-        if (openedRef.current) return;
-        openedRef.current = true;
-        openPanel();
-        return () => {
-            // Optionally close panel when navigating away
-            import('@tauri-apps/api/core').then(({ invoke }) => {
-                invoke('close_app_panel').catch(() => { });
-            });
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    return (
-        <div className="h-full flex flex-col items-center justify-center gap-8 px-8">
-            {/* Icon */}
-            <div className={`w-20 h-20 rounded-3xl ${accentColor} flex items-center justify-center shadow-xl`}>
-                <Icon className="w-10 h-10 text-white" />
-            </div>
-
-            {/* Text */}
-            <div className="text-center space-y-2 max-w-sm">
-                <h3 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{title}</h3>
-                <p className={`text-sm leading-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{description}</p>
-            </div>
-
-            {/* Status */}
-            {status === 'opening' && (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Đang mở cửa sổ…
-                </div>
-            )}
-
-            {status === 'open' && (
-                <div className="flex flex-col items-center gap-3">
-                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${isDark ? 'bg-teal-900/40 text-teal-400 border border-teal-800/50' : 'bg-teal-50 text-teal-700 border border-teal-200'}`}>
-                        <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-                        Cửa sổ đang mở
-                    </div>
-                    <button
-                        onClick={openPanel}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 ${isDark ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}
-                    >
-                        <ArrowUpRight className="w-4 h-4" />
-                        Mở lại / Focus
-                    </button>
-                </div>
-            )}
-
-            {status === 'error' && (
-                <div className="flex flex-col items-center gap-3">
-                    <p className="text-sm text-red-400">Không thể mở cửa sổ nội tuyến.</p>
-                    <button
-                        onClick={async () => {
-                            try {
-                                const { invoke } = await import('@tauri-apps/api/core');
-                                await invoke('open_url', { url });
-                            } catch { window.open(url, '_blank'); }
-                        }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white transition-all active:scale-95"
-                    >
-                        <ExternalLink className="w-4 h-4" />
-                        Mở trong trình duyệt
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-}
+// AppPanelSection removed — replaced by embedded components
 
 // ─── Nav rail ─────────────────────────────────────────────────────────────────
 const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
@@ -319,36 +232,15 @@ export function DailyVocabTab({ isDark }: DailyVocabTabProps) {
                 )}
 
                 {section === 'usage-plan' && (
-                    <AppPanelSection
-                        isDark={isDark}
-                        url="https://wordai.pro/usage"
-                        title="Usage & Plan"
-                        description="Xem dung lượng đã dùng, gói hiện tại, lịch sử thanh toán và nâng cấp tài khoản."
-                        icon={FileText}
-                        accentColor="bg-gradient-to-br from-blue-500 to-indigo-600"
-                    />
+                    <UsagePlanEmbed isDark={isDark} />
                 )}
 
                 {section === 'ai-chat' && (
-                    <AppPanelSection
-                        isDark={isDark}
-                        url="https://wordai.pro/AI-chat"
-                        title="AI Chat"
-                        description="Trò chuyện với AI, phân tích tài liệu, viết văn bản và hỏi bất kỳ điều gì."
-                        icon={MessageCircle}
-                        accentColor="bg-gradient-to-br from-teal-500 to-emerald-600"
-                    />
+                    <AIChatEmbed isDark={isDark} />
                 )}
 
                 {section === 'ai-learning' && (
-                    <AppPanelSection
-                        isDark={isDark}
-                        url="https://wordai.pro/ai-learning"
-                        title="AI Learning Assistant"
-                        description="Trợ lý học tập AI giải bài từng bước, chấm điểm và lộ trình học cá nhân hoá."
-                        icon={GraduationCap}
-                        accentColor="bg-gradient-to-br from-purple-500 to-violet-600"
-                    />
+                    <AILearningEmbed isDark={isDark} />
                 )}
 
                 {section === 'wynai-music' && (

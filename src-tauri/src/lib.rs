@@ -8,57 +8,6 @@ async fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
-/// Open a URL in a floating in-app panel window (new Tauri WebviewWindow).
-/// If a panel with the same URL is already open, focus it instead.
-#[tauri::command]
-async fn open_app_panel(app: tauri::AppHandle, url: String, title: String) -> Result<(), String> {
-    use tauri::Manager;
-    const LABEL: &str = "app_panel";
-
-    // Close any existing panel first
-    if let Some(existing) = app.get_webview_window(LABEL) {
-        let _ = existing.close();
-        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
-    }
-
-    let main_win = app.get_webview_window("main")
-        .ok_or_else(|| "main window not found".to_string())?;
-
-    let outer_pos = main_win.outer_position().map_err(|e| e.to_string())?;
-    let outer_size = main_win.outer_size().map_err(|e| e.to_string())?;
-    let scale = main_win.scale_factor().map_err(|e| e.to_string())?;
-
-    // Convert physical → logical, inset by 40px from each side
-    let lx = (outer_pos.x as f64 / scale) + 40.0;
-    let ly = (outer_pos.y as f64 / scale) + 30.0;
-    let lw = ((outer_size.width as f64 / scale) - 80.0).max(800.0);
-    let lh = ((outer_size.height as f64 / scale) - 60.0).max(500.0);
-
-    let webview_url = WebviewUrl::External(
-        url.parse().map_err(|e: url::ParseError| e.to_string())?
-    );
-
-    WebviewWindowBuilder::new(&app, LABEL, webview_url)
-        .title(&title)
-        .inner_size(lw, lh)
-        .position(lx, ly)
-        .resizable(true)
-        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15")
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-/// Close the in-app panel window if open.
-#[tauri::command]
-async fn close_app_panel(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-    if let Some(win) = app.get_webview_window("app_panel") {
-        win.close().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
 
 #[tauri::command]
 fn get_app_build_info() -> serde_json::Value {
@@ -246,8 +195,6 @@ pub fn run() {
             check_for_updates,
             download_and_install_update,
             open_url,
-            open_app_panel,
-            close_app_panel,
             google_auth::open_google_auth,
             read_audio_files_in_dir,
             copy_files_to_playlist_dir,
