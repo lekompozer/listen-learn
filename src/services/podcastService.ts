@@ -60,6 +60,7 @@ export interface PodcastEpisodeDetail extends PodcastEpisode {
     source_url?: string | null;
     vocabulary_raw?: { word: string; definition_en: string }[] | null;
     transcript_turns?: PodcastTranscriptTurn[] | null;
+    transcript_en?: string | null;
     transcript_vi?: string | null;
     transcripts?: Record<string, PodcastTedTranscriptSegment[]> | null;
     ai_processed?: boolean;

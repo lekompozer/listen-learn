@@ -33,6 +33,19 @@ function parseViLines(transcriptVi: string): string[] {
         });
 }
 
+/** Split a flat transcript string into sentences (same as web page.tsx) */
+function splitSentences(text: string): string[] {
+    if (!text) return [];
+    const paragraphs = text.replace(/\r\n/g, '\n').trim().split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    const sentences: string[] = [];
+    for (const para of paragraphs) {
+        const stripped = para.replace(/^[A-Z]{2,10}:\s*/, '');
+        const parts = stripped.split(/(?<=[.!?])\s+(?=[A-Z"\u2018\u201C])/);
+        sentences.push(...parts.map(s => s.trim()).filter(Boolean));
+    }
+    return sentences;
+}
+
 
 
 interface PodcastDetailViewProps {
@@ -95,15 +108,22 @@ export default function PodcastDetailView({ podcastId, onSelectEpisode }: Podcas
         );
     }
 
-    // Build videoTurns (same logic as the web page.tsx)
+    // Build videoTurns (mirrors web page.tsx logic — includes sentence-split fallback)
     const viLines = episode.transcript_vi ? parseViLines(episode.transcript_vi) : [];
-    const videoTurns = (episode.transcript_turns ?? []).map((turn, i) => ({
-        speaker: turn.speaker,
-        text: turn.text,
-        viText: turn.text_vi ?? viLines[i],
-        start_sec: turn.start_sec,
-        end_sec: turn.end_sec,
-    }));
+    const hasTurns = (episode.transcript_turns ?? []).length > 0;
+    const videoTurns = hasTurns
+        ? (episode.transcript_turns ?? []).map((turn, i) => ({
+            speaker: turn.speaker,
+            text: turn.text,
+            viText: turn.text_vi ?? viLines[i],
+            start_sec: turn.start_sec,
+            end_sec: turn.end_sec,
+        }))
+        : (() => {
+            const enSentences = episode.transcript_en ? splitSentences(episode.transcript_en) : [];
+            const viSentences = episode.transcript_vi ? splitSentences(episode.transcript_vi) : [];
+            return enSentences.map((text, i) => ({ speaker: '', text, viText: viSentences[i] }));
+        })();
 
     // Cast episode to the shape PodcastDetailContent expects
     // (the service type is a subset; we satisfy the wider interface at runtime)

@@ -43,33 +43,6 @@ const LANG_LABELS: Record<string, string> = {
     it: 'Italiano',
 };
 
-// ─── YT IFrame API types ──────────────────────────────────────────────────────
-
-declare global {
-    interface Window {
-        YT: {
-            Player: new (el: string | HTMLElement, opts: YTPlayerOptions) => YTPlayerInstance;
-            PlayerState: { PLAYING: number; PAUSED: number; ENDED: number; CUED: number; BUFFERING: number };
-        };
-        onYouTubeIframeAPIReady: () => void;
-    }
-}
-
-interface YTPlayerOptions {
-    videoId: string;
-    playerVars?: Record<string, string | number>;
-    events?: {
-        onReady?: (e: { target: YTPlayerInstance }) => void;
-        onStateChange?: (e: { data: number }) => void;
-    };
-}
-
-interface YTPlayerInstance {
-    getCurrentTime(): number;
-    seekTo(seconds: number, allowSeekAhead: boolean): void;
-    destroy(): void;
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function findActiveIndex(segments: TedTranscriptSegment[], currentSec: number): number {
@@ -88,12 +61,9 @@ function formatSec(s: number): string {
     return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl, transcripts }: Props) {
+export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: _youtubeUrl, transcripts }: Props) {
     const { isDark } = useTheme();
-    const playerDivRef = useRef<HTMLDivElement>(null);
-    const playerRef = useRef<YTPlayerInstance | null>(null);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -105,11 +75,21 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl, 
     const [isPlaying, setIsPlaying] = useState(false);
 
     // ─── Intro offset ──────────────────────────────────────────────────────
-    // YouTube clips often have 12–22s of intro before the talk starts.
-    // The offset shifts the transcript so segment times align with real video time.
     const [offset, setOffset] = useState(12);
     const [isEditingOffset, setIsEditingOffset] = useState(false);
     const [offsetInput, setOffsetInput] = useState('12');
+
+    // ─── YouTube embed origin — computed client-side only ─────────────────
+    // tauri-plugin-localhost serves at http://localhost:3002 in both dev and prod.
+    // window.location.origin is already "http://localhost:3002" in that case.
+    // Fallback covers any case where it's still "tauri://localhost".
+    const [ytEmbedOrigin, setYtEmbedOrigin] = useState('http://localhost:3002');
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const o = window.location.origin;
+            setYtEmbedOrigin(o.startsWith('http') ? o : 'http://localhost:3002');
+        }
+    }, []);
 
     const saveOffset = () => {
         const v = parseFloat(offsetInput);
@@ -122,7 +102,6 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl, 
         ? Object.keys(transcripts).filter(k => k !== 'en' && (transcripts[k]?.length ?? 0) > 0)
         : [];
 
-    // Default secondary language to 'vi' if available, else first available
     useEffect(() => {
         if (availableLangs.length > 0) {
             setSecondLang(availableLangs.includes('vi') ? 'vi' : availableLangs[0]);
@@ -132,12 +111,10 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl, 
     const enSegments: TedTranscriptSegment[] = transcripts?.en ?? [];
     const secSegments: TedTranscriptSegment[] = (secondLang && transcripts?.[secondLang]) ? transcripts[secondLang] : [];
 
-    // Transcript time = video time − offset
     const transcriptSec = Math.max(0, currentSec - offset);
     const activeIdx = findActiveIndex(enSegments, transcriptSec);
 
-    // ─── Auto-scroll active line into view (container-only, won't scroll page) ─
-    // Guard: only when video is playing — prevents page scroll on mobile at load
+    // ─── Auto-scroll ────────────────────────────────────────────────────────
     useEffect(() => {
         if (!autoScroll || !isPlaying || activeIdx < 0) return;
         const el = lineRefs.current[activeIdx];
@@ -151,81 +128,80 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl, 
         }
     }, [activeIdx, autoScroll, isPlaying]);
 
-    // ─── Polling: update currentSec while video plays ──────────────────────
+    // ─── postMessage helpers ────────────────────────────────────────────────
+    const sendCmd = useCallback((func: string, args: unknown[] = []) => {
+        try {
+            iframeRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func, args }), '*'
+            );
+        } catch { /* cross-origin, ignore */ }
+    }, []);
+
     const startPolling = useCallback(() => {
         if (pollRef.current) clearInterval(pollRef.current);
         setIsPlaying(true);
-        pollRef.current = setInterval(() => {
-            if (playerRef.current) {
-                setCurrentSec(playerRef.current.getCurrentTime());
-            }
-        }, 250);
-    }, []);
+        pollRef.current = setInterval(() => { sendCmd('getCurrentTime'); }, 250);
+    }, [sendCmd]);
 
     const stopPolling = useCallback(() => {
-        if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-        }
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         setIsPlaying(false);
     }, []);
 
-    // ─── Load YouTube IFrame API ────────────────────────────────────────────
+    // ─── Listen for YouTube postMessage responses ───────────────────────────
     useEffect(() => {
         if (!youtubeId) return;
-
-        const initPlayer = () => {
-            if (!playerDivRef.current) return;
-            playerRef.current = new window.YT.Player(playerDivRef.current, {
-                videoId: youtubeId,
-                playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
-                events: {
-                    onReady: () => setPlayerReady(true),
-                    onStateChange: (e) => {
-                        const PLAYING = 1;
-                        if (e.data === PLAYING) startPolling();
-                        else stopPolling();
-                    },
-                },
-            });
-        };
-
-        if (window.YT?.Player) {
-            initPlayer();
-        } else {
-            window.onYouTubeIframeAPIReady = initPlayer;
-            if (!document.getElementById('yt-iframe-api')) {
-                const tag = document.createElement('script');
-                tag.id = 'yt-iframe-api';
-                tag.src = 'https://www.youtube.com/iframe_api';
-                document.head.appendChild(tag);
+        const handleMsg = (e: MessageEvent) => {
+            if (typeof e.data !== 'string') return;
+            let d: Record<string, unknown>;
+            try { d = JSON.parse(e.data); } catch { return; }
+            const ev = d.event as string | undefined;
+            const info = d.info;
+            if (ev === 'onReady') {
+                setPlayerReady(true);
+                try { iframeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch { }
             }
-        }
-
-        return () => {
-            stopPolling();
-            playerRef.current?.destroy();
-            playerRef.current = null;
+            if (ev === 'onStateChange') {
+                const state = typeof info === 'number' ? info : (info as Record<string, unknown>)?.playerState;
+                if (state === 1) startPolling(); else stopPolling();
+            }
+            if (ev === 'infoDelivery' && info && typeof info === 'object') {
+                const ct = (info as Record<string, unknown>).currentTime;
+                if (typeof ct === 'number') setCurrentSec(ct);
+            }
         };
+        window.addEventListener('message', handleMsg);
+        return () => { window.removeEventListener('message', handleMsg); stopPolling(); };
     }, [youtubeId, startPolling, stopPolling]);
 
-    // ─── Click segment → seek video (add offset back) ────────────────────
+    // ─── Click segment → seek ──────────────────────────────────────────────
     const handleSeekTo = (sec: number) => {
         const videoSec = sec + offset;
-        playerRef.current?.seekTo(videoSec, true);
+        sendCmd('seekTo', [videoSec, true]);
         setCurrentSec(videoSec);
     };
 
     const hasTranscript = enSegments.length > 0;
+    const iframeSrc = `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=0&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(ytEmbedOrigin)}`;
 
-    // ── nav bar is ~48px (py-3 + text-sm); top-[48px] keeps player below nav
-    // ── calc(100dvh - 48px) fills the rest of the viewport
     return (
         <div className="flex flex-col gap-2">
-            {/* ── Player ── */}
+            {/* ── Player — plain <iframe>, Tauri WKWebView compatible ── */}
             <div className={`flex-shrink-0 rounded-2xl overflow-hidden border shadow-xl bg-black ${isDark ? 'border-gray-700/60' : 'border-gray-300/80'}`}>
                 <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                    <div ref={playerDivRef} className="absolute inset-0 w-full h-full" />
+                    <iframe
+                        ref={iframeRef}
+                        src={iframeSrc}
+                        title={title}
+                        className="absolute inset-0 w-full h-full"
+                        style={{ border: 'none' }}
+                        allow="autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                        allowFullScreen
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        onLoad={() => {
+                            try { iframeRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening' }), '*'); } catch { }
+                        }}
+                    />
                 </div>
                 <div className={`px-4 py-2 flex items-center justify-between border-t ${isDark ? 'bg-gray-800/80 border-gray-700/50' : 'bg-gray-100 border-gray-200'}`}>
                     <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>TED Talk · YouTube {playerReady && <span className="text-teal-500">● Live</span>}</span>
