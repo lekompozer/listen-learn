@@ -152,8 +152,8 @@ export default function TedPlayerWithTranscript({ youtubeId, title, youtubeUrl: 
     useEffect(() => {
         if (!youtubeId) return;
         const handleMsg = (e: MessageEvent) => {
-            // Only handle messages from YouTube origins
-            if (!String(e.origin).includes('youtube.com')) return;
+            // Only handle messages from YouTube origins (both youtube.com and youtube-nocookie.com)
+            if (!String(e.origin).match(/youtube(-nocookie)?\.com/)) return;
             if (typeof e.data !== 'string') return;
             let d: Record<string, unknown>;
             try { d = JSON.parse(e.data); } catch { return; }
