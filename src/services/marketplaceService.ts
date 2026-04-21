@@ -232,4 +232,64 @@ export const marketplaceService = {
             return { tags: [], total_unique_tags: 0, returned_count: 0 };
         }
     },
+
+    async getTopRatedTests(limit: number = 8, page: number = 1, language?: string): Promise<{ tests: MarketplaceTest[] }> {
+        let url = `/api/v1/marketplace/tests?sort_by=top_rated&page_size=${limit}&page=${page}`;
+        if (language) url += `&language=${language}`;
+        try {
+            const response = await apiRequest<{ success: boolean; data: { tests: MarketplaceTest[] } }>(url, {}, false);
+            return { tests: Array.isArray(response?.data?.tests) ? response.data.tests : [] };
+        } catch {
+            return { tests: [] };
+        }
+    },
+
+    async getLatestTests(limit: number = 8, page: number = 1, language?: string): Promise<{ tests: MarketplaceTest[] }> {
+        let url = `/api/v1/marketplace/tests?sort_by=newest&page_size=${limit}&page=${page}`;
+        if (language) url += `&language=${language}`;
+        try {
+            const response = await apiRequest<{ success: boolean; data: { tests: MarketplaceTest[] } }>(url, {}, false);
+            return { tests: Array.isArray(response?.data?.tests) ? response.data.tests : [] };
+        } catch {
+            return { tests: [] };
+        }
+    },
+
+    async getPopularTests(
+        limit: number = 10,
+        test_category?: 'academic' | 'diagnostic',
+        days?: number
+    ): Promise<Array<{ test_id: string; test_title: string; slug?: string; submission_count: number; test_category: string; creator_id: string; creator_name: string; }>> {
+        const queryParams = new URLSearchParams({ limit: limit.toString() });
+        if (test_category) queryParams.append('test_category', test_category);
+        if (days !== undefined && days > 0) queryParams.append('days', days.toString());
+        try {
+            const response = await apiRequest<{ popular_tests: Array<{ test_id: string; test_title: string; slug?: string; submission_count: number; test_category: string; creator_id: string; creator_name: string; }> }>(
+                `/api/v1/tests/statistics/popular?${queryParams.toString()}`, {}, false
+            );
+            return Array.isArray(response?.popular_tests) ? response.popular_tests : [];
+        } catch {
+            return [];
+        }
+    },
+
+    async getActiveUsers(
+        limit: number = 10,
+        min_submissions?: number,
+        test_category?: 'academic' | 'diagnostic',
+        days?: number
+    ): Promise<Array<{ user_id: string; user_name: string; submission_count: number; average_score: number; passed_count: number; failed_count: number; }>> {
+        const queryParams = new URLSearchParams({ limit: limit.toString() });
+        if (min_submissions !== undefined && min_submissions > 0) queryParams.append('min_submissions', min_submissions.toString());
+        if (test_category) queryParams.append('test_category', test_category);
+        if (days !== undefined && days > 0) queryParams.append('days', days.toString());
+        try {
+            const response = await apiRequest<{ active_users: Array<{ user_id: string; user_name: string; submission_count: number; average_score: number; passed_count: number; failed_count: number; }> }>(
+                `/api/v1/tests/statistics/active-users?${queryParams.toString()}`, {}, false
+            );
+            return Array.isArray(response?.active_users) ? response.active_users : [];
+        } catch {
+            return [];
+        }
+    },
 };
