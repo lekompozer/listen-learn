@@ -242,16 +242,6 @@ export default function GamificationSidebar({ isDarkMode, onConversationSelect, 
             <div className={`h-full flex flex-col ${bgColor} ${isDarkMode ? 'sidebar-scrollbar-dark' : 'sidebar-scrollbar-light'}`}>
                 {/* Tabs */}
                 <div className={`border-b ${borderColor} flex items-stretch`}>
-                    {/* Collapse button */}
-                    {onToggle && (
-                        <button
-                            onClick={onToggle}
-                            className={`px-2 flex items-center justify-center border-r ${borderColor} transition-colors ${isDarkMode ? 'text-gray-500 hover:text-gray-200 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-teal-100/60'}`}
-                            title={t('Thu gọn', 'Collapse')}
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    )}
                     <button
                         onClick={() => setActiveTab('path')}
                         className={`flex-1 px-4 py-3 font-medium text-sm transition-all ${activeTab === 'path'

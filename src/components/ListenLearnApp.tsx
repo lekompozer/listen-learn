@@ -13,7 +13,7 @@ import { useLanguage, useTheme } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
 
 const SongLearningTab = dynamic(() => import('@/components/songs/SongLearningTab').then(m => ({ default: m.SongLearningTab })), { ssr: false });
-const DailyVocabClient = dynamic(() => import('@/components/daily-vocab/DailyVocabClient'), { ssr: false });
+const DailyVocabTab = dynamic(() => import('@/components/daily-vocab/DailyVocabTab').then(m => ({ default: m.DailyVocabTab })), { ssr: false });
 const ConversationsSidebar = dynamic(() => import('@/components/conversations/ConversationsSidebar'), { ssr: false });
 const ConversationContent = dynamic(() => import('@/components/conversations/ConversationContent'), { ssr: false });
 const GamificationSidebar = dynamic(() => import('@/components/conversations/GamificationSidebarV2'), { ssr: false });
@@ -268,12 +268,23 @@ export default function ListenLearnApp() {
 
                 {/* Daily Vocab Tab */}
                 {activeTab === 'daily-vocab' && (
-                    <DailyVocabClient />
+                    <DailyVocabTab isDark={isDark} />
                 )}
 
                 {/* Conversations Tab */}
                 {activeTab === 'conversations' && (
-                    <div className="flex h-full overflow-hidden">
+                    <div className="flex h-full overflow-hidden relative">
+                        {/* Floating round toggle for GamificationSidebar — web style */}
+                        <button
+                            onClick={() => setIsGamificationVisible(v => !v)}
+                            style={{ right: isGamificationVisible ? gamifSidebarWidth + 8 : 12 }}
+                            className={`absolute top-[56px] z-20 w-8 h-8 flex items-center justify-center rounded-full shadow-lg border transition-all duration-300 ${isDark ? 'bg-gray-800 hover:bg-gray-700 text-white border-gray-600' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'}`}
+                            title={isGamificationVisible ? (isVietnamese ? 'Thu gọn' : 'Collapse') : (isVietnamese ? 'Mở rộng' : 'Expand')}
+                        >
+                            <svg className={`w-4 h-4 transition-transform duration-300 ${isGamificationVisible ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
+                            </svg>
+                        </button>
                         {/* Left sidebar (Conversations) — resizable */}
                         {isSidebarVisible && (
                             <div
@@ -327,18 +338,6 @@ export default function ListenLearnApp() {
                                     onToggle={() => setIsGamificationVisible(false)}
                                 />
                             </div>
-                        )}
-                        {/* Right edge toggle (show Learning Path when hidden) */}
-                        {!isGamificationVisible && (
-                            <button
-                                onClick={() => setIsGamificationVisible(true)}
-                                className={`flex-shrink-0 w-6 h-full flex items-center justify-center transition-colors ${isDark ? 'text-gray-600 hover:text-gray-300 hover:bg-white/5' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100/60'}`}
-                                title={isVietnamese ? 'Hiện Learning Path' : 'Show Learning Path'}
-                            >
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 18l6-6-6-6" />
-                                </svg>
-                            </button>
                         )}
                     </div>
                 )}
