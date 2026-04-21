@@ -19,9 +19,10 @@ const ConversationContent = dynamic(() => import('@/components/conversations/Con
 const GamificationSidebar = dynamic(() => import('@/components/conversations/GamificationSidebarV2'), { ssr: false });
 const ConversationsUpgradeModal = dynamic(() => import('@/components/conversations/ConversationsUpgradeModal'), { ssr: false });
 const PodcastGridPage = dynamic(() => import('@/components/podcast/PodcastGridPage'), { ssr: false });
+const OnlineTestsTab = dynamic(() => import('@/components/online-tests/OnlineTestsTab'), { ssr: false });
 const SubscriptionModal = dynamic(() => import('@/components/songs/SubscriptionModal'), { ssr: false });
 
-export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast';
+export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast' | 'online-tests';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 
@@ -347,6 +348,11 @@ export default function ListenLearnApp() {
                     <PodcastGridPage
                         isDarkMode={isDark}
                     />
+                )}
+
+                {/* Online Tests Tab */}
+                {activeTab === 'online-tests' && (
+                    <OnlineTestsTab />
                 )}
             </div>
 

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Image from 'next/image';
-
+import Image from 'next/image';import { Mic, MicOff, Loader2 as ScoringLoader } from 'lucide-react';
 // Ensure Cloudflare Images URL uses the correct variant
 const cfImage = (url: string) =>
     url.replace(/\/(public|thumbnail|small|medium|large|original)$/, '') + '/original';
@@ -102,6 +101,95 @@ export default function PodcastContent({ podcastId, isDarkMode }: PodcastContent
     const [showGrammarModal, setShowGrammarModal] = useState(false);
     const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
     const [savedGrammars, setSavedGrammars] = useState<Set<string>>(new Set());
+
+    // Pronunciation scoring state (per vocab word index)
+    const [pronState, setPronState] = useState<Record<number, {
+        isRecording?: boolean;
+        isScoring?: boolean;
+        pending?: string | null;
+        mimeType?: string;
+        score?: number;
+        remaining?: number;
+        feedback?: string;
+    }>>({});
+    const pronChunksRef = useRef<Record<number, Blob[]>>({});
+    const pronRecorderRef = useRef<Record<number, MediaRecorder>>({});
+    const pronMimeRef = useRef<Record<number, string>>({});
+
+    const sendPronScore = async (idx: number, base64: string, word: string) => {
+        setPronState(s => ({ ...s, [idx]: { ...s[idx], pending: null, isScoring: true } }));
+        try {
+            let authHeader: Record<string, string> = {};
+            if (user) {
+                try { authHeader = { Authorization: `Bearer ${await user.getIdToken()}` }; } catch { /* ignore */ }
+            }
+            const res = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL ?? 'https://ai.wordai.pro'}/api/v1/pronunciation/score`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...authHeader },
+                    body: JSON.stringify({ audio_base64: base64, expected_text: word, audio_mime_type: pronMimeRef.current[idx] || 'audio/webm' }),
+                },
+            );
+            const data = await res.json();
+            if (res.ok) {
+                setPronState(s => ({
+                    ...s,
+                    [idx]: {
+                        ...s[idx],
+                        isScoring: false,
+                        score: Math.round((data.overall_score ?? 0) * 100),
+                        remaining: data.daily_usage?.remaining,
+                        feedback: data.feedback,
+                    },
+                }));
+            } else {
+                setPronState(s => ({ ...s, [idx]: { ...s[idx], isScoring: false } }));
+            }
+        } catch {
+            setPronState(s => ({ ...s, [idx]: { ...s[idx], isScoring: false } }));
+        }
+    };
+
+    const handlePronMic = async (idx: number, word: string) => {
+        const current = pronState[idx] || {};
+        if (current.isRecording || current.isScoring) return;
+        // Reset score to re-record
+        setPronState(s => ({ ...s, [idx]: { isRecording: true, pending: null } }));
+        pronChunksRef.current[idx] = [];
+        let stream: MediaStream | null = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+                : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+            pronMimeRef.current[idx] = mimeType || 'audio/webm';
+            const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            pronRecorderRef.current[idx] = mr;
+            mr.ondataavailable = (e) => { if (e.data.size > 0) pronChunksRef.current[idx]?.push(e.data); };
+            mr.onstop = async () => {
+                stream!.getTracks().forEach(t => t.stop());
+                await new Promise<void>(resolve => setTimeout(resolve, 80));
+                const blob = new Blob(pronChunksRef.current[idx] || [], { type: pronMimeRef.current[idx] });
+                if (blob.size < 100) { setPronState(s => ({ ...s, [idx]: { ...s[idx], isRecording: false } })); return; }
+                const base64: string = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve((reader.result as string).split(',')[1] ?? '');
+                    reader.readAsDataURL(blob);
+                });
+                setPronState(s => ({ ...s, [idx]: { ...s[idx], isRecording: false, pending: base64 } }));
+            };
+            mr.start();
+            // Auto-stop after 5s
+            setTimeout(() => { try { if (mr.state === 'recording') mr.stop(); } catch { /* ignore */ } }, 5000);
+        } catch {
+            stream?.getTracks().forEach(t => t.stop());
+            setPronState(s => ({ ...s, [idx]: { isRecording: false } }));
+        }
+    };
+
+    const stopPronMic = (idx: number) => {
+        try { pronRecorderRef.current[idx]?.stop(); } catch { /* ignore */ }
+    };
 
     // Audio
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -593,13 +681,45 @@ export default function PodcastContent({ podcastId, isDarkMode }: PodcastContent
                                     </button>
                                 )}
 
-                                {/* Words */}
-                                {vocabTab === 'words' && vocab.vocabulary.map((item, i) => (
+                                {vocabTab === 'words' && vocab.vocabulary.map((item, i) => {
+                                    const ps = pronState[i] || {};
+                                    const scoreColor = ps.score !== undefined
+                                        ? ps.score >= 80 ? 'text-green-400' : ps.score >= 60 ? 'text-yellow-400' : 'text-red-400'
+                                        : '';
+                                    return (
                                     <div key={i} className={`p-3 rounded-xl border ${border} ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
                                         <div className="flex items-start justify-between mb-1.5">
                                             <div className="flex items-center gap-1">
                                                 <span className={`font-bold text-sm ${textPri}`}>{item.word}</span>
                                                 <SpeakButton word={item.word} className={`inline-flex items-center justify-center w-5 h-5 rounded-full transition-colors flex-shrink-0 ${isDarkMode ? 'text-gray-600 hover:text-teal-400 hover:bg-teal-400/10' : 'text-gray-400 hover:text-teal-600 hover:bg-teal-600/10'}`} />
+                                                {/* Mic button */}
+                                                {ps.isRecording ? (
+                                                    <button
+                                                        onClick={() => stopPronMic(i)}
+                                                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500/20 text-red-400 animate-pulse flex-shrink-0"
+                                                        title={t('Dừng ghi âm', 'Stop recording')}
+                                                    >
+                                                        <MicOff className="w-3 h-3" />
+                                                    </button>
+                                                ) : ps.isScoring ? (
+                                                    <ScoringLoader className="w-4 h-4 text-amber-400 animate-spin flex-shrink-0" />
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handlePronMic(i, item.word)}
+                                                        className={`inline-flex items-center justify-center w-5 h-5 rounded-full transition-colors flex-shrink-0
+                                                            ${ps.score !== undefined
+                                                                ? (isDarkMode ? 'text-gray-500 hover:text-teal-400 hover:bg-teal-400/10' : 'text-gray-400 hover:text-teal-600 hover:bg-teal-600/10')
+                                                                : (isDarkMode ? 'text-purple-500 hover:text-purple-400 hover:bg-purple-400/10' : 'text-purple-600 hover:bg-purple-100')
+                                                            }`}
+                                                        title={t('Đọc thử + AI chấm phát âm (miễn phí 10 lần/ngày)', 'Read & AI score pronunciation (10 free/day)')}
+                                                    >
+                                                        <Mic className="w-3 h-3" />
+                                                    </button>
+                                                )}
+                                                {/* Score badge */}
+                                                {ps.score !== undefined && !ps.isScoring && (
+                                                    <span className={`text-[11px] font-bold ${scoreColor}`}>{ps.score}%</span>
+                                                )}
                                             </div>
                                             {item.pos_tag && (
                                                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${getPosTagStyle(item.pos_tag)}`}>
@@ -610,8 +730,43 @@ export default function PodcastContent({ podcastId, isDarkMode }: PodcastContent
                                         <p className={`text-xs leading-relaxed ${textSec} mb-1`}>
                                             {item.definition_vi || item.definition_en}
                                         </p>
+                                        {/* Pending confirm box */}
+                                        {ps.pending && !ps.isScoring && (
+                                            <div className={`flex items-center gap-2 mt-1.5 p-2 rounded-lg text-xs
+                                                ${isDarkMode ? 'bg-purple-900/30 border border-purple-700/40' : 'bg-purple-50 border border-purple-200'}`}>
+                                                <Mic className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                                                <span className={isDarkMode ? 'text-purple-300' : 'text-purple-700'}>
+                                                    {t('Gửi để AI chấm?', 'Send for AI scoring?')}
+                                                </span>
+                                                <button
+                                                    onClick={() => sendPronScore(i, ps.pending!, item.word)}
+                                                    className="ml-auto px-2 py-0.5 rounded bg-purple-600 text-white hover:bg-purple-700 font-medium"
+                                                >
+                                                    {t('Chấm', 'Score')}
+                                                </button>
+                                                <button
+                                                    onClick={() => setPronState(s => ({ ...s, [i]: { ...s[i], pending: null } }))}
+                                                    className={`px-1.5 py-0.5 rounded ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`}
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        )}
+                                        {/* Score result */}
+                                        {ps.score !== undefined && !ps.isScoring && !ps.pending && (
+                                            <div className={`flex items-center gap-2 mt-1.5 p-2 rounded-lg text-xs
+                                                ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-gray-100 border border-gray-200'}`}>
+                                                <span className={`font-bold text-base ${scoreColor}`}>{ps.score}%</span>
+                                                {ps.feedback && <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>{ps.feedback}</span>}
+                                                {ps.remaining !== undefined && (
+                                                    <span className={`ml-auto text-[10px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>
+                                                        {t('Còn lại', 'Left')}: {ps.remaining}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                         {item.example && (
-                                            <div className="flex items-start gap-1">
+                                            <div className="flex items-start gap-1 mt-1">
                                                 <p className={`text-xs italic flex-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                                                     &ldquo;{item.example}&rdquo;
                                                 </p>
@@ -619,7 +774,8 @@ export default function PodcastContent({ podcastId, isDarkMode }: PodcastContent
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                })}
 
                                 {/* Grammar */}
                                 {vocabTab === 'grammar' && vocab.grammar_points.map((point, i) => (
