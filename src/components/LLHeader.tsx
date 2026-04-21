@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Award,
+    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
@@ -33,7 +33,6 @@ const TABS: { id: TabType; labelVi: string; labelEn: string; icon: React.Compone
     { id: 'songs', labelVi: 'Bài Hát', labelEn: 'Songs', icon: Music },
     { id: 'conversations', labelVi: 'Hội Thoại', labelEn: 'Conversations', icon: MessageCircle },
     { id: 'podcast', labelVi: 'Podcast', labelEn: 'Podcast', icon: Radio },
-    { id: 'online-tests', labelVi: 'Kiểm Tra', labelEn: 'Tests', icon: Award },
 ];
 
 interface LLHeaderProps {

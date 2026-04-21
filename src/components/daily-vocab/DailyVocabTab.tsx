@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useState, useCallback } from 'react';
 import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
-    Download, ExternalLink, BookOpen,
+    Download, ExternalLink, BookOpen, Award,
 } from 'lucide-react';
 import { AIChatEmbed } from '@/components/embeds/AIChatEmbed';
 import { UsagePlanEmbed } from '@/components/embeds/UsagePlanEmbed';
@@ -16,8 +16,12 @@ const DailyVocabClient = dynamic(
     () => import('@/components/daily-vocab/DailyVocabClient'),
     { ssr: false, loading: () => null }
 );
+const OnlineTestsView = dynamic(
+    () => import('@/components/online-tests/OnlineTestsView'),
+    { ssr: false }
+);
 
-type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning';
+type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests';
 
 interface DailyVocabTabProps {
     isDark: boolean;
@@ -142,6 +146,7 @@ const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType
     { id: 'usage-plan', label: 'Usage & Plan', icon: FileText },
 ];
 const TOOLS_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
+    { id: 'online-tests', label: 'Online Tests', icon: Award },
     { id: 'ai-chat', label: 'AI Chat', icon: MessageCircle },
     { id: 'wynai-music', label: 'WynAI Music', icon: Music },
     { id: 'ai-learning', label: 'AI Learning Assistant', icon: GraduationCap },
@@ -235,6 +240,10 @@ export function DailyVocabTab({ isDark }: DailyVocabTabProps) {
 
                 {section === 'usage-plan' && (
                     <UsagePlanEmbed isDark={isDark} />
+                )}
+
+                {section === 'online-tests' && (
+                    <OnlineTestsView />
                 )}
 
                 {section === 'ai-chat' && (
