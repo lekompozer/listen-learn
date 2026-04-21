@@ -265,7 +265,7 @@ export function AILearningEmbed({ isDark }: AILearningEmbedProps) {
                                 className={`w-full px-4 py-3 rounded-2xl border text-sm outline-none resize-none transition-all ${isDark
                                     ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500 focus:border-teal-500'
                                     : 'border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:border-teal-400'
-                                } disabled:opacity-50`}
+                                    } disabled:opacity-50`}
                             />
                         </div>
 

@@ -231,7 +231,7 @@ export function AIChatEmbed({ isDark }: AIChatEmbedProps) {
                                         className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${provider === p.id
                                             ? (isDark ? 'text-teal-400 bg-teal-900/30' : 'text-teal-700 bg-teal-50')
                                             : (isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50')
-                                        }`}
+                                            }`}
                                     >
                                         {p.label}
                                     </button>
@@ -274,7 +274,7 @@ export function AIChatEmbed({ isDark }: AIChatEmbedProps) {
                         <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
                             ? 'bg-teal-600 text-white rounded-tr-sm'
                             : (isDark ? 'bg-gray-800 text-gray-200 rounded-tl-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm')
-                        }`}>
+                            }`}>
                             {msg.content}
                             {msg.streaming && (
                                 <span className="inline-block w-1.5 h-4 bg-current opacity-70 animate-pulse ml-0.5 align-text-bottom" />
