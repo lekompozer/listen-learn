@@ -88,6 +88,15 @@ export interface TopTest {
     category?: string;
 }
 
+export interface TopUser {
+    user_id: string;
+    display_name: string;
+    avatar_url?: string | null;
+    test_count?: number;
+    total_score?: number;
+    average_score?: number;
+}
+
 export interface PopularTag {
     tag: string;
     count: number;
