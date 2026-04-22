@@ -6,7 +6,7 @@
 import { logger } from '@/lib/logger';
 import { getValidAuthToken } from '@/lib/auth-utils';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 
 // ===========================
 // Type Definitions
