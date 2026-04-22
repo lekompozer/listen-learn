@@ -139,7 +139,7 @@ export const MCQAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                         key={option.option_key}
                         onClick={() => handleToggle(option.option_key)}
                         disabled={disabled}
-                        className={`w-full p-4 rounded-lg border-2 text-left transition-all ${isSelected
+                        className={`w-full p-4 rounded-lg border-2 text-left transition-all ${isDark ? 'text-white' : 'text-gray-900'} ${isSelected
                             ? isDark
                                 ? 'bg-blue-900/40 border-blue-500'
                                 : 'bg-blue-50 border-blue-400'
@@ -204,7 +204,7 @@ export const MatchingAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                 {question.left_items?.map((item) => (
                     <div
                         key={item.key}
-                        className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}
+                        className={`p-4 rounded-lg ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'}`}
                     >
                         <div className="mb-2 font-medium">
                             <span className="font-bold">{item.key}.</span> {render(item.text)}
@@ -215,7 +215,7 @@ export const MatchingAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                             disabled={disabled}
                             className={`w-full p-2 rounded border ${isDark
                                 ? 'bg-gray-700 border-gray-600 text-white'
-                                : 'bg-white border-gray-300'
+                                : 'bg-white border-gray-300 text-gray-900'
                                 } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <option value="">{t('-- Chọn đáp án --', '-- Select answer --')}</option>
@@ -273,7 +273,7 @@ export const MapLabelingAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                 {question.label_positions?.map((pos) => (
                     <div
                         key={pos.key}
-                        className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}
+                        className={`p-4 rounded-lg ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'}`}
                     >
                         <div className="mb-2 font-medium">
                             <span className="font-bold">{pos.key}.</span> {pos.description || `Position ${pos.key}`}
@@ -284,7 +284,7 @@ export const MapLabelingAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                             disabled={disabled}
                             className={`w-full p-2 rounded border ${isDark
                                 ? 'bg-gray-700 border-gray-600 text-white'
-                                : 'bg-white border-gray-300'
+                                : 'bg-white border-gray-300 text-gray-900'
                                 } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <option value="">{t('-- Chọn nhãn --', '-- Select label --')}</option>
@@ -329,14 +329,14 @@ export const CompletionAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                     {render(question.instruction)}
                 </div>
             )}
-            <div className={`p-4 rounded mb-4 font-mono text-sm whitespace-pre-wrap ${isDark ? 'bg-gray-800' : 'bg-gray-50'
+            <div className={`p-4 rounded mb-4 font-mono text-sm whitespace-pre-wrap ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'
                 }`}>
                 {question.template ? render(question.template) : question.template}
             </div>
             <div className="space-y-3">
                 {question.blanks?.map((blank) => (
                     <div key={blank.key}>
-                        <label className="block text-sm font-medium mb-1">
+                        <label className={`block text-sm font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                             [{blank.key}] {blank.word_limit && `(${t('Tối đa', 'Max')} ${blank.word_limit} ${t('từ', 'words')})`}
                         </label>
                         <input
@@ -347,8 +347,8 @@ export const CompletionAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                             disabled={disabled}
                             placeholder={t('Nhập câu trả lời', 'Enter answer')}
                             className={`w-full p-3 rounded border ${isDark
-                                ? 'bg-gray-800 border-gray-700 text-white'
-                                : 'bg-white border-gray-300'
+                                ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                 } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                     </div>
@@ -393,7 +393,7 @@ export const SentenceCompletionAnswerInput: React.FC<QuestionAnswerInputProps> =
 
             {/* NEW FORMAT: Single sentence with template */}
             {hasTemplate && !hasSentences && (
-                <div className={`p-4 rounded-lg mb-3 ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                <div className={`p-4 rounded-lg mb-3 ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'}`}>
                     <div className="mb-2 whitespace-pre-wrap">{question.template ? render(question.template) : question.template}</div>
                     <input
                         type="text"
@@ -403,8 +403,8 @@ export const SentenceCompletionAnswerInput: React.FC<QuestionAnswerInputProps> =
                         disabled={disabled}
                         placeholder={t('Nhập câu trả lời', 'Enter answer')}
                         className={`w-full p-3 rounded border ${isDark
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300'
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                             } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                 </div>
@@ -416,7 +416,7 @@ export const SentenceCompletionAnswerInput: React.FC<QuestionAnswerInputProps> =
                     {question.sentences?.map((sentence) => (
                         <div
                             key={sentence.key}
-                            className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}
+                            className={`p-4 rounded-lg ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'}`}
                         >
                             <div className="mb-2">
                                 <span className="font-bold">{sentence.key}.</span> {sentence.template}
@@ -429,8 +429,8 @@ export const SentenceCompletionAnswerInput: React.FC<QuestionAnswerInputProps> =
                                 disabled={disabled}
                                 placeholder={t('Nhập câu trả lời', 'Enter answer') + (sentence.word_limit ? ` (${t('Tối đa', 'Max')} ${sentence.word_limit} ${t('từ', 'words')})` : '')}
                                 className={`w-full p-3 rounded border ${isDark
-                                    ? 'bg-gray-700 border-gray-600 text-white'
-                                    : 'bg-white border-gray-300'
+                                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                     } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                             />
                         </div>
@@ -440,7 +440,7 @@ export const SentenceCompletionAnswerInput: React.FC<QuestionAnswerInputProps> =
 
             {/* FALLBACK: Show question_text if no template or sentences */}
             {!hasTemplate && !hasSentences && question.question_text && (
-                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'}`}>
                     <div className="mb-3 whitespace-pre-wrap">{render(question.question_text)}</div>
                     <input
                         type="text"
@@ -450,8 +450,8 @@ export const SentenceCompletionAnswerInput: React.FC<QuestionAnswerInputProps> =
                         disabled={disabled}
                         placeholder={t('Nhập câu trả lời', 'Enter answer')}
                         className={`w-full p-3 rounded border ${isDark
-                            ? 'bg-gray-700 border-gray-600 text-white'
-                            : 'bg-white border-gray-300'
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                             } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                 </div>
@@ -497,7 +497,7 @@ export const ShortAnswerAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                 {questionsToRender.map((q) => (
                     <div
                         key={q.key}
-                        className={`p-4 rounded-lg ${isDark ? 'bg-gray-800' : 'bg-gray-50'}`}
+                        className={`p-4 rounded-lg ${isDark ? 'bg-gray-800 text-white' : 'bg-gray-50 text-gray-900'}`}
                     >
                         {questionsToRender.length > 1 && (
                             <div className="mb-2 font-medium">
@@ -512,8 +512,8 @@ export const ShortAnswerAnswerInput: React.FC<QuestionAnswerInputProps> = ({
                             disabled={disabled}
                             placeholder={t('Nhập câu trả lời', 'Enter answer') + (q.word_limit ? ` (${t('Tối đa', 'Max')} ${q.word_limit} ${t('từ', 'words')})` : '')}
                             className={`w-full p-3 rounded border ${isDark
-                                ? 'bg-gray-700 border-gray-600 text-white'
-                                : 'bg-white border-gray-300'
+                                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500'
+                                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
                                 } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                     </div>
@@ -581,8 +581,8 @@ export const TrueFalseMultipleAnswerInput: React.FC<QuestionAnswerInputProps> = 
                     <div
                         key={option.option_key}
                         className={`p-4 rounded-lg border ${!isAnswered
-                            ? isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
-                            : isDark ? 'bg-gray-800 border-blue-600' : 'bg-blue-50 border-blue-300'
+                            ? isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'
+                            : isDark ? 'bg-gray-800 border-blue-600 text-white' : 'bg-blue-50 border-blue-300 text-gray-900'
                             }`}
                     >
                         {/* Option Text */}
