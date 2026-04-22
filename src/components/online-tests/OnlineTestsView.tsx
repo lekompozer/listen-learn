@@ -49,6 +49,14 @@ const PublicTestView = dynamic(
     () => import('./PublicTestView').then(m => ({ default: m.PublicTestView })),
     { ssr: false }
 );
+const TestTakingView = dynamic(
+    () => import('./TestTakingView').then(m => ({ default: m.TestTakingView })),
+    { ssr: false }
+);
+const TestResultsView = dynamic(
+    () => import('./TestResultsView').then(m => ({ default: m.TestResultsView })),
+    { ssr: false }
+);
 const TestGenerationPollingPopup = dynamic(
     () => import('./TestGenerationPollingPopup').then(m => ({ default: m.TestGenerationPollingPopup })),
     { ssr: false }
@@ -76,6 +84,10 @@ export default function OnlineTestsView() {
     const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
     const [selectedTestSlug, setSelectedTestSlug] = useState<string | null>(null);
 
+    // Test flow: null = browsing, string = active test/results
+    const [takingTestId, setTakingTestId] = useState<string | null>(null);
+    const [resultsSubmissionId, setResultsSubmissionId] = useState<string | null>(null);
+
     // Community filters
     const [category, setCategory] = useState('all');
     const [tag, setTag] = useState('all');
@@ -101,8 +113,23 @@ export default function OnlineTestsView() {
         ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
         : 'bg-purple-50 text-purple-700 border border-purple-200';
 
+    // Called when PublicTestView Start button is clicked
+    const handleStartTest = (testId: string) => {
+        if (!user) {
+            openUrl(`https://wynai.pro/online-test/take?testId=${testId}`);
+            return;
+        }
+        setTakingTestId(testId);
+    };
+
+    // Called by TestTakingView after submission
+    const handleShowResults = (submissionId: string) => {
+        setTakingTestId(null);
+        setResultsSubmissionId(submissionId);
+    };
+
     const navItem = (view: ViewMode, icon: React.ReactNode, label: string, requiresAuth = false) => {
-        const isActive = viewMode === view;
+        const isActive = viewMode === view && !takingTestId && !resultsSubmissionId && !selectedTestId && !selectedTestSlug;
         return (
             <button
                 onClick={() => {
@@ -113,6 +140,8 @@ export default function OnlineTestsView() {
                     setViewMode(view);
                     setSelectedTestId(null);
                     setSelectedTestSlug(null);
+                    setTakingTestId(null);
+                    setResultsSubmissionId(null);
                 }}
                 className={`${base} ${isActive ? active : inactive}`}
             >
@@ -124,8 +153,8 @@ export default function OnlineTestsView() {
     };
 
     const renderContent = () => {
-        // Public test view (selected from community)
-        if ((viewMode === 'public' || viewMode === 'community') && (selectedTestId || selectedTestSlug)) {
+        // Test detail view (selected from community or sidebar)
+        if (selectedTestId || selectedTestSlug) {
             return (
                 <PublicTestView
                     testId={selectedTestId || undefined}
@@ -136,6 +165,7 @@ export default function OnlineTestsView() {
                         setSelectedTestId(null);
                         setSelectedTestSlug(null);
                     }}
+                    onStartTest={handleStartTest}
                 />
             );
         }
@@ -212,6 +242,7 @@ export default function OnlineTestsView() {
                                     isDark={isDark}
                                     language={language}
                                     onBack={() => setSelectedTestId(null)}
+                                    onStartTest={handleStartTest}
                                 />
                             )}
                         </div>
@@ -237,7 +268,7 @@ export default function OnlineTestsView() {
                         isDark={isDark}
                         language={language}
                         onBack={() => setViewMode('community')}
-                        onViewResult={(submissionId) => setSelectedTestSlug(submissionId)}
+                        onViewResult={(submissionId) => setResultsSubmissionId(submissionId)}
                     />
                 );
 
@@ -245,6 +276,36 @@ export default function OnlineTestsView() {
                 return null;
         }
     };
+
+    // ── Full-screen overlay for test-taking ──────────────────────────────────
+    if (takingTestId && user) {
+        return (
+            <div className={`flex flex-col h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+                <TestTakingView
+                    testId={takingTestId}
+                    userId={user.uid}
+                    isDark={isDark}
+                    language={language}
+                    onExit={() => setTakingTestId(null)}
+                    onShowResults={handleShowResults}
+                />
+            </div>
+        );
+    }
+
+    // ── Full-screen overlay for results ─────────────────────────────────────
+    if (resultsSubmissionId) {
+        return (
+            <div className={`flex flex-col h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+                <TestResultsView
+                    submissionId={resultsSubmissionId}
+                    isDark={isDark}
+                    language={language}
+                    onBack={() => setResultsSubmissionId(null)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full overflow-hidden">

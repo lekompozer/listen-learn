@@ -19,6 +19,7 @@ interface PublicTestViewProps {
     isDark: boolean;
     language: 'vi' | 'en';
     onBack: () => void;
+    onStartTest?: (testId: string) => void; // In-app: override router.push with callback
 }
 
 export const PublicTestView: React.FC<PublicTestViewProps> = ({
@@ -26,7 +27,8 @@ export const PublicTestView: React.FC<PublicTestViewProps> = ({
     testSlug, // NEW: Primary parameter
     isDark,
     language,
-    onBack
+    onBack,
+    onStartTest,
 }) => {
     const router = useRouter();
 
@@ -155,7 +157,13 @@ export const PublicTestView: React.FC<PublicTestViewProps> = ({
     }, [test, testSlug]);
 
     const handleStartTest = () => {
-        router.push(`/online-test/take?testId=${test?.test_id || testId}`);
+        const resolvedTestId = test?.test_id || testId;
+        if (!resolvedTestId) return;
+        if (onStartTest) {
+            onStartTest(resolvedTestId);
+        } else {
+            router.push(`/online-test/take?testId=${resolvedTestId}`);
+        }
     };
 
     const getDifficultyColor = (difficulty?: string) => {

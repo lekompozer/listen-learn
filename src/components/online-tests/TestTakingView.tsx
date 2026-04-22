@@ -52,6 +52,7 @@ interface TestTakingViewProps {
     isDark: boolean;
     language: 'vi' | 'en';
     onExit?: () => void;
+    onShowResults?: (submissionId: string) => void; // In-app: override router.push
 }
 
 interface SessionInfo {
@@ -75,6 +76,7 @@ export const TestTakingView: React.FC<TestTakingViewProps> = ({
     isDark,
     language,
     onExit,
+    onShowResults,
 }) => {
     const t = (vi: string, en: string) => language === 'en' ? en : vi;
     const router = useRouter();
@@ -817,7 +819,11 @@ export const TestTakingView: React.FC<TestTakingViewProps> = ({
                 setShowRatingModal(true);
             } else {
                 // For private tests, navigate directly to results
-                router.push(`/online-test/results?submissionId=${result.submission_id}`);
+                if (onShowResults) {
+                    onShowResults(result.submission_id);
+                } else {
+                    router.push(`/online-test/results?submissionId=${result.submission_id}`);
+                }
             }
         } catch (err: any) {
             logger.error('❌ Failed to submit test:', err);
@@ -849,7 +855,11 @@ export const TestTakingView: React.FC<TestTakingViewProps> = ({
                     setShowRatingModal(true);
                 } else {
                     // For private tests, navigate directly to results
-                    router.push(`/online-test/results?submissionId=${latestSubmission.submission_id}`);
+                    if (onShowResults) {
+                        onShowResults(latestSubmission.submission_id);
+                    } else {
+                        router.push(`/online-test/results?submissionId=${latestSubmission.submission_id}`);
+                    }
                 }
                 return;
             }
@@ -898,7 +908,11 @@ export const TestTakingView: React.FC<TestTakingViewProps> = ({
 
             // Redirect to test detail page after 2 seconds
             setTimeout(() => {
-                router.push(`/online-test?view=public&testId=${testId}`);
+                if (onExit) {
+                    onExit();
+                } else {
+                    router.push(`/online-test?view=public&testId=${testId}`);
+                }
             }, 2000);
         }
     };
@@ -907,7 +921,11 @@ export const TestTakingView: React.FC<TestTakingViewProps> = ({
         setShowRatingModal(false);
         // Navigate to results after closing rating modal
         if (submissionId) {
-            router.push(`/online-test/results?submissionId=${submissionId}`);
+            if (onShowResults) {
+                onShowResults(submissionId);
+            } else {
+                router.push(`/online-test/results?submissionId=${submissionId}`);
+            }
         }
     };
 
@@ -1058,7 +1076,7 @@ export const TestTakingView: React.FC<TestTakingViewProps> = ({
                         {error || t('Đã xảy ra lỗi', 'An error occurred')}
                     </p>
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => onExit ? onExit() : router.back()}
                         className={`px-6 py-2 rounded-lg cursor-pointer ${isDark
                             ? 'bg-blue-600 hover:bg-blue-700 text-white'
                             : 'bg-blue-500 hover:bg-blue-600 text-white'
