@@ -69,85 +69,86 @@ export function useSpeechRecognition({
             return;
         }
 
-        // Abort any previous instance
-        if (recognitionRef.current) {
-            try { recognitionRef.current.abort(); } catch { /* ignore */ }
-            recognitionRef.current = null;
-        }
-
-        const recognition = new SpeechRecognitionCtor() as any;
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = lang;
-        recognition.maxAlternatives = 1;
-
         transcriptRef.current = '';
         isRunningRef.current = true;
         endFiredRef.current = false;
 
-        // Start silence timer immediately — fires if user never speaks
-        clearSilenceTimer();
-        silenceTimerRef.current = setTimeout(() => {
-            if (isRunningRef.current) {
-                isRunningRef.current = false;
-                try { recognition.stop(); } catch { /* ignore */ }
-                // onend will fire → fireEnd()
+        // setupAndStart: creates a FRESH recognition instance and starts it.
+        // Called on initial start AND on unexpected onend (WKWebView stops after each
+        // final result even with continuous=true — calling recognition.start() on a
+        // stopped instance throws, so we must create a new instance each time).
+        const setupAndStart = () => {
+            if (recognitionRef.current) {
+                try { recognitionRef.current.abort(); } catch { /* ignore */ }
+                recognitionRef.current = null;
             }
-        }, silenceMs);
 
-        recognition.onresult = (event: any) => {
-            let interim = '';
-            let final = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const text = event.results[i][0].transcript;
-                if (event.results[i].isFinal) final += text;
-                else interim += text;
-            }
-            if (final) transcriptRef.current += final;
-            onInterimRef.current?.(transcriptRef.current + interim);
+            const recognition = new SpeechRecognitionCtor() as any;
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = lang;
+            recognition.maxAlternatives = 1;
 
-            // Reset silence timer on every speech event
+            // Reset silence timer (preserves 3s window after each restart)
             clearSilenceTimer();
             silenceTimerRef.current = setTimeout(() => {
                 if (isRunningRef.current) {
                     isRunningRef.current = false;
                     try { recognition.stop(); } catch { /* ignore */ }
-                    // onend → fireEnd()
                 }
             }, silenceMs);
-        };
 
-        recognition.onerror = (event: any) => {
-            const err: string = event?.error ?? 'unknown';
-            clearSilenceTimer();
-            isRunningRef.current = false;
-            if (err !== 'aborted' && err !== 'no-speech') {
-                onErrorRef.current?.(err); // 'not-allowed', 'audio-capture', etc.
-            }
-            // for 'not-allowed': onerror fires, then onend fires — fireEnd handles it
-        };
-
-        recognition.onend = () => {
-            if (isRunningRef.current) {
-                // Unexpected end mid-session — try to restart
-                try {
-                    recognition.start();
-                    return;
-                } catch {
-                    isRunningRef.current = false;
+            recognition.onresult = (event: any) => {
+                let interim = '';
+                let final = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const text = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) final += text;
+                    else interim += text;
                 }
+                if (final) transcriptRef.current += (transcriptRef.current ? ' ' : '') + final.trim();
+                onInterimRef.current?.(transcriptRef.current + (interim ? ' ' + interim : ''));
+
+                // Reset silence timer on every speech activity
+                clearSilenceTimer();
+                silenceTimerRef.current = setTimeout(() => {
+                    if (isRunningRef.current) {
+                        isRunningRef.current = false;
+                        try { recognition.stop(); } catch { /* ignore */ }
+                    }
+                }, silenceMs);
+            };
+
+            recognition.onerror = (event: any) => {
+                const err: string = event?.error ?? 'unknown';
+                clearSilenceTimer();
+                isRunningRef.current = false;
+                if (err !== 'aborted' && err !== 'no-speech') {
+                    onErrorRef.current?.(err);
+                }
+            };
+
+            recognition.onend = () => {
+                if (isRunningRef.current) {
+                    // WKWebView auto-stops after each final result even with continuous=true.
+                    // Create a new instance to keep recording — transcript is preserved in transcriptRef.
+                    setupAndStart();
+                    return;
+                }
+                fireEnd();
+            };
+
+            recognitionRef.current = recognition;
+            try {
+                recognition.start();
+            } catch (e) {
+                isRunningRef.current = false;
+                clearSilenceTimer();
+                onErrorRef.current?.(`start-failed: ${e}`);
             }
-            fireEnd();
         };
 
-        recognitionRef.current = recognition;
-        try {
-            recognition.start();
-        } catch (e) {
-            isRunningRef.current = false;
-            clearSilenceTimer();
-            onErrorRef.current?.(`start-failed: ${e}`);
-        }
+        setupAndStart();
     }, [lang, silenceMs, clearSilenceTimer, fireEnd]);
 
     // Cleanup on unmount
