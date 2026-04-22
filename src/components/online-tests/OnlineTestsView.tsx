@@ -5,7 +5,7 @@
  * Sections: Community | My Tests | Shared Tests | Generate AI | Create Manual | Test Detail
  */
 
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { BookOpen } from 'lucide-react';
@@ -102,6 +102,28 @@ export default function OnlineTestsView() {
     const [pollingTestType, setPollingTestType] = useState<'listening' | 'general' | 'document'>('general');
     const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
     const contextMenuHook = useTestContextMenu();
+
+    // Resizable Tests sidebar
+    const [testSidebarWidth, setTestSidebarWidth] = useState(220);
+    const testSidebarWidthRef = useRef(220);
+    const testResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+    useEffect(() => { testSidebarWidthRef.current = testSidebarWidth; }, [testSidebarWidth]);
+    const startTestSidebarResize = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        testResizeRef.current = { startX: e.clientX, startWidth: testSidebarWidthRef.current };
+        const onMove = (ev: MouseEvent) => {
+            if (!testResizeRef.current) return;
+            const delta = ev.clientX - testResizeRef.current.startX;
+            setTestSidebarWidth(Math.max(180, Math.min(480, testResizeRef.current.startWidth + delta)));
+        };
+        const onUp = () => {
+            testResizeRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, []);
 
     // Called when PublicTestView Start button is clicked
     const handleStartTest = (testId: string) => {
@@ -227,8 +249,11 @@ export default function OnlineTestsView() {
     return (
         <>
             <div className="flex h-full overflow-hidden">
-                {/* Left sidebar — My Tests */}
-                <aside className={`w-[220px] flex-shrink-0 flex flex-col border-r ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}>
+                {/* Left sidebar — My Tests (resizable) */}
+                <aside
+                    style={{ width: testSidebarWidth, flexShrink: 0 }}
+                    className={`flex flex-col border-r overflow-hidden ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}
+                >
                     {!user ? (
                         <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6">
                             <BookOpen className="w-10 h-10 text-gray-400" />
@@ -256,6 +281,12 @@ export default function OnlineTestsView() {
                         />
                     )}
                 </aside>
+
+                {/* Resize handle */}
+                <div
+                    className={`w-[3px] flex-shrink-0 cursor-col-resize transition-colors hover:bg-purple-400/40 active:bg-purple-500/50 ${isDark ? 'bg-white/5' : 'bg-gray-200/60'}`}
+                    onMouseDown={startTestSidebarResize}
+                />
 
                 {/* Right content */}
                 <main className="flex-1 overflow-y-auto">

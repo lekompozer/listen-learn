@@ -32,7 +32,20 @@ export default function ListenLearnApp() {
 
     const t = (vi: string, en: string) => isVietnamese ? vi : en;
 
-    const [activeTab, setActiveTab] = useState<TabType>('songs');
+    const [activeTab, setActiveTab] = useState<TabType>(() => {
+        try {
+            const saved = typeof window !== 'undefined' ? localStorage.getItem('ll_active_tab') : null;
+            if (saved && ['daily-vocab', 'songs', 'conversations', 'podcast'].includes(saved)) {
+                return saved as TabType;
+            }
+        } catch { /* ignore */ }
+        return 'daily-vocab';
+    });
+
+    const handleTabChange = useCallback((tab: TabType) => {
+        setActiveTab(tab);
+        try { localStorage.setItem('ll_active_tab', tab); } catch { /* ignore */ }
+    }, []);
     const [isPremium, setIsPremium] = useState(false);
     const [isConversationsPremium, setIsConversationsPremium] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -239,7 +252,7 @@ export default function ListenLearnApp() {
             <div className="pt-[28px]" data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
                 <LLHeader
                     activeTab={activeTab}
-                    onTabChange={setActiveTab}
+                    onTabChange={handleTabChange}
                     isPremium={isPremium || isConversationsPremium}
                     onUpgradeClick={() => {
                         if (activeTab === 'conversations') {
@@ -268,7 +281,7 @@ export default function ListenLearnApp() {
 
                 {/* Daily Vocab Tab */}
                 {activeTab === 'daily-vocab' && (
-                    <DailyVocabTab isDark={isDark} />
+                    <DailyVocabTab isDark={isDark} isSidebarVisible={isSidebarVisible} />
                 )}
 
                 {/* Conversations Tab */}

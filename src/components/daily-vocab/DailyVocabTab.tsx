@@ -25,6 +25,7 @@ type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | '
 
 interface DailyVocabTabProps {
     isDark: boolean;
+    isSidebarVisible?: boolean;
 }
 
 // ─── Platform data (mirrors wordai /download) ─────────────────────────────────
@@ -226,12 +227,12 @@ function VocabNavRail({ isDark, section, onSelect }: {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function DailyVocabTab({ isDark }: DailyVocabTabProps) {
+export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTabProps) {
     const [section, setSection] = useState<VocabSection>('daily-vocab');
 
     return (
         <div className="h-full flex overflow-hidden">
-            <VocabNavRail isDark={isDark} section={section} onSelect={setSection} />
+            {isSidebarVisible && <VocabNavRail isDark={isDark} section={section} onSelect={setSection} />}
 
             <div className="flex-1 overflow-hidden min-w-0">
                 {section === 'daily-vocab' && (
