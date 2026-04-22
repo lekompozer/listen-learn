@@ -156,7 +156,7 @@ function SavedVideosPlayer({ videos, initialIndex, isDark, onBack }: {
 }) {
     const items = videos.map(toYTItem);
     // eslint-disable-next-line @typescript-eslint/no-empty-function
-    const noop = useCallback(() => {}, []);
+    const noop = useCallback(() => { }, []);
 
     return (
         <div className="h-full w-full relative overflow-hidden">
