@@ -228,7 +228,10 @@ function ChatBubble({
     }, [msg.audioBase64]);
 
     return (
-        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
+        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} items-end gap-2 mb-3`}>
+            {!isUser && (
+                <img src="/icon-WynCodeAI-Header.png" alt="AI" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+            )}
             <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
                 <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser
                     ? isDark ? 'bg-teal-700/80 text-white' : 'bg-teal-600 text-white'
