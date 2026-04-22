@@ -51,9 +51,7 @@
       "minimumSystemVersion": "10.15",
       "entitlements": "entitlements.plist",
       "signingIdentity": "-",
-      "infoPlist": {
-        "NSMicrophoneUsageDescription": "Listen & Learn needs microphone access for the Speak with AI feature — so you can practise speaking English."
-      }
+      "infoPlist": "Info.plist"
     },
     "windows": {
       "wix": {},
