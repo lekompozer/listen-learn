@@ -279,6 +279,12 @@ export default function SpeakWithAITab() {
     const [grammarResults, setGrammarResults] = useState<Record<string, string>>({});
     const [checkingGrammarFor, setCheckingGrammarFor] = useState<string | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
+    // usePremiumMode: Premium users can toggle between Flash (Web STT) and Premium (Gemini STT)
+    const [usePremiumMode, setUsePremiumMode] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return true;
+        const saved = localStorage.getItem('ll_speak_use_premium');
+        return saved === null ? true : saved === '1';
+    });
 
     const chatBottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -345,7 +351,7 @@ export default function SpeakWithAITab() {
         let transcript = webSpeechTranscript;
         let prefilledAnalysis: string | undefined;
 
-        if (isPremium && audioBlob && GEMINI_STT_URL) {
+        if (isPremium && usePremiumMode && audioBlob && GEMINI_STT_URL) {
             setAppState('processing');
             setInterimText('');
             try {
@@ -434,7 +440,7 @@ export default function SpeakWithAITab() {
                 setErrorMsg(err?.message ?? 'Unknown error');
             }
         }
-    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium]);
+    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, usePremiumMode]);
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
@@ -615,7 +621,7 @@ export default function SpeakWithAITab() {
                             <span className={`px-1.5 py-0.5 rounded font-semibold ${isPremium
                                 ? isDark ? 'bg-violet-600/20 text-violet-400' : 'bg-violet-100 text-violet-700'
                                 : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'
-                            }`}>
+                                }`}>
                                 {isPremium ? 'Premium' : 'Flash'}
                             </span>
                             <span>
@@ -752,7 +758,7 @@ export default function SpeakWithAITab() {
                             {appState === 'processing' && (
                                 <span className="flex items-center gap-1.5 justify-center">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    {interimText === '' && isPremium
+                                    {interimText === '' && isPremium && usePremiumMode
                                         ? t('Đang nhận dạng giọng nói…', 'Transcribing…')
                                         : t('AI đang trả lời…', 'AI is thinking…')}
                                 </span>
@@ -766,7 +772,32 @@ export default function SpeakWithAITab() {
                             {appState === 'error' && t('Có lỗi xảy ra', 'An error occurred')}
                         </p>
 
-                        <MicButton state={appState} onClick={handleMicClick} isDark={isDark} />
+                        {/* Mic + mode toggle row */}
+                        <div className="flex items-center gap-4">
+                            <MicButton state={appState} onClick={handleMicClick} isDark={isDark} />
+                            {/* Flash / Premium toggle — only show for premium users */}
+                            {isPremium && GEMINI_STT_URL && (
+                                <button
+                                    onClick={() => setUsePremiumMode(v => {
+                                        const next = !v;
+                                        localStorage.setItem('ll_speak_use_premium', next ? '1' : '0');
+                                        return next;
+                                    })}
+                                    disabled={appState !== 'idle' && appState !== 'error'}
+                                    className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl border transition-all
+                                        disabled:opacity-40
+                                        ${usePremiumMode
+                                            ? isDark ? 'bg-violet-600/20 border-violet-500/50 text-violet-300' : 'bg-violet-50 border-violet-400 text-violet-700'
+                                            : isDark ? 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600' : 'bg-white border-gray-300 text-gray-500 hover:text-gray-700'
+                                        }`}
+                                >
+                                    <span className={`text-[10px] font-bold tracking-wide ${usePremiumMode ? '' : 'opacity-70'}`}>
+                                        {usePremiumMode ? 'PREMIUM' : 'FLASH'}
+                                    </span>
+                                    <span className={`w-2 h-2 rounded-full ${usePremiumMode ? 'bg-violet-400' : 'bg-gray-500'}`} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>
