@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, BookOpen, AlignLeft, Video, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, BookOpen, AlignLeft, Video, Loader2, AlertCircle, RefreshCw, Layers } from 'lucide-react';
 import YoutubeShortsPlayer from '@/components/videos/YoutubeShortsPlayer';
 import type { YTShortItem } from '@/components/videos/YTShortItem';
 import {
@@ -13,7 +13,31 @@ import {
     type SavedVideoItem,
 } from '@/services/conversationLearningService';
 
-type SavedTab = 'words' | 'grammar' | 'videos';
+type SavedTab = 'videos' | 'vocab' | 'words' | 'grammar';
+
+interface SavedVocabEntry {
+    wordId: string;
+    word: string;
+    definition_vi: string;
+    savedAt: number;
+}
+
+function getLocalSavedVocab(): SavedVocabEntry[] {
+    try { return JSON.parse(localStorage.getItem('wordai_dailyvocab_saved') ?? '[]'); }
+    catch { return []; }
+}
+
+function VocabEntryCard({ item, isDark }: { item: SavedVocabEntry; isDark: boolean }) {
+    return (
+        <div className={`rounded-2xl border p-4 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className="flex items-center gap-2 mb-1">
+                <span className={`text-base font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.word}</span>
+            </div>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{item.definition_vi}</p>
+            <p className={`text-[11px] mt-1.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{new Date(item.savedAt).toLocaleDateString()}</p>
+        </div>
+    );
+}
 
 function WordCard({ item, isDark, onClick }: { item: SavedVocabularyItem; isDark: boolean; onClick: () => void }) {
     return (
@@ -207,16 +231,18 @@ function VideoCard({ item, isDark, onClick }: { item: SavedVideoItem; isDark: bo
 // VideoDetail replaced by SavedVideosPlayer above
 
 const TABS: { id: SavedTab; label: string; icon: React.ElementType }[] = [
+    { id: 'videos', label: 'Videos', icon: Video },
+    { id: 'vocab', label: 'Vocab', icon: Layers },
     { id: 'words', label: 'Words', icon: BookOpen },
     { id: 'grammar', label: 'Grammar', icon: AlignLeft },
-    { id: 'videos', label: 'Videos', icon: Video },
 ];
 
 export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
-    const [tab, setTab] = useState<SavedTab>('words');
+    const [tab, setTab] = useState<SavedTab>('videos');
     const [words, setWords] = useState<SavedVocabularyItem[]>([]);
     const [grammar, setGrammar] = useState<SavedGrammarItem[]>([]);
     const [videos, setVideos] = useState<SavedVideoItem[]>([]);
+    const [vocabEntries, setVocabEntries] = useState<SavedVocabEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedWord, setSelectedWord] = useState<SavedVocabularyItem | null>(null);
@@ -244,14 +270,22 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
         finally { setLoading(false); }
     }, []);
 
-    const reload = tab === 'words' ? loadWords : tab === 'grammar' ? loadGrammar : loadVideos;
+    const loadVocab = useCallback(async () => {
+        setLoading(true); setError(null);
+        try { setVocabEntries(getLocalSavedVocab()); }
+        catch { setError('Failed to load saved vocab'); }
+        finally { setLoading(false); }
+    }, []);
+
+    const reload = tab === 'words' ? loadWords : tab === 'grammar' ? loadGrammar : tab === 'vocab' ? loadVocab : loadVideos;
 
     useEffect(() => {
         setSelectedWord(null); setSelectedGrammar(null); setSelectedVideoIndex(null);
         if (tab === 'words') loadWords();
         else if (tab === 'grammar') loadGrammar();
+        else if (tab === 'vocab') loadVocab();
         else loadVideos();
-    }, [tab, loadWords, loadGrammar, loadVideos]);
+    }, [tab, loadWords, loadGrammar, loadVocab, loadVideos]);
 
     const btnBase = `flex items-center gap-2.5 w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition-all`;
     const btnActive = isDark ? 'bg-teal-600/20 text-teal-300' : 'bg-teal-50 text-teal-700';
@@ -275,7 +309,7 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
             <div className="flex-1 flex flex-col overflow-hidden">
                 <div className={`flex-shrink-0 flex items-center justify-between px-5 py-3.5 border-b ${isDark ? 'border-gray-700/60' : 'border-gray-200'}`}>
                     <h2 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {tab === 'words' ? 'Saved Words' : tab === 'grammar' ? 'Saved Grammar' : 'Saved Videos'}
+                        {tab === 'videos' ? 'Saved Videos' : tab === 'vocab' ? 'Saved Vocab' : tab === 'words' ? 'Saved Words' : 'Saved Grammar'}
                     </h2>
                     <button onClick={reload} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
                         <RefreshCw className="w-4 h-4" />
@@ -309,6 +343,11 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
                         videos.length === 0
                             ? <div className={`h-full flex flex-col items-center justify-center gap-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}><Video className="w-8 h-8 opacity-30" /><p className="text-sm">No saved videos yet</p></div>
                             : <div className="space-y-2">{videos.map((item, idx) => <VideoCard key={item.youtube_id} item={item} isDark={isDark} onClick={() => setSelectedVideoIndex(idx)} />)}</div>
+                    )}
+                    {tab === 'vocab' && !loading && !error && (
+                        vocabEntries.length === 0
+                            ? <div className={`h-full flex flex-col items-center justify-center gap-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}><Layers className="w-8 h-8 opacity-30" /><p className="text-sm">No saved vocab yet</p></div>
+                            : <div className="space-y-2">{vocabEntries.map(item => <VocabEntryCard key={item.wordId} item={item} isDark={isDark} />)}</div>
                     )}
                 </div>
             </div>
