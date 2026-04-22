@@ -17,10 +17,11 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 const VERTEX_API_KEY = process.env.NEXT_PUBLIC_VERTEX_API_KEY;
-// Gemini 2.5 Flash Lite — audio transcription (STT)
-const GEMINI_MODEL = 'gemini-2.5-flash-lite-preview-04-17';
+// Gemini 2.0 Flash Lite — audio transcription (STT)
+// Region must be us-central1; gemini-2.5-flash-lite-preview is not available in asia-southeast1.
+const GEMINI_MODEL = 'gemini-2.0-flash-lite-001';
 const GEMINI_STT_URL = VERTEX_API_KEY
-    ? `https://aiplatform.googleapis.com/v1beta1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${VERTEX_API_KEY}`
+    ? `https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${VERTEX_API_KEY}`
     : null;
 
 import { useTheme, useLanguage } from '@/contexts/AppContext';

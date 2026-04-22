@@ -31,7 +31,9 @@ export function playBase64Audio(
     audioRef?: { current: HTMLAudioElement | null },
 ): Promise<void> {
     return new Promise((resolve) => {
-        const audio = new Audio(`data:audio/mp3;base64,${base64}`);
+        // macOS say+afconvert produces M4A/AAC; old Edge TTS produced MP3.
+        // audio/mp4 covers both — WKWebView sniffs the actual format.
+        const audio = new Audio(`data:audio/mp4;base64,${base64}`);
         if (audioRef) audioRef.current = audio;
 
         let settled = false;

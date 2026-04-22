@@ -1,125 +1,65 @@
-/// Edge TTS via Microsoft's unofficial WebSocket API.
-/// Bypasses CORS restriction that blocks direct browser WebSocket to speech.platform.bing.com.
+/// TTS via macOS built-in `say` command + `afconvert` → AAC/M4A.
+/// Replaces the dead Microsoft Edge TTS REST endpoint (404 since 2025).
 ///
-/// Protocol reference: https://github.com/nicholasgasior/edge-tts-rs
-/// We implement the minimal WebSocket handshake ourselves using `reqwest` + `tokio-tungstenite`
-/// (tokio-tungstenite is pulled in transitively; if not available we fall back to HTTP request).
-///
-/// Returns raw MP3 bytes as base64-encoded string.
+/// Returns AAC/M4A audio as base64-encoded string.
+/// On non-macOS platforms returns an error (app is macOS-only for now).
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 
-/// Supported voices (subset)
+/// Supported voices (subset) — kept for API compatibility.
 const DEFAULT_VOICE: &str = "en-US-JennyNeural";
 
-/// Request Edge TTS audio via the unofficial REST endpoint.
-/// Microsoft exposes a REST fallback that works without WebSocket.
+/// Generate TTS audio using macOS `say` + `afconvert`.
+/// Maps Edge voice names to built-in macOS voices.
 #[tauri::command]
 pub async fn get_edge_tts_audio(text: String, voice: Option<String>) -> Result<String, String> {
     let voice = voice.unwrap_or_else(|| DEFAULT_VOICE.to_string());
 
-    // Use the unofficial REST endpoint (same one Edge browser uses for Read Aloud)
-    let token_url = "https://dev.microsofttranslator.com/apps/endpoint?api-version=1.0";
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
+    // Map Edge voice names → macOS built-in voices
+    let mac_voice = match voice.as_str() {
+        "en-US-GuyNeural"       => "Tom",
+        "en-GB-SoniaNeural"     => "Kate",
+        "en-AU-NatashaNeural"   => "Karen",
+        "en-GB-RyanNeural"      => "Daniel",
+        _                       => "Samantha",   // en-US-JennyNeural + default
+    };
 
-    // Step 1: get access token
-    let token_resp = client
-        .post(token_url)
-        .header("Ocp-Apim-Subscription-Key", "")
-        .send()
-        .await;
+    use rand::Rng;
+    let rand_id: u32 = rand::thread_rng().gen();
+    let aiff_path = format!("/tmp/ll_tts_{rand_id}.aiff");
+    let m4a_path  = format!("/tmp/ll_tts_{rand_id}.m4a");
 
-    // If token approach fails, use the direct synthesis URL
-    let _ = token_resp; // ignore — use direct endpoint
+    // 1. Generate AIFF with macOS `say`
+    let say_status = std::process::Command::new("say")
+        .args(["-v", mac_voice, "-r", "185", &text, "-o", &aiff_path])
+        .status()
+        .map_err(|e| format!("say command error: {e}"))?;
 
-    // Direct SSML synthesis endpoint
-    let ssml = format!(
-        r#"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
-            <voice name='{voice}'>
-                <prosody rate='0%' pitch='0%'>{text}</prosody>
-            </voice>
-        </speak>"#,
-        voice = voice,
-        text = escape_xml(&text),
-    );
-
-    // Use the browser-compatible free endpoint
-    let free_url = "https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
-
-    let api_key_header = format!(
-        "TrustedClientToken={}",
-        "6A5AA1D4EAFF4E9FB37E23D68491D6F4" // public read-aloud token (same as Edge browser)
-    );
-
-    let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/ssml+xml"));
-    headers.insert(
-        "X-Microsoft-OutputFormat",
-        HeaderValue::from_static("audio-24khz-48kbitrate-mono-mp3"),
-    );
-    headers.insert(
-        "User-Agent",
-        HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
-    );
-
-    let url = format!("{free_url}?{api_key_header}&ConnectionId={}", uuid_v4());
-
-    let resp = client
-        .post(&url)
-        .headers(headers)
-        .body(ssml)
-        .send()
-        .await
-        .map_err(|e| format!("TTS request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("TTS error {status}: {body}"));
+    if !say_status.success() {
+        return Err("say command returned error".to_string());
     }
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("TTS read body error: {e}"))?;
+    // 2. Convert AIFF → AAC/M4A with built-in `afconvert` (WKWebView supports it)
+    let afconvert_status = std::process::Command::new("afconvert")
+        .args(["-f", "m4af", "-d", "aac", &aiff_path, &m4a_path])
+        .status()
+        .map_err(|e| format!("afconvert error: {e}"))?;
+
+    let _ = std::fs::remove_file(&aiff_path);
+
+    if !afconvert_status.success() {
+        let _ = std::fs::remove_file(&m4a_path);
+        return Err("afconvert failed".to_string());
+    }
+
+    // 3. Read + base64 encode + cleanup
+    let bytes = std::fs::read(&m4a_path)
+        .map_err(|e| format!("read audio file failed: {e}"))?;
+    let _ = std::fs::remove_file(&m4a_path);
 
     if bytes.is_empty() {
-        return Err("TTS returned empty audio".to_string());
+        return Err("TTS produced empty audio".to_string());
     }
 
     Ok(STANDARD.encode(&bytes))
-}
-
-fn escape_xml(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}
-
-fn uuid_v4() -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let bytes: [u8; 16] = rng.gen();
-    format!(
-        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
-        u16::from_be_bytes([bytes[4], bytes[5]]),
-        u16::from_be_bytes([bytes[6], bytes[7]]) & 0x0fff,
-        (u16::from_be_bytes([bytes[8], bytes[9]]) & 0x3fff) | 0x8000,
-        {
-            let b = &bytes[10..16];
-            (b[0] as u64) << 40
-                | (b[1] as u64) << 32
-                | (b[2] as u64) << 24
-                | (b[3] as u64) << 16
-                | (b[4] as u64) << 8
-                | (b[5] as u64)
-        }
-    )
 }
