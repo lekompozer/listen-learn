@@ -10,9 +10,12 @@ import { callDeepSeek, buildSystemPrompt, type DeepSeekMessage } from '@/hooks/u
 import { getEdgeTTSAudio, playBase64Audio, speakWithSynthesis } from '@/hooks/useEdgeTTS';
 import {
     listConversations, createConversation, addMessage, deleteConversation,
-    getDailyUsage, incrementDailyUsage, canSendMessage, getConversation,
-    type SpeakConversation, type SpeakMessage, FREE_LIMIT,
+    getDailyUsage, incrementDailyUsage, incrementMonthlyUsage, canSendMessage,
+    getMonthlyUsage, getConversation,
+    type SpeakConversation, type SpeakMessage, FREE_LIMIT, PREMIUM_MONTHLY_LIMIT,
 } from '@/hooks/useSpeakConversations';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 import { useTheme, useLanguage } from '@/contexts/AppContext';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 
@@ -25,23 +28,57 @@ const VOICES: { value: string; label: string }[] = [
     { value: 'en-AU-NatashaNeural', label: 'Natasha (AU Female)' },
 ];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
+// ── Blob → Base64 ────────────────────────────────────────────────────────────
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string); // data:audio/webm;base64,...
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
 
-// ── Grammar Check ─────────────────────────────────────────────────────────────
-async function checkGrammar(
-    text: string,
-    audioDataUrl: string | undefined,
+// ── Analyze Audio — real backend endpoint ────────────────────────────────────
+async function analyzeAudioWithAPI(
+    audioBase64: string,      // data:audio/webm;base64,...
+    transcript: string,
     token: string,
 ): Promise<string> {
-    // Use existing grammar check endpoint
-    const resp = await fetch(`${API_BASE}/api/v1/grammar/check`, {
+    // Strip the data URL prefix to get raw base64 + mime type
+    const match = audioBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) throw new Error('Invalid audio data');
+    const [, mimeType, rawBase64] = match;
+
+    const response = await fetch(`${API_BASE_URL}/api/grammar/check-audio`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text }),
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            audio_base64: rawBase64,
+            audio_mime_type: mimeType,
+            reference_text: transcript || undefined,
+            language: 'en',
+        }),
     });
-    if (!resp.ok) throw new Error(`Grammar check failed: ${resp.status}`);
-    const data = await resp.json();
-    return data.corrected ?? data.result ?? data.feedback ?? '';
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || `Audio analysis failed (${response.status})`);
+    }
+    const data = await response.json();
+    // Format result from backend
+    const lines: string[] = [];
+    if (data.overall_score !== undefined) {
+        lines.push(`Score: ${data.overall_score}/100`);
+    }
+    if (data.transcribed_text) {
+        lines.push(`Heard: "${data.transcribed_text}"`);
+    }
+    if (data.feedback) {
+        lines.push(data.feedback);
+    }
+    return lines.join('\n') || '✓ Sounds great!';
 }
 
 // ── Mic Button ────────────────────────────────────────────────────────────────
@@ -77,18 +114,23 @@ function MicButton({
 
 // ── Chat Bubble ───────────────────────────────────────────────────────────────
 function ChatBubble({
-    msg, isDark, onCheckGrammar, grammarResult, isCheckingGrammar,
+    msg, isDark, onAnalyze, analyzeResult, isAnalyzing,
 }: {
     msg: SpeakMessage;
     isDark: boolean;
-    onCheckGrammar?: () => void;
-    grammarResult?: string;
-    isCheckingGrammar?: boolean;
+    onAnalyze?: () => void;
+    analyzeResult?: string;
+    isAnalyzing?: boolean;
 }) {
     const isUser = msg.role === 'user';
-    const [audioEl] = useState<HTMLAudioElement | null>(() =>
-        msg.audioDataUrl ? new Audio(msg.audioDataUrl) : null
-    );
+    // Replay audio from persisted base64 (survives page reload)
+    const replayAudio = useCallback(() => {
+        if (!msg.audioBase64) return;
+        try {
+            const audio = new Audio(msg.audioBase64);
+            audio.play().catch(() => null);
+        } catch { /* ignore */ }
+    }, [msg.audioBase64]);
 
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -103,35 +145,36 @@ function ChatBubble({
                 {/* User message actions */}
                 {isUser && (
                     <div className="flex items-center gap-2 px-1">
-                        {/* Replay audio */}
-                        {audioEl && (
+                        {/* Replay audio — only shown if base64 was saved */}
+                        {msg.audioBase64 && (
                             <button
-                                onClick={() => { try { audioEl.currentTime = 0; audioEl.play(); } catch { /* ignore */ } }}
+                                onClick={replayAudio}
                                 className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full transition-colors
                                     ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
                             >
                                 <Volume2 className="w-3 h-3" /> Nghe lại
                             </button>
                         )}
-                        {/* Grammar check — on demand */}
-                        {onCheckGrammar && !grammarResult && (
+                        {/* Analyze Audio — on demand */}
+                        {onAnalyze && !analyzeResult && (
                             <button
-                                onClick={onCheckGrammar}
-                                disabled={isCheckingGrammar}
+                                onClick={onAnalyze}
+                                disabled={isAnalyzing}
                                 className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full transition-colors
                                     ${isDark ? 'text-gray-400 hover:text-teal-300 hover:bg-white/10' : 'text-gray-500 hover:text-teal-700 hover:bg-gray-100'}
                                     disabled:opacity-40`}
                             >
-                                {isCheckingGrammar
+                                {isAnalyzing
                                     ? <Loader2 className="w-3 h-3 animate-spin" />
                                     : <CheckCircle2 className="w-3 h-3" />}
-                                Check grammar
+                                Analyze Audio
                             </button>
                         )}
-                        {grammarResult && (
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${isDark ? 'bg-green-900/40 text-green-300' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                                ✓ {grammarResult}
-                            </span>
+                        {analyzeResult && (
+                            <div className={`text-[10px] px-2 py-1 rounded-lg max-w-[260px] whitespace-pre-wrap leading-relaxed
+                                ${isDark ? 'bg-teal-900/40 text-teal-200' : 'bg-teal-50 text-teal-800 border border-teal-200'}`}>
+                                {analyzeResult}
+                            </div>
                         )}
                     </div>
                 )}
@@ -172,6 +215,7 @@ export default function SpeakWithAITab() {
     const [newTopicValue, setNewTopicValue] = useState('');
     const [selectedVoice, setSelectedVoice] = useState(VOICES[0].value);
     const [dailyUsage, setDailyUsage] = useState(0);
+    const [isPremium, setIsPremium] = useState(false);
     const [grammarResults, setGrammarResults] = useState<Record<string, string>>({});
     const [checkingGrammarFor, setCheckingGrammarFor] = useState<string | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
@@ -182,11 +226,22 @@ export default function SpeakWithAITab() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const speakingAudioRef = useRef<HTMLAudioElement | null>(null);
 
-    // Load conversations on mount
+    // Load conversations + check premium on mount
     useEffect(() => {
         setConversations(listConversations());
         setDailyUsage(getDailyUsage());
-    }, []);
+        // Check premium subscription
+        if (user) {
+            user.getIdToken().then(token =>
+                fetch(`${API_BASE_URL}/api/v1/conversations/subscription/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => { if (d?.is_premium) setIsPremium(true); })
+                    .catch(() => null)
+            ).catch(() => null);
+        }
+    }, [user]);
 
     // Scroll to bottom on new messages
     useEffect(() => {
@@ -216,31 +271,29 @@ export default function SpeakWithAITab() {
     // Handle final transcript → send to DeepSeek
     const handleSpeechEnd = useCallback(async (transcript: string) => {
         if (!transcript.trim() || !activeConvoId) return;
-        if (!canSendMessage()) {
-            setErrorMsg(t(
-                `Bạn đã dùng hết ${FREE_LIMIT} lượt miễn phí hôm nay. Quay lại ngày mai nhé!`,
-                `You've used all ${FREE_LIMIT} free turns today. Come back tomorrow!`,
-            ));
-            setAppState('error');
-            return;
-        }
-
-        setInterimText('');
+        if (!canSendMessage(isPremium)) return;
         setAppState('processing');
 
-        // Save user recording if MediaRecorder was active
-        let audioDataUrl: string | undefined;
-        if (mediaRecorderRef.current && recordingBlobRef.current.length > 0) {
-            const blob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
-            audioDataUrl = URL.createObjectURL(blob);
+        // Save user recording as base64 (persisted in localStorage for replay)
+        let audioBase64: string | undefined;
+        if (recordingBlobRef.current.length > 0) {
+            try {
+                const blob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
+                // Only store if < 200KB to avoid localStorage overflow
+                if (blob.size < 200_000) {
+                    audioBase64 = await blobToBase64(blob);
+                }
+            } catch { /* ignore */ }
             recordingBlobRef.current = [];
         }
 
         // Add user message to local state immediately
-        const userMsg = addMessage(activeConvoId, { role: 'user', text: transcript, audioDataUrl });
+        const userMsg = addMessage(activeConvoId, { role: 'user', text: transcript, audioBase64 });
         setMessages(prev => [...prev, userMsg]);
-        incrementDailyUsage();
-        setDailyUsage(getDailyUsage());
+        // Track usage: premium uses monthly counter, free uses daily
+        if (isPremium) { incrementMonthlyUsage(); }
+        else { incrementDailyUsage(); }
+        setDailyUsage(isPremium ? getMonthlyUsage() : getDailyUsage());
 
         // Build messages for DeepSeek
         const currentConvo = getConversation(activeConvoId);
@@ -336,36 +389,42 @@ export default function SpeakWithAITab() {
     const stopMediaRecorder = useCallback(() => {
         if (mediaRecorderRef.current?.state !== 'inactive') {
             mediaRecorderRef.current?.stop();
-            mediaRecorderRef.current?.stream.getTracks().forEach(t => t.stop());
+            mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop());
+            mediaRecorderRef.current = null;
         }
     }, []);
 
     const handleMicClick = useCallback(() => {
-        if (appState === 'idle' || appState === 'error') {
-            setErrorMsg('');
-            setAppState('listening');
-            startRecognition();
-            startMediaRecorder();
-        } else if (appState === 'listening') {
+        if (appState === 'listening') {
             stopRecognition();
             stopMediaRecorder();
             // onEnd callback will fire with final text
+        } else {
+            startRecognition();
+            startMediaRecorder();
         }
     }, [appState, startRecognition, stopRecognition, startMediaRecorder, stopMediaRecorder]);
 
-    const handleCheckGrammar = useCallback(async (msg: SpeakMessage) => {
-        if (!user) return;
+    const handleAnalyzeAudio = useCallback(async (msg: SpeakMessage) => {
+        if (!msg.audioBase64) {
+            setGrammarResults(prev => ({ ...prev, [msg.id]: t('Không có audio để phân tích', 'No audio recorded to analyze') }));
+            return;
+        }
+        if (!user) {
+            setGrammarResults(prev => ({ ...prev, [msg.id]: t('Vui lòng đăng nhập', 'Please sign in to analyze audio') }));
+            return;
+        }
         setCheckingGrammarFor(msg.id);
         try {
             const token = await user.getIdToken();
-            const result = await checkGrammar(msg.text, msg.audioDataUrl, token);
-            setGrammarResults(prev => ({ ...prev, [msg.id]: result || '✓ No errors found' }));
+            const result = await analyzeAudioWithAPI(msg.audioBase64, msg.text, token);
+            setGrammarResults(prev => ({ ...prev, [msg.id]: result }));
         } catch (e: any) {
             setGrammarResults(prev => ({ ...prev, [msg.id]: `Error: ${e.message}` }));
         } finally {
             setCheckingGrammarFor(null);
         }
-    }, [user]);
+    }, [user, t]);
 
     const handleDeleteConvo = useCallback((id: string, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -449,13 +508,16 @@ export default function SpeakWithAITab() {
                         ))}
                     </div>
 
-                    {/* Daily usage */}
+                    {/* Usage quota */}
                     <div className={`px-4 py-3 border-t text-[10px] ${isDark ? 'border-gray-700/60 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
-                        {t('Hôm nay', 'Today')}: {dailyUsage}/{FREE_LIMIT} {t('lượt miễn phí', 'free turns')}
+                        {isPremium
+                            ? <>{t('Tháng này', 'This month')}: {dailyUsage}/{PREMIUM_MONTHLY_LIMIT} {t('câu Premium', 'Premium turns')}</>
+                            : <>{t('Hôm nay', 'Today')}: {dailyUsage}/{FREE_LIMIT} {t('lượt miễn phí', 'free turns')}</>
+                        }
                         <div className={`mt-1.5 h-1 rounded-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
                             <div
                                 className="h-full rounded-full bg-teal-500 transition-all duration-500"
-                                style={{ width: `${Math.min(100, (dailyUsage / FREE_LIMIT) * 100)}%` }}
+                                style={{ width: `${Math.min(100, (dailyUsage / (isPremium ? PREMIUM_MONTHLY_LIMIT : FREE_LIMIT)) * 100)}%` }}
                             />
                         </div>
                     </div>
@@ -530,9 +592,9 @@ export default function SpeakWithAITab() {
                                     key={msg.id}
                                     msg={msg}
                                     isDark={isDark}
-                                    onCheckGrammar={msg.role === 'user' ? () => handleCheckGrammar(msg) : undefined}
-                                    grammarResult={grammarResults[msg.id]}
-                                    isCheckingGrammar={checkingGrammarFor === msg.id}
+                                    onAnalyze={msg.role === 'user' ? () => handleAnalyzeAudio(msg) : undefined}
+                                    analyzeResult={grammarResults[msg.id]}
+                                    isAnalyzing={checkingGrammarFor === msg.id}
                                 />
                             ))}
 

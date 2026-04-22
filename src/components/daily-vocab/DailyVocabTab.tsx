@@ -151,9 +151,9 @@ const QUICK_ACTIONS: { id: VocabSection; label: string; icon: React.ElementType 
     { id: 'saved', label: 'Saved', icon: Bookmark },
 ];
 const PRACTICE_ITEMS: { label: string; icon: React.ElementType; id: VocabSection | null }[] = [
-    { label: 'FreeTalk', icon: Mic, id: null },
-    { label: 'Study Buddy', icon: Users, id: null },
     { label: 'Speak with AI', icon: Volume2, id: 'speak' },
+    { label: 'Study Buddy', icon: Users, id: null },
+    { label: 'FreeTalk', icon: Mic, id: null },
 ];
 const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
     { id: 'ai-learning', label: 'WynAI Tutor', icon: GraduationCap },
