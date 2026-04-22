@@ -234,7 +234,21 @@ function ChatBubble({
                     ? isDark ? 'bg-teal-700/80 text-white' : 'bg-teal-600 text-white'
                     : isDark ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900 shadow-sm border border-gray-200'
                     }`}>
-                    {msg.text}
+                    {isUser ? msg.text : (() => {
+                        const correctionIdx = msg.text.indexOf('💬 Correction:');
+                        if (correctionIdx === -1) return msg.text;
+                        const mainReply = msg.text.slice(0, correctionIdx).trim();
+                        const correction = msg.text.slice(correctionIdx + '💬 Correction:'.length).trim();
+                        return (
+                            <>
+                                <span>{mainReply}</span>
+                                <div className={`mt-2.5 pt-2 border-t text-xs leading-relaxed ${isDark ? 'border-gray-600 text-emerald-300' : 'border-gray-200 text-emerald-700'}`}>
+                                    <span className={`font-semibold mr-1 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>💬 Correction:</span>
+                                    <span className="italic">{correction}</span>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
 
                 {/* User message actions */}

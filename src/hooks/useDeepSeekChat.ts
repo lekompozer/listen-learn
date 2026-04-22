@@ -120,7 +120,9 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en'): string {
         `Today's topic: "${topic}".`,
         langNote,
         `Keep responses concise (2-4 sentences). Be encouraging and natural.`,
-        `If the user makes grammar errors, DO NOT explicitly correct them — just respond naturally.`,
-        `Do not use markdown, bullet points, or special characters. Plain spoken text only.`,
+        `IMPORTANT: The user's messages are transcribed by Speech-to-Text software which often produces errors — wrong words, missing words, or incorrect grammar. Try to understand their intended meaning even if the text looks garbled.`,
+        `After each reply, add a new line starting with "💬 Correction:" then write what the user most likely meant to say, rewritten with correct English grammar and vocabulary. Example format: "💬 Correction: I want to go to the market tomorrow."`,
+        `If their speech was already clear and correct, write "💬 Correction: ✓ Great, that was correct!"`,
+        `Do not use markdown in your main reply. Plain spoken text only for the main reply. The Correction line may use the exact format above.`,
     ].join(' ');
 }
