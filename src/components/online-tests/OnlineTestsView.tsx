@@ -8,10 +8,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
-import {
-    Globe, BookOpen, Sparkles, PlusCircle, ExternalLink,
-    Users, Clock, ChevronRight
-} from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { useTheme } from '@/contexts/AppContext';
 import { useLanguage } from '@/contexts/AppContext';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
@@ -106,14 +103,6 @@ export default function OnlineTestsView() {
     const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
     const contextMenuHook = useTestContextMenu();
 
-    const base = 'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all';
-    const inactive = isDark
-        ? 'text-gray-300 hover:bg-white/5 hover:text-white'
-        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900';
-    const active = isDark
-        ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
-        : 'bg-purple-50 text-purple-700 border border-purple-200';
-
     // Called when PublicTestView Start button is clicked
     const handleStartTest = (testId: string) => {
         if (!user) {
@@ -127,30 +116,6 @@ export default function OnlineTestsView() {
     const handleShowResults = (submissionId: string) => {
         setTakingTestId(null);
         setResultsSubmissionId(submissionId);
-    };
-
-    const navItem = (view: ViewMode, icon: React.ReactNode, label: string, requiresAuth = false) => {
-        const isActive = viewMode === view && !takingTestId && !resultsSubmissionId && !selectedTestId && !selectedTestSlug;
-        return (
-            <button
-                onClick={() => {
-                    if (requiresAuth && !user) {
-                        openUrl('https://wynai.pro/online-test');
-                        return;
-                    }
-                    setViewMode(view);
-                    setSelectedTestId(null);
-                    setSelectedTestSlug(null);
-                    setTakingTestId(null);
-                    setResultsSubmissionId(null);
-                }}
-                className={`${base} ${isActive ? active : inactive}`}
-            >
-                <span className="flex-shrink-0">{icon}</span>
-                <span className="flex-1 text-left truncate">{label}</span>
-                {requiresAuth && !user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
-            </button>
-        );
     };
 
     const renderContent = () => {
@@ -198,56 +163,6 @@ export default function OnlineTestsView() {
                             else openUrl('https://wynai.pro/online-test?view=test-history');
                         }}
                     />
-                );
-
-            case 'my-tests':
-                if (!user) {
-                    return (
-                        <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-8">
-                            <BookOpen className="w-12 h-12 text-gray-400" />
-                            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {t('Đăng nhập để xem bài thi của bạn', 'Sign in to view your tests')}
-                            </p>
-                            <button
-                                onClick={() => openUrl('https://wynai.pro/online-test')}
-                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
-                            >
-                                {t('Mở trên Web', 'Open on Web')} <ExternalLink className="w-3 h-3 inline ml-1" />
-                            </button>
-                        </div>
-                    );
-                }
-                return (
-                    <div className="flex h-full overflow-hidden">
-                        <TestSidebar
-                            isDark={isDark}
-                            language={language}
-                            selectedTestId={selectedTestId}
-                            onTestSelect={(id) => setSelectedTestId(id)}
-                            onOpenManualTestModal={() => setShowCreateManual(true)}
-                            onOpenGenerateFromAIModal={() => setShowGenerateFromAI(true)}
-                            onCommunityTestsClick={() => setViewMode('community')}
-                            contextMenuHook={contextMenuHook}
-                            refreshTrigger={sidebarRefreshTrigger}
-                        />
-                        <div className="flex-1 overflow-y-auto flex items-center justify-center">
-                            {!selectedTestId ? (
-                                <div className="text-center p-8">
-                                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                        {t('Chọn bài thi từ sidebar', 'Select a test from the sidebar')}
-                                    </p>
-                                </div>
-                            ) : (
-                                <PublicTestView
-                                    testId={selectedTestId}
-                                    isDark={isDark}
-                                    language={language}
-                                    onBack={() => setSelectedTestId(null)}
-                                    onStartTest={handleStartTest}
-                                />
-                            )}
-                        </div>
-                    </div>
                 );
 
             case 'my-public-tests':
@@ -312,64 +227,34 @@ export default function OnlineTestsView() {
     return (
         <>
             <div className="flex h-full overflow-hidden">
-                {/* Left sidebar */}
+                {/* Left sidebar — My Tests */}
                 <aside className={`w-[220px] flex-shrink-0 flex flex-col border-r ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}>
-                    {/* Community Tests header */}
-                    <div className="p-3 border-b" style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
-                        <button
-                            onClick={() => { setViewMode('community'); setSelectedTestId(null); setSelectedTestSlug(null); }}
-                            className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all
-                            ${viewMode === 'community' && !selectedTestId && !selectedTestSlug
-                                    ? (isDark
-                                        ? 'bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-600/30'
-                                        : 'bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200')
-                                    : inactive}`}
-                        >
-                            <div className={`p-1.5 rounded-lg ${isDark ? 'bg-blue-600/20' : 'bg-blue-100'}`}>
-                                <Globe className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
-                            </div>
-                            <div className="text-left">
-                                <div className={`font-semibold text-xs ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                    {t('Cộng đồng Tests', 'Community Tests')}
-                                </div>
-                                <div className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    {t('Khám phá tests công khai', 'Discover public tests')}
-                                </div>
-                            </div>
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-                        <div className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {t('Của tôi', 'My Tests')}
+                    {!user ? (
+                        <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6">
+                            <BookOpen className="w-10 h-10 text-gray-400" />
+                            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                {t('Đăng nhập để xem bài thi của bạn', 'Sign in to view your tests')}
+                            </p>
+                            <button
+                                onClick={() => openUrl('https://wynai.pro/online-test')}
+                                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                            >
+                                {t('Mở trên Web', 'Open on Web')}
+                            </button>
                         </div>
-
-                        {navItem('my-tests', <BookOpen className="w-4 h-4" />, t('Bài thi của tôi', 'My Tests'), true)}
-                        {navItem('my-public-tests', <Globe className="w-4 h-4" />, t('Đã xuất bản', 'My Published'), true)}
-                        {navItem('test-history', <Clock className="w-4 h-4" />, t('Lịch sử làm bài', 'Test History'), true)}
-
-                        <div className={`px-2 py-1 mt-2 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {t('Tạo mới', 'Create')}
-                        </div>
-
-                        <button
-                            onClick={() => user ? setShowGenerateFromAI(true) : openUrl('https://wynai.pro/online-test?view=create-ai')}
-                            className={`${base} ${inactive}`}
-                        >
-                            <Sparkles className="w-4 h-4 flex-shrink-0 text-yellow-400" />
-                            <span className="flex-1 text-left truncate">{t('Tạo bằng AI ✨', 'Create with AI ✨')}</span>
-                            {!user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
-                        </button>
-
-                        <button
-                            onClick={() => user ? setShowCreateManual(true) : openUrl('https://wynai.pro/online-test?view=create')}
-                            className={`${base} ${inactive}`}
-                        >
-                            <PlusCircle className="w-4 h-4 flex-shrink-0" />
-                            <span className="flex-1 text-left truncate">{t('Tạo thủ công', 'Create Manually')}</span>
-                            {!user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
-                        </button>
-                    </div>
+                    ) : (
+                        <TestSidebar
+                            isDark={isDark}
+                            language={language}
+                            selectedTestId={selectedTestId}
+                            onTestSelect={(id) => { setSelectedTestId(id); setSelectedTestSlug(null); }}
+                            onOpenManualTestModal={() => setShowCreateManual(true)}
+                            onOpenGenerateFromAIModal={() => setShowGenerateFromAI(true)}
+                            onCommunityTestsClick={() => { setSelectedTestId(null); setSelectedTestSlug(null); setViewMode('community'); }}
+                            contextMenuHook={contextMenuHook}
+                            refreshTrigger={sidebarRefreshTrigger}
+                        />
+                    )}
                 </aside>
 
                 {/* Right content */}
