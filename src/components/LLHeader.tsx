@@ -108,7 +108,7 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                     await getCurrentWindow().startDragging();
                 } catch { /* web fallback */ }
             }}
-            className={`flex-shrink-0 flex items-center justify-between pl-[15px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-[#c6d4d4]/95 border-black/10'}`}
+            className={`flex-shrink-0 flex items-center justify-between pl-[15px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-white/85 border-gray-200/60'}`}
         >
             {/* Left: sidebar toggle + app title */}
             <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
