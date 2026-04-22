@@ -187,7 +187,6 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
     // Map frontend provider key → security settings OnlineModelId
     const providerToModelId = (p: string): 'gemini' | 'chatgpt' | 'deepseek' | 'qwen' | null => {
         if (p === 'gemma4') return null; // handled client-side
-        if (p === 'gemma4') return null; // handled client-side
         if (p === 'gemini') return 'gemini';
         if (p === 'chatgpt') return 'chatgpt';
         if (p === 'deepseek' || p === 'deepseek_reasoner') return 'deepseek';
@@ -701,55 +700,6 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                         logger.error('Jan history save failed:', histErr);
                     }
                 }
-            }
-            return;
-        }
-
-        // ── Gemma 4 Free (Cloudflare Workers AI — client-side) ──
-        if (aiProvider === 'gemma4') {
-            if (!canUseGemma4()) {
-                const limitMsg: AIEditMessage = {
-                    type: 'ai',
-                    content: `⚠️ Bạn đã dùng hết ${GEMMA4_DAILY_LIMIT} lần miễn phí hôm nay. Vui lòng chuyển sang DeepSeek hoặc thử lại vào ngày mai.\n\nYou've used all ${GEMMA4_DAILY_LIMIT} free Gemma 4 turns for today. Please switch to another model or try again tomorrow.`,
-                    timestamp: new Date(),
-                };
-                setAiChatMessages(prev => [...prev, limitMsg]);
-                setIsStreaming(false);
-                return;
-            }
-            try {
-                const systemContent = `You are a helpful AI assistant for learning. Be concise and helpful.`;
-                const historyMessages = conversationHistoryRef.current.map(m => ({
-                    role: m.role as 'user' | 'assistant',
-                    content: m.content,
-                }));
-                const messages = [
-                    { role: 'system' as const, content: systemContent },
-                    ...historyMessages,
-                    { role: 'user' as const, content: userQuery },
-                ];
-                const reply = await callGemma4Direct(messages);
-                incrementGemma4DailyUsage();
-                setGemma4Usage(getGemma4DailyUsage());
-                if (reply) {
-                    const aiMsg: AIEditMessage = { type: 'ai', content: reply, timestamp: new Date() };
-                    setAiChatMessages(prev => [...prev, aiMsg]);
-                    setConversationHistory(prev => [
-                        ...prev,
-                        { role: 'user', content: userQuery },
-                        { role: 'assistant', content: reply },
-                    ]);
-                }
-            } catch (err: any) {
-                const errMsg: AIEditMessage = {
-                    type: 'ai',
-                    content: `Gemma 4 Error: ${err?.message || err}`,
-                    timestamp: new Date(),
-                };
-                setAiChatMessages(prev => [...prev, errMsg]);
-            } finally {
-                setIsStreaming(false);
-                setStreamingContent('');
             }
             return;
         }
