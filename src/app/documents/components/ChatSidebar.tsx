@@ -717,7 +717,10 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                 return;
             }
             try {
-                const systemContent = `You are a helpful AI assistant for learning. Be concise and helpful.`;
+                const selectionCtx = savedSelection?.text?.trim()
+                    ? `\n\n[Đoạn văn bản được chọn / Selected text]:\n${savedSelection.text.substring(0, 3000)}`
+                    : '';
+                const systemContent = `Bạn là trợ lý AI thông minh hỗ trợ người dùng học tập và làm việc. Bạn có thể giúp người dùng hỏi về tài liệu, đoạn văn bản đính kèm, code, hoặc bất kỳ câu hỏi nào liên quan đến học tập và công việc. Hãy trả lời ngắn gọn, rõ ràng và hữu ích.${selectionCtx}\n\nYou are a smart AI assistant supporting learning and work. You can help users ask about documents, attached text excerpts, code, or any questions related to learning and work. Be concise, clear, and helpful.${selectionCtx}`;
                 const historyMessages = conversationHistoryRef.current.map(m => ({
                     role: m.role as 'user' | 'assistant',
                     content: m.content,
@@ -1272,6 +1275,7 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                                 }`}
                         >
                             <span>
+                                {aiProvider === 'gemma4' && <>🌟 Gemma 4 <span style={{ fontSize: '0.7em', background: '#065f46', color: '#6ee7b7', borderRadius: '4px', padding: '1px 4px', marginLeft: '2px' }}>Free</span></>}
                                 {aiProvider === 'deepseek' && 'DeepSeek'}
                                 {aiProvider === 'deepseek_reasoner' && 'DeepSeek R1'}
                                 {aiProvider === 'chatgpt' && 'GPT-5 Mini'}
@@ -1289,7 +1293,7 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                                 : 'bg-white border-gray-200'
                                 }`}>
                                 <div className="py-1">
-                                    {(['deepseek', 'deepseek_reasoner', 'chatgpt', 'gemini', 'qwen'] as const).filter(p => !isProviderDisabled(p)).map((provider) => (
+                                    {(['gemma4', 'deepseek', 'deepseek_reasoner', 'chatgpt', 'gemini', 'qwen'] as const).filter(p => !isProviderDisabled(p)).map((provider) => (
                                         <button
                                             key={provider}
                                             onClick={() => {
@@ -1305,6 +1309,7 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                                                     : 'text-gray-700 hover:bg-gray-100'
                                                 }`}
                                         >
+                                            {provider === 'gemma4' && <span className="flex items-center gap-1.5">🌟 Gemma 4 26B <span style={{ fontSize: '0.75em', background: '#065f46', color: '#6ee7b7', borderRadius: '4px', padding: '1px 5px' }}>Free {5 - gemma4Usage}/5</span></span>}
                                             {provider === 'deepseek' && 'DeepSeek'}
                                             {provider === 'deepseek_reasoner' && 'DeepSeek (Thinking Mode)'}
                                             {provider === 'chatgpt' && 'GPT-5 Mini'}
