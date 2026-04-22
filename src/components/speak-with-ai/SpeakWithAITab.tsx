@@ -399,7 +399,19 @@ export default function SpeakWithAITab() {
             stopRecognition();
             stopMediaRecorder();
             // onEnd callback will fire with final text
-        } else {
+        } else if (appState === 'speaking') {
+            // Interrupt AI speech → start recording immediately
+            if (speakingAudioRef.current) {
+                speakingAudioRef.current.pause();
+                speakingAudioRef.current = null;
+            }
+            window.speechSynthesis?.cancel();
+            setAppState('listening');
+            startRecognition();
+            startMediaRecorder();
+        } else if (appState === 'idle' || appState === 'error') {
+            setErrorMsg('');
+            setAppState('listening');
             startRecognition();
             startMediaRecorder();
         }

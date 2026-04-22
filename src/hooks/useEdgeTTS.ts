@@ -42,7 +42,9 @@ export function playBase64Audio(
             resolve();
         };
 
-        // Primary: ended event
+        // Primary: direct onended (most reliable in WKWebView)
+        audio.onended = done;
+        // Also addEventListener for redundancy
         audio.addEventListener('ended', done);
         // Fallback 1: error → still resolve so state returns to idle
         audio.addEventListener('error', done);
@@ -51,12 +53,12 @@ export function playBase64Audio(
         audio.addEventListener('canplaythrough', () => {
             const durationMs = isFinite(audio.duration) && audio.duration > 0
                 ? audio.duration * 1000 + 1500  // +1.5s buffer
-                : 30_000;                        // hard cap 30s
+                : 12_000;                        // unknown duration → 12s fallback
             setTimeout(done, durationMs);
         });
 
-        // Fallback 3: hard cap in case canplaythrough never fires
-        setTimeout(done, 35_000);
+        // Fallback 3: hard cap in case canplaythrough never fires (15s max)
+        setTimeout(done, 15_000);
 
         audio.play().catch(done);
     });
