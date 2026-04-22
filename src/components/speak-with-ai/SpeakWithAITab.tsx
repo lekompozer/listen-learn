@@ -180,6 +180,7 @@ export default function SpeakWithAITab() {
     const abortRef = useRef<AbortController | null>(null);
     const recordingBlobRef = useRef<Blob[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const speakingAudioRef = useRef<HTMLAudioElement | null>(null);
 
     // Load conversations on mount
     useEffect(() => {
@@ -268,9 +269,10 @@ export default function SpeakWithAITab() {
             const aiMsg = addMessage(activeConvoId, { role: 'assistant', text: replyText });
 
             if (base64Audio) {
-                // Play audio and show text simultaneously
-                setMessages(prev => [...prev, aiMsg]);
-                await playBase64Audio(base64Audio);
+                // Start audio immediately, delay text 0.5s to sync with speech onset
+                const playPromise = playBase64Audio(base64Audio, speakingAudioRef);
+                setTimeout(() => setMessages(prev => [...prev, aiMsg]), 500);
+                await playPromise;
             } else {
                 // Fallback: show text then try speech synthesis
                 setMessages(prev => [...prev, aiMsg]);
