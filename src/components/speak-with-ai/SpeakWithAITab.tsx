@@ -96,7 +96,7 @@ function ChatBubble({
                 <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser
                     ? isDark ? 'bg-teal-700/80 text-white' : 'bg-teal-600 text-white'
                     : isDark ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                }`}>
+                    }`}>
                     {msg.text}
                 </div>
 
