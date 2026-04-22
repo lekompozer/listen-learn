@@ -103,7 +103,8 @@ jobs:
         shell: bash
         run: |
           TAG="${{ github.ref_name }}"
-          for asset in $(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -E '\.tar\.gz$|\.tar\.gz\.sig$|\.nsis\.zip$|\.nsis\.zip\.sig$|\.AppImage\.tar\.gz$'); do
+          ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || echo "")
+          for asset in $ASSETS; do
             echo "Deleting stale asset: $asset"
             gh release delete-asset "$TAG" "$asset" --yes 2>/dev/null || true
           done
