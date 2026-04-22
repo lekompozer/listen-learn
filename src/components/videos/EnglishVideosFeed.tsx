@@ -159,7 +159,7 @@ export default function EnglishVideosFeed() {
                 onActiveIndexChange={handleActiveIndexChange}
                 onSave={handleSave}
                 savedIds={savedIds}
-                showControls={false}
+                showControls={true}
             />
         </div>
     );

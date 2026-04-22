@@ -248,7 +248,7 @@ export default function ListenLearnApp() {
     };
 
     return (
-        <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-[#c6d4d4] text-gray-900'}`}>
+        <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-white/85 text-gray-900'}`}>
             {/* macOS traffic lights area — 28px padding above header */}
             <div className="pt-[28px]" data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
                 <LLHeader
