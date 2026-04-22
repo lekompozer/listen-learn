@@ -11,6 +11,10 @@ import LLHeader from './LLHeader';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
+import type { LLView } from './LLSidebar';
+
+const LLSidebar = dynamic(() => import('./LLSidebar').then(m => ({ default: m.LLSidebar })), { ssr: false });
+const SavedView = dynamic(() => import('./SavedView').then(m => ({ default: m.SavedView })), { ssr: false });
 
 const SongLearningTab = dynamic(() => import('@/components/songs/SongLearningTab').then(m => ({ default: m.SongLearningTab })), { ssr: false });
 const DailyVocabTab = dynamic(() => import('@/components/daily-vocab/DailyVocabTab').then(m => ({ default: m.DailyVocabTab })), { ssr: false });
@@ -45,8 +49,45 @@ export default function ListenLearnApp() {
 
     const handleTabChange = useCallback((tab: TabType) => {
         setActiveTab(tab);
+        setActiveView('tabs');
         try { localStorage.setItem('ll_active_tab', tab); } catch { /* ignore */ }
     }, []);
+    // Global sidebar state
+    const [activeView, setActiveView] = useState<LLView>('tabs');
+    const [globalSidebarVisible, setGlobalSidebarVisible] = useState(true);
+    const [globalSidebarWidth, setGlobalSidebarWidth] = useState(190);
+    const globalSidebarWidthRef = useRef(190);
+    useEffect(() => { globalSidebarWidthRef.current = globalSidebarWidth; }, [globalSidebarWidth]);
+    const globalSidebarResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+    const startGlobalSidebarResize = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        globalSidebarResizeRef.current = { startX: e.clientX, startWidth: globalSidebarWidthRef.current };
+        const onMove = (ev: MouseEvent) => {
+            if (!globalSidebarResizeRef.current) return;
+            const delta = ev.clientX - globalSidebarResizeRef.current.startX;
+            setGlobalSidebarWidth(Math.max(140, Math.min(280, globalSidebarResizeRef.current.startWidth + delta)));
+        };
+        const onUp = () => {
+            globalSidebarResizeRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, []);
+
+    const handleViewChange = useCallback((view: LLView) => {
+        if (view === 'online-test') {
+            handleTabChange('conversations');
+        } else if (view === 'ai-chat') {
+            toast(isVietnamese ? 'Tính năng sắp ra mắt 🚀' : 'Coming soon! 🚀');
+        } else {
+            setActiveView(view);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [handleTabChange, isVietnamese]);
+
     const [isPremium, setIsPremium] = useState(false);
     const [isConversationsPremium, setIsConversationsPremium] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -249,26 +290,50 @@ export default function ListenLearnApp() {
 
     return (
         <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-[#c6d4d4] text-gray-900'}`}>
-            {/* macOS traffic lights area — 28px padding above header */}
-            <div className="pt-[28px]" data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-                <LLHeader
-                    activeTab={activeTab}
-                    onTabChange={handleTabChange}
-                    isPremium={isPremium || isConversationsPremium}
-                    onUpgradeClick={() => {
-                        if (activeTab === 'conversations') {
-                            setShowConversationsUpgradeModal(true);
-                        } else {
-                            setShowSubscriptionModal(true);
-                        }
-                    }}
-                    isSidebarVisible={isSidebarVisible}
-                    onToggleSidebar={() => setIsSidebarVisible(v => !v)}
-                />
-            </div>
+            {/* macOS traffic lights area — 28px full-width drag bar */}
+            <div
+                className="h-[28px] flex-shrink-0 w-full"
+                data-tauri-drag-region
+                style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+            />
+
+            {/* Body: global sidebar + main */}
+            <div className="flex flex-1 overflow-hidden min-h-0">
+                {/* Global Left Sidebar */}
+                {globalSidebarVisible && (
+                    <LLSidebar
+                        isDark={isDark}
+                        isVietnamese={isVietnamese}
+                        activeView={activeView}
+                        onViewChange={handleViewChange}
+                        width={globalSidebarWidth}
+                        onResize={startGlobalSidebarResize}
+                    />
+                )}
+
+                {/* Main column: header + content */}
+                <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                    <LLHeader
+                        activeTab={activeTab}
+                        onTabChange={handleTabChange}
+                        isPremium={isPremium || isConversationsPremium}
+                        onUpgradeClick={() => {
+                            if (activeTab === 'conversations') {
+                                setShowConversationsUpgradeModal(true);
+                            } else {
+                                setShowSubscriptionModal(true);
+                            }
+                        }}
+                        isSidebarVisible={globalSidebarVisible}
+                        onToggleSidebar={() => setGlobalSidebarVisible(v => !v)}
+                    />
 
             {/* Main content area */}
             <div className="flex-1 overflow-hidden relative">
+                {activeView === 'saved' ? (
+                    <SavedView isDark={isDark} isVietnamese={isVietnamese} />
+                ) : (
+                <>
                 {/* Songs Tab */}
                 {activeTab === 'songs' && (
                     <SongLearningTab
@@ -366,8 +431,12 @@ export default function ListenLearnApp() {
                 {activeTab === 'videos' && (
                     <EnglishVideosFeed />
                 )}
+                </>
+                )}
 
             </div>
+                </div>{/* end main column */}
+            </div>{/* end body */}
             {showSubscriptionModal && (
                 <SubscriptionModal
                     isOpen={showSubscriptionModal}
