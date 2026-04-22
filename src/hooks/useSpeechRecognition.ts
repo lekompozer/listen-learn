@@ -28,6 +28,8 @@ export function useSpeechRecognition({
     const isRunningRef = useRef(false);
     // prevent double onEnd calls
     const endFiredRef = useRef(false);
+    // true = user has spoken at least one word — silence timer only starts after this
+    const hasSpokenRef = useRef(false);
 
     // keep latest callbacks in refs so we never have stale closures
     const onEndRef = useRef(onEnd);
@@ -72,6 +74,7 @@ export function useSpeechRecognition({
         transcriptRef.current = '';
         isRunningRef.current = true;
         endFiredRef.current = false;
+        hasSpokenRef.current = false; // reset: silence timer won't start until user speaks
 
         // setupAndStart: creates a FRESH recognition instance and starts it.
         // Called on initial start AND on unexpected onend (WKWebView stops after each
@@ -89,14 +92,17 @@ export function useSpeechRecognition({
             recognition.lang = lang;
             recognition.maxAlternatives = 1;
 
-            // Reset silence timer (preserves 3s window after each restart)
-            clearSilenceTimer();
-            silenceTimerRef.current = setTimeout(() => {
-                if (isRunningRef.current) {
-                    isRunningRef.current = false;
-                    try { recognition.stop(); } catch { /* ignore */ }
-                }
-            }, silenceMs);
+            // NOTE: Do NOT start silence timer here — only starts after user speaks.
+
+            const resetSilenceTimer = () => {
+                clearSilenceTimer();
+                silenceTimerRef.current = setTimeout(() => {
+                    if (isRunningRef.current) {
+                        isRunningRef.current = false;
+                        try { recognition.stop(); } catch { /* ignore */ }
+                    }
+                }, silenceMs);
+            };
 
             recognition.onresult = (event: any) => {
                 let interim = '';
@@ -109,21 +115,19 @@ export function useSpeechRecognition({
                 if (final) transcriptRef.current += (transcriptRef.current ? ' ' : '') + final.trim();
                 onInterimRef.current?.(transcriptRef.current + (interim ? ' ' + interim : ''));
 
-                // Reset silence timer on every speech activity
-                clearSilenceTimer();
-                silenceTimerRef.current = setTimeout(() => {
-                    if (isRunningRef.current) {
-                        isRunningRef.current = false;
-                        try { recognition.stop(); } catch { /* ignore */ }
-                    }
-                }, silenceMs);
+                // Start/reset silence timer only AFTER user has actually spoken
+                hasSpokenRef.current = true;
+                resetSilenceTimer();
             };
 
             recognition.onerror = (event: any) => {
                 const err: string = event?.error ?? 'unknown';
+                // 'no-speech': WKWebView fires this if mic is open but user hasn't spoken yet.
+                // Don't stop — just let it restart via onend so we keep waiting.
+                if (err === 'no-speech') return;
                 clearSilenceTimer();
                 isRunningRef.current = false;
-                if (err !== 'aborted' && err !== 'no-speech') {
+                if (err !== 'aborted') {
                     onErrorRef.current?.(err);
                 }
             };
@@ -131,7 +135,7 @@ export function useSpeechRecognition({
             recognition.onend = () => {
                 if (isRunningRef.current) {
                     // WKWebView auto-stops after each final result even with continuous=true.
-                    // Create a new instance to keep recording — transcript is preserved in transcriptRef.
+                    // Create a new instance to keep recording — transcript + hasSpoken preserved.
                     setupAndStart();
                     return;
                 }
