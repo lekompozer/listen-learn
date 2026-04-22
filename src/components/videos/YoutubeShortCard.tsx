@@ -68,9 +68,8 @@ export default function YoutubeShortCard({
                     {onSave && (
                         <button
                             onClick={onSave}
-                            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors ${
-                                isSaved ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-black/50 text-white hover:bg-black/70'
-                            }`}
+                            className={`w-10 h-10 rounded-full backdrop-blur-sm flex items-center justify-center transition-colors ${isSaved ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-black/50 text-white hover:bg-black/70'
+                                }`}
                             aria-label={isSaved ? 'Saved' : 'Save'}
                         >
                             {isSaved ? <BookmarkCheck className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
