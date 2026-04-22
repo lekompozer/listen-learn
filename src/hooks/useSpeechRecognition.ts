@@ -2,6 +2,10 @@
 
 import { useRef, useCallback, useEffect } from 'react';
 
+// SpeechRecognition is a browser API — not in TypeScript's default lib
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySpeechRecognition = any;
+
 interface UseSpeechRecognitionOptions {
     onResult: (transcript: string) => void;
     onEnd: () => void;
@@ -17,7 +21,7 @@ export function useSpeechRecognition({
     silenceMs = 2500,
     lang = 'en-US',
 }: UseSpeechRecognitionOptions) {
-    const recognitionRef = useRef<SpeechRecognition | null>(null);
+    const recognitionRef = useRef<AnySpeechRecognition>(null);
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const transcriptRef = useRef('');
     const isRunningRef = useRef(false);
@@ -50,7 +54,8 @@ export function useSpeechRecognition({
             try { recognitionRef.current.abort(); } catch { /* ignore */ }
         }
 
-        const recognition = new SpeechRecognitionCtor() as SpeechRecognition;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const recognition = new SpeechRecognitionCtor() as any;
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = lang;
@@ -59,7 +64,8 @@ export function useSpeechRecognition({
         transcriptRef.current = '';
         isRunningRef.current = true;
 
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognition.onresult = (event: any) => {
             let interim = '';
             let final = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -80,7 +86,8 @@ export function useSpeechRecognition({
             }, silenceMs);
         };
 
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        recognition.onerror = (event: any) => {
             clearSilenceTimer();
             isRunningRef.current = false;
             if (event.error !== 'aborted') {
@@ -116,7 +123,9 @@ export function useSpeechRecognition({
         };
     }, [clearSilenceTimer]);
 
-    return { start, stop, isSupported: typeof window !== 'undefined' && !!(
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    )};
+    return {
+        start, stop, isSupported: typeof window !== 'undefined' && !!(
+            (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        )
+    };
 }
