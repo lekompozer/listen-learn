@@ -262,7 +262,7 @@ export default function VocabCard({
     const [showMoreCaption, setShowMoreCaption] = useState(false);
     const [isPlayingPodcast, setIsPlayingPodcast] = useState(false);
     const [isPlayingBackgroundMusic, setIsPlayingBackgroundMusic] = useState(false);
-    const [isBackgroundMusicMuted, setIsBackgroundMusicMuted] = useState(false);
+    const [isBackgroundMusicMuted, setIsBackgroundMusicMuted] = useState(true);
     const [isVideoMuted, setIsVideoMuted] = useState(() => !videoAudioUnlocked);
     // Debounced flag for showing the tap-to-unmute badge — prevents flicker
     // when isVideoMuted flips rapidly during intersection/play-catch cycles.
@@ -597,6 +597,12 @@ export default function VocabCard({
     };
 
     const toggleBackgroundMusic = () => {
+        if (isBackgroundMusicMuted) {
+            // First click — mark audio interaction unlocked so play() is allowed
+            audioInteractionUnlocked = true;
+        } else {
+            pauseBackgroundMusic();
+        }
         setIsBackgroundMusicMuted((prev) => !prev);
     };
 

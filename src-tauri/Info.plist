@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Listen &amp; Learn needs microphone access for the Speak with AI feature — so you can practise speaking English.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Listen &amp; Learn uses speech recognition to convert your voice to text for the Speak with AI feature.</string>
 </dict>
 </plist>
