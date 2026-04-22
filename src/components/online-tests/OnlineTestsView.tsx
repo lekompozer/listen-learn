@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import {
     Globe, BookOpen, Sparkles, PlusCircle, ExternalLink,
@@ -277,10 +278,10 @@ export default function OnlineTestsView() {
         }
     };
 
-    // ── Full-screen overlay for test-taking ──────────────────────────────────
-    if (takingTestId && user) {
-        return (
-            <div className={`flex flex-col h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    // ── Portals: cover entire screen (header + all sidebars) ─────────────────
+    const testOverlay = takingTestId && user
+        ? createPortal(
+            <div className={`fixed inset-0 z-[9999] flex flex-col ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
                 <TestTakingView
                     testId={takingTestId}
                     userId={user.uid}
@@ -289,25 +290,27 @@ export default function OnlineTestsView() {
                     onExit={() => setTakingTestId(null)}
                     onShowResults={handleShowResults}
                 />
-            </div>
-        );
-    }
+            </div>,
+            document.body
+        )
+        : null;
 
-    // ── Full-screen overlay for results ─────────────────────────────────────
-    if (resultsSubmissionId) {
-        return (
-            <div className={`flex flex-col h-full ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    const resultsOverlay = resultsSubmissionId
+        ? createPortal(
+            <div className={`fixed inset-0 z-[9999] flex flex-col ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
                 <TestResultsView
                     submissionId={resultsSubmissionId}
                     isDark={isDark}
                     language={language}
                     onBack={() => setResultsSubmissionId(null)}
                 />
-            </div>
-        );
-    }
+            </div>,
+            document.body
+        )
+        : null;
 
     return (
+        <>
         <div className="flex h-full overflow-hidden">
             {/* Left sidebar */}
             <aside className={`w-[220px] flex-shrink-0 flex flex-col border-r ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}>
@@ -479,5 +482,8 @@ export default function OnlineTestsView() {
                 />
             )}
         </div>
+        {testOverlay}
+        {resultsOverlay}
+        </>
     );
 }
