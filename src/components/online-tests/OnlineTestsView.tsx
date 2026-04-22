@@ -311,179 +311,179 @@ export default function OnlineTestsView() {
 
     return (
         <>
-        <div className="flex h-full overflow-hidden">
-            {/* Left sidebar */}
-            <aside className={`w-[220px] flex-shrink-0 flex flex-col border-r ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}>
-                {/* Community Tests header */}
-                <div className="p-3 border-b" style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
-                    <button
-                        onClick={() => { setViewMode('community'); setSelectedTestId(null); setSelectedTestSlug(null); }}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all
+            <div className="flex h-full overflow-hidden">
+                {/* Left sidebar */}
+                <aside className={`w-[220px] flex-shrink-0 flex flex-col border-r ${isDark ? 'bg-gray-900/80 border-gray-700/60' : 'bg-white/85 border-gray-200'}`}>
+                    {/* Community Tests header */}
+                    <div className="p-3 border-b" style={{ borderColor: isDark ? '#374151' : '#e5e7eb' }}>
+                        <button
+                            onClick={() => { setViewMode('community'); setSelectedTestId(null); setSelectedTestSlug(null); }}
+                            className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all
                             ${viewMode === 'community' && !selectedTestId && !selectedTestSlug
-                                ? (isDark
-                                    ? 'bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-600/30'
-                                    : 'bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200')
-                                : inactive}`}
-                    >
-                        <div className={`p-1.5 rounded-lg ${isDark ? 'bg-blue-600/20' : 'bg-blue-100'}`}>
-                            <Globe className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
-                        </div>
-                        <div className="text-left">
-                            <div className={`font-semibold text-xs ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                {t('Cộng đồng Tests', 'Community Tests')}
+                                    ? (isDark
+                                        ? 'bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-600/30'
+                                        : 'bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200')
+                                    : inactive}`}
+                        >
+                            <div className={`p-1.5 rounded-lg ${isDark ? 'bg-blue-600/20' : 'bg-blue-100'}`}>
+                                <Globe className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
                             </div>
-                            <div className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                {t('Khám phá tests công khai', 'Discover public tests')}
+                            <div className="text-left">
+                                <div className={`font-semibold text-xs ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                    {t('Cộng đồng Tests', 'Community Tests')}
+                                </div>
+                                <div className={`text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {t('Khám phá tests công khai', 'Discover public tests')}
+                                </div>
                             </div>
-                        </div>
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-                    <div className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {t('Của tôi', 'My Tests')}
+                        </button>
                     </div>
 
-                    {navItem('my-tests', <BookOpen className="w-4 h-4" />, t('Bài thi của tôi', 'My Tests'), true)}
-                    {navItem('my-public-tests', <Globe className="w-4 h-4" />, t('Đã xuất bản', 'My Published'), true)}
-                    {navItem('test-history', <Clock className="w-4 h-4" />, t('Lịch sử làm bài', 'Test History'), true)}
+                    <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+                        <div className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {t('Của tôi', 'My Tests')}
+                        </div>
 
-                    <div className={`px-2 py-1 mt-2 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {t('Tạo mới', 'Create')}
+                        {navItem('my-tests', <BookOpen className="w-4 h-4" />, t('Bài thi của tôi', 'My Tests'), true)}
+                        {navItem('my-public-tests', <Globe className="w-4 h-4" />, t('Đã xuất bản', 'My Published'), true)}
+                        {navItem('test-history', <Clock className="w-4 h-4" />, t('Lịch sử làm bài', 'Test History'), true)}
+
+                        <div className={`px-2 py-1 mt-2 text-[10px] font-semibold uppercase tracking-wider ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {t('Tạo mới', 'Create')}
+                        </div>
+
+                        <button
+                            onClick={() => user ? setShowGenerateFromAI(true) : openUrl('https://wynai.pro/online-test?view=create-ai')}
+                            className={`${base} ${inactive}`}
+                        >
+                            <Sparkles className="w-4 h-4 flex-shrink-0 text-yellow-400" />
+                            <span className="flex-1 text-left truncate">{t('Tạo bằng AI ✨', 'Create with AI ✨')}</span>
+                            {!user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
+                        </button>
+
+                        <button
+                            onClick={() => user ? setShowCreateManual(true) : openUrl('https://wynai.pro/online-test?view=create')}
+                            className={`${base} ${inactive}`}
+                        >
+                            <PlusCircle className="w-4 h-4 flex-shrink-0" />
+                            <span className="flex-1 text-left truncate">{t('Tạo thủ công', 'Create Manually')}</span>
+                            {!user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
+                        </button>
                     </div>
+                </aside>
 
-                    <button
-                        onClick={() => user ? setShowGenerateFromAI(true) : openUrl('https://wynai.pro/online-test?view=create-ai')}
-                        className={`${base} ${inactive}`}
-                    >
-                        <Sparkles className="w-4 h-4 flex-shrink-0 text-yellow-400" />
-                        <span className="flex-1 text-left truncate">{t('Tạo bằng AI ✨', 'Create with AI ✨')}</span>
-                        {!user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
-                    </button>
+                {/* Right content */}
+                <main className="flex-1 overflow-y-auto">
+                    {renderContent()}
+                </main>
 
-                    <button
-                        onClick={() => user ? setShowCreateManual(true) : openUrl('https://wynai.pro/online-test?view=create')}
-                        className={`${base} ${inactive}`}
-                    >
-                        <PlusCircle className="w-4 h-4 flex-shrink-0" />
-                        <span className="flex-1 text-left truncate">{t('Tạo thủ công', 'Create Manually')}</span>
-                        {!user && <ExternalLink className="w-3 h-3 opacity-40 flex-shrink-0" />}
-                    </button>
-                </div>
-            </aside>
-
-            {/* Right content */}
-            <main className="flex-1 overflow-y-auto">
-                {renderContent()}
-            </main>
-
-            {/* Modals */}
-            {showGenerateFromAI && (
-                <GenerateFromAIModal
-                    isOpen={showGenerateFromAI}
-                    isDark={isDark}
-                    language={language}
-                    onClose={() => setShowGenerateFromAI(false)}
-                    onSubmit={async (config) => {
-                        setCurrentTestType(config.testType);
-                        setShowAILoading(true);
-                        try {
-                            const { onlineTestService } = await import('@/services/onlineTestService');
-                            let generatedTest;
-                            if (config.testType === 'listening') {
-                                generatedTest = await onlineTestService.generateListeningTest({
-                                    title: config.title,
-                                    description: config.description,
-                                    language: config.language,
-                                    difficulty: config.difficulty,
-                                    num_questions: config.numQuestions || 10,
-                                    num_audio_sections: 1,
-                                    audio_config: { num_speakers: 2 },
-                                    user_query: config.userQuery,
-                                    time_limit_minutes: config.timeLimitMinutes,
-                                    passing_score: config.passingScore,
-                                });
-                            } else {
-                                generatedTest = await onlineTestService.generateTestFromAI({
-                                    title: config.title,
-                                    description: config.description,
-                                    topic: config.topic,
-                                    user_query: config.userQuery,
-                                    test_category: config.testCategory,
-                                    language: config.language,
-                                    difficulty: config.difficulty,
-                                    test_type: config.testType,
-                                    num_questions: config.testType === 'mixed' ? undefined : config.numQuestions,
-                                    num_mcq_questions: config.testType === 'mixed' ? config.numMcqQuestions : undefined,
-                                    num_essay_questions: config.testType === 'mixed' ? config.numEssayQuestions : undefined,
-                                    time_limit_minutes: config.timeLimitMinutes,
-                                    max_retries: config.maxRetries ?? 3,
-                                    passing_score: config.passingScore,
-                                });
+                {/* Modals */}
+                {showGenerateFromAI && (
+                    <GenerateFromAIModal
+                        isOpen={showGenerateFromAI}
+                        isDark={isDark}
+                        language={language}
+                        onClose={() => setShowGenerateFromAI(false)}
+                        onSubmit={async (config) => {
+                            setCurrentTestType(config.testType);
+                            setShowAILoading(true);
+                            try {
+                                const { onlineTestService } = await import('@/services/onlineTestService');
+                                let generatedTest;
+                                if (config.testType === 'listening') {
+                                    generatedTest = await onlineTestService.generateListeningTest({
+                                        title: config.title,
+                                        description: config.description,
+                                        language: config.language,
+                                        difficulty: config.difficulty,
+                                        num_questions: config.numQuestions || 10,
+                                        num_audio_sections: 1,
+                                        audio_config: { num_speakers: 2 },
+                                        user_query: config.userQuery,
+                                        time_limit_minutes: config.timeLimitMinutes,
+                                        passing_score: config.passingScore,
+                                    });
+                                } else {
+                                    generatedTest = await onlineTestService.generateTestFromAI({
+                                        title: config.title,
+                                        description: config.description,
+                                        topic: config.topic,
+                                        user_query: config.userQuery,
+                                        test_category: config.testCategory,
+                                        language: config.language,
+                                        difficulty: config.difficulty,
+                                        test_type: config.testType,
+                                        num_questions: config.testType === 'mixed' ? undefined : config.numQuestions,
+                                        num_mcq_questions: config.testType === 'mixed' ? config.numMcqQuestions : undefined,
+                                        num_essay_questions: config.testType === 'mixed' ? config.numEssayQuestions : undefined,
+                                        time_limit_minutes: config.timeLimitMinutes,
+                                        max_retries: config.maxRetries ?? 3,
+                                        passing_score: config.passingScore,
+                                    });
+                                }
+                                setShowGenerateFromAI(false);
+                                setShowAILoading(false);
+                                setPollingTestId(generatedTest.test_id);
+                                setPollingTestType(config.testType === 'listening' ? 'listening' : 'general');
+                                setShowPollingPopup(true);
+                                setSidebarRefreshTrigger(n => n + 1);
+                            } catch {
+                                setShowAILoading(false);
                             }
-                            setShowGenerateFromAI(false);
-                            setShowAILoading(false);
-                            setPollingTestId(generatedTest.test_id);
-                            setPollingTestType(config.testType === 'listening' ? 'listening' : 'general');
-                            setShowPollingPopup(true);
+                        }}
+                    />
+                )}
+
+                {showAILoading && (
+                    <AITestGenerationLoadingModal
+                        isOpen={showAILoading}
+                        isDark={isDark}
+                        language={language}
+                        testType={currentTestType}
+                    />
+                )}
+
+                {showCreateManual && (
+                    <CreateManualTestModal
+                        isOpen={showCreateManual}
+                        isDark={isDark}
+                        language={language}
+                        onClose={() => setShowCreateManual(false)}
+                        onSuccess={(testId) => {
+                            setShowCreateManual(false);
+                            setSelectedTestId(testId);
+                            setViewMode('my-tests');
                             setSidebarRefreshTrigger(n => n + 1);
-                        } catch {
-                            setShowAILoading(false);
-                        }
-                    }}
-                />
-            )}
+                        }}
+                    />
+                )}
 
-            {showAILoading && (
-                <AITestGenerationLoadingModal
-                    isOpen={showAILoading}
-                    isDark={isDark}
-                    language={language}
-                    testType={currentTestType}
-                />
-            )}
-
-            {showCreateManual && (
-                <CreateManualTestModal
-                    isOpen={showCreateManual}
-                    isDark={isDark}
-                    language={language}
-                    onClose={() => setShowCreateManual(false)}
-                    onSuccess={(testId) => {
-                        setShowCreateManual(false);
-                        setSelectedTestId(testId);
-                        setViewMode('my-tests');
-                        setSidebarRefreshTrigger(n => n + 1);
-                    }}
-                />
-            )}
-
-            {showPollingPopup && pollingTestId && (
-                <TestGenerationPollingPopup
-                    testId={pollingTestId}
-                    testType={pollingTestType}
-                    isDark={isDark}
-                    language={language}
-                    onCompleted={() => {
-                        setShowPollingPopup(false);
-                        setPollingTestId(null);
-                        setViewMode('my-tests');
-                        setSidebarRefreshTrigger(n => n + 1);
-                    }}
-                    onFailed={(error) => {
-                        setShowPollingPopup(false);
-                        setPollingTestId(null);
-                        console.error('Test generation failed:', error);
-                    }}
-                    onClose={() => {
-                        setShowPollingPopup(false);
-                        setPollingTestId(null);
-                    }}
-                />
-            )}
-        </div>
-        {testOverlay}
-        {resultsOverlay}
+                {showPollingPopup && pollingTestId && (
+                    <TestGenerationPollingPopup
+                        testId={pollingTestId}
+                        testType={pollingTestType}
+                        isDark={isDark}
+                        language={language}
+                        onCompleted={() => {
+                            setShowPollingPopup(false);
+                            setPollingTestId(null);
+                            setViewMode('my-tests');
+                            setSidebarRefreshTrigger(n => n + 1);
+                        }}
+                        onFailed={(error) => {
+                            setShowPollingPopup(false);
+                            setPollingTestId(null);
+                            console.error('Test generation failed:', error);
+                        }}
+                        onClose={() => {
+                            setShowPollingPopup(false);
+                            setPollingTestId(null);
+                        }}
+                    />
+                )}
+            </div>
+            {testOverlay}
+            {resultsOverlay}
         </>
     );
 }
