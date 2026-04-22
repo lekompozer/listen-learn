@@ -20,7 +20,7 @@ const STORAGE_KEY = 'll_speak_conversations';
 const DAILY_KEY = 'll_speak_daily';
 const MONTHLY_KEY = 'll_speak_monthly';
 export const FREE_LIMIT = 5;
-export const PREMIUM_MONTHLY_LIMIT = 300;
+export const PREMIUM_MONTHLY_LIMIT = 150;
 
 function today(): string {
     return new Date().toISOString().slice(0, 10);

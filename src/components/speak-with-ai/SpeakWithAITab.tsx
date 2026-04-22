@@ -88,23 +88,34 @@ async function analyzeAudioWithAPI(
     return lines.join('\n') || '✓ Sounds great!';
 }
 
-// ── Gemini STT — transcribe audio blob → text ─────────────────────────────────
-async function transcribeWithGemini(audioBlob: Blob): Promise<string> {
+// ── Gemini Premium STT — transcribe + pronunciation analysis in one call ──────
+interface GeminiSTTResult {
+    text: string;       // accurate transcript (sent to DeepSeek)
+    analysis: string;   // pronunciation feedback (shown on Analyze button)
+}
+
+async function transcribeWithGemini(audioBlob: Blob): Promise<GeminiSTTResult> {
     if (!GEMINI_STT_URL) throw new Error('Vertex API key not configured');
     const dataUrl = await blobToBase64(audioBlob);
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) throw new Error('Invalid audio blob');
     const [, mimeType, rawBase64] = match;
 
+    const prompt = `You are an English pronunciation coach. Listen to this audio and respond with a JSON object (no markdown, no code block) with exactly two fields:
+1. "text": the accurate verbatim transcription of what was said
+2. "analysis": a brief pronunciation feedback string. If pronunciation is good, write "✓ Good pronunciation!". If there are mistakes, briefly note them (e.g. "Vowel in 'sheet' sounds short — try a longer /iː/ sound"). Keep analysis under 2 sentences.
+
+Respond with only valid JSON, example: {"text":"hello how are you","analysis":"✓ Good pronunciation!"}`;
+
     const body = {
         contents: [{
             role: 'user',
             parts: [
                 { inline_data: { mime_type: mimeType, data: rawBase64 } },
-                { text: 'Transcribe this audio accurately. Return ONLY the spoken words, nothing else. No punctuation corrections, no formatting, no explanations.' },
+                { text: prompt },
             ],
         }],
-        generationConfig: { temperature: 0, maxOutputTokens: 300 },
+        generationConfig: { temperature: 0, maxOutputTokens: 400, responseMimeType: 'application/json' },
     };
 
     const resp = await fetch(GEMINI_STT_URL, {
@@ -117,7 +128,17 @@ async function transcribeWithGemini(audioBlob: Blob): Promise<string> {
         throw new Error(err.error?.message || `Gemini STT ${resp.status}`);
     }
     const data = await resp.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+    try {
+        const parsed = JSON.parse(raw);
+        return {
+            text: parsed.text?.trim() ?? '',
+            analysis: parsed.analysis?.trim() ?? '✓ Good pronunciation!',
+        };
+    } catch {
+        // Fallback: treat entire response as text only
+        return { text: raw, analysis: '✓ Analyzed' };
+    }
 }
 
 // ── Mic Button ────────────────────────────────────────────────────────────────
@@ -258,11 +279,6 @@ export default function SpeakWithAITab() {
     const [grammarResults, setGrammarResults] = useState<Record<string, string>>({});
     const [checkingGrammarFor, setCheckingGrammarFor] = useState<string | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
-    // Audio Mode: use Gemini STT instead of Web Speech API for final transcript
-    const [audioMode, setAudioMode] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return localStorage.getItem('ll_speak_audio_mode') === '1';
-    });
 
     const chatBottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -317,21 +333,25 @@ export default function SpeakWithAITab() {
         if (!activeConvoId) return;
         if (!canSendMessage(isPremium)) return;
 
-        // Capture audio blob first (used for Gemini STT and replay)
+        // Capture audio blob (used for Gemini Premium STT + replay)
         let audioBlob: Blob | null = null;
         if (recordingBlobRef.current.length > 0) {
             audioBlob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
             recordingBlobRef.current = [];
         }
 
-        // In Audio Mode: use Gemini STT to get accurate transcript
+        // Premium: use Gemini STT (accurate transcript + auto pronunciation analysis)
+        // Free (Flash): use Web Speech transcript directly
         let transcript = webSpeechTranscript;
-        if (audioMode && audioBlob && GEMINI_STT_URL) {
+        let prefilledAnalysis: string | undefined;
+
+        if (isPremium && audioBlob && GEMINI_STT_URL) {
             setAppState('processing');
             setInterimText('');
             try {
-                const geminiText = await transcribeWithGemini(audioBlob);
-                if (geminiText) transcript = geminiText;
+                const result = await transcribeWithGemini(audioBlob);
+                if (result.text) transcript = result.text;
+                prefilledAnalysis = result.analysis;
             } catch (e) {
                 console.warn('Gemini STT failed, using Web Speech fallback:', e);
             }
@@ -349,6 +369,12 @@ export default function SpeakWithAITab() {
         // Add user message to local state immediately
         const userMsg = addMessage(activeConvoId, { role: 'user', text: transcript, audioBase64 });
         setMessages(prev => [...prev, userMsg]);
+
+        // Pre-fill pronunciation analysis for Premium (no need to click backend)
+        if (prefilledAnalysis) {
+            setGrammarResults(prev => ({ ...prev, [userMsg.id]: prefilledAnalysis! }));
+        }
+
         // Track usage: premium uses monthly counter, free uses daily
         if (isPremium) { incrementMonthlyUsage(); }
         else { incrementDailyUsage(); }
@@ -408,7 +434,7 @@ export default function SpeakWithAITab() {
                 setErrorMsg(err?.message ?? 'Unknown error');
             }
         }
-    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, audioMode]);
+    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium]);
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
@@ -477,6 +503,10 @@ export default function SpeakWithAITab() {
     }, [appState, startRecognition, stopRecognition, startMediaRecorder, stopMediaRecorder]);
 
     const handleAnalyzeAudio = useCallback(async (msg: SpeakMessage) => {
+        // Premium: result already pre-filled by Gemini during recording — nothing to do
+        if (grammarResults[msg.id]) return;
+
+        // Free (Flash): call backend /api/grammar/check-audio
         if (!msg.audioBase64) {
             setGrammarResults(prev => ({ ...prev, [msg.id]: t('Không có audio để phân tích', 'No audio recorded to analyze') }));
             return;
@@ -495,7 +525,7 @@ export default function SpeakWithAITab() {
         } finally {
             setCheckingGrammarFor(null);
         }
-    }, [user, t]);
+    }, [user, t, grammarResults]);
 
     const handleDeleteConvo = useCallback((id: string, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -581,13 +611,23 @@ export default function SpeakWithAITab() {
 
                     {/* Usage quota */}
                     <div className={`px-4 py-3 border-t text-[10px] ${isDark ? 'border-gray-700/60 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
-                        {isPremium
-                            ? <>{t('Tháng này', 'This month')}: {dailyUsage}/{PREMIUM_MONTHLY_LIMIT} {t('câu Premium', 'Premium turns')}</>
-                            : <>{t('Hôm nay', 'Today')}: {dailyUsage}/{FREE_LIMIT} {t('lượt miễn phí', 'free turns')}</>
-                        }
-                        <div className={`mt-1.5 h-1 rounded-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                        <div className="flex items-center gap-1 mb-1">
+                            <span className={`px-1.5 py-0.5 rounded font-semibold ${isPremium
+                                ? isDark ? 'bg-violet-600/20 text-violet-400' : 'bg-violet-100 text-violet-700'
+                                : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                                {isPremium ? 'Premium' : 'Flash'}
+                            </span>
+                            <span>
+                                {isPremium
+                                    ? <>{t('Tháng này', 'This month')}: {dailyUsage}/{PREMIUM_MONTHLY_LIMIT}</>
+                                    : <>{t('Hôm nay', 'Today')}: {dailyUsage}/{FREE_LIMIT}</>
+                                }
+                            </span>
+                        </div>
+                        <div className={`h-1 rounded-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
                             <div
-                                className="h-full rounded-full bg-teal-500 transition-all duration-500"
+                                className={`h-full rounded-full transition-all duration-500 ${isPremium ? 'bg-violet-500' : 'bg-teal-500'}`}
                                 style={{ width: `${Math.min(100, (dailyUsage / (isPremium ? PREMIUM_MONTHLY_LIMIT : FREE_LIMIT)) * 100)}%` }}
                             />
                         </div>
@@ -616,27 +656,6 @@ export default function SpeakWithAITab() {
                         </span>
                     )}
                     <div className="ml-auto flex items-center gap-2">
-                        {/* Audio Mode toggle — Gemini STT vs Web Speech */}
-                        {GEMINI_STT_URL && (
-                            <button
-                                onClick={() => setAudioMode(v => {
-                                    const next = !v;
-                                    localStorage.setItem('ll_speak_audio_mode', next ? '1' : '0');
-                                    return next;
-                                })}
-                                title={audioMode
-                                    ? t('Đang dùng Gemini STT (chính xác hơn)', 'Using Gemini STT (accurate)')
-                                    : t('Đang dùng Web Speech (chuyển sang Gemini?)', 'Using Web Speech (switch to Gemini?)')}
-                                className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border transition-all font-medium
-                                    ${audioMode
-                                        ? isDark ? 'bg-violet-600/20 border-violet-500/50 text-violet-300' : 'bg-violet-50 border-violet-400 text-violet-700'
-                                        : isDark ? 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200' : 'bg-white border-gray-300 text-gray-500 hover:text-gray-700'
-                                    }`}
-                            >
-                                <span className={`w-1.5 h-1.5 rounded-full ${audioMode ? 'bg-violet-400' : 'bg-gray-500'}`} />
-                                {audioMode ? 'Gemini STT' : 'Web STT'}
-                            </button>
-                        )}
                         {/* Voice selector */}
                         <div className="relative">
                             <select
@@ -733,7 +752,7 @@ export default function SpeakWithAITab() {
                             {appState === 'processing' && (
                                 <span className="flex items-center gap-1.5 justify-center">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    {interimText === '' && audioMode
+                                    {interimText === '' && isPremium
                                         ? t('Đang nhận dạng giọng nói…', 'Transcribing…')
                                         : t('AI đang trả lời…', 'AI is thinking…')}
                                 </span>
