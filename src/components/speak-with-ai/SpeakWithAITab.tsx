@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { callDeepSeek, buildSystemPrompt, type DeepSeekMessage } from '@/hooks/useDeepSeekChat';
-import { getEdgeTTSAudio, playBase64Audio, speakWithSynthesis } from '@/hooks/useEdgeTTS';
+import { playBase64Audio, speakWithSynthesis } from '@/hooks/useEdgeTTS';
+
+const isTauriDesktop = () => typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
 import {
     listConversations, createConversation, addMessage, deleteConversation,
     getDailyUsage, incrementDailyUsage, incrementMonthlyUsage, canSendMessage,
@@ -17,9 +19,9 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 const VERTEX_API_KEY = process.env.NEXT_PUBLIC_VERTEX_API_KEY;
-// Gemini 2.0 Flash Lite — audio transcription (STT)
-// Region must be us-central1; gemini-2.5-flash-lite-preview is not available in asia-southeast1.
-const GEMINI_MODEL = 'gemini-2.0-flash-lite-001';
+// Gemini 2.5 Flash Lite — audio transcription (STT)
+// Region must be us-central1.
+const GEMINI_MODEL = 'gemini-2.5-flash-lite-preview-04-17';
 const GEMINI_STT_URL = VERTEX_API_KEY
     ? `https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${VERTEX_API_KEY}`
     : null;
@@ -35,6 +37,17 @@ const VOICES: { value: string; label: string }[] = [
     { value: 'en-GB-SoniaNeural', label: 'Sonia (UK Female)' },
     { value: 'en-AU-NatashaNeural', label: 'Natasha (AU Female)' },
 ];
+
+// ── Error logger → localStorage ─────────────────────────────────────────────
+function logError(ctx: string, msg: string | undefined) {
+    try {
+        const raw = localStorage.getItem('ll_error_log') ?? '[]';
+        const log: Array<{ ts: string; ctx: string; msg: string }> = JSON.parse(raw);
+        log.push({ ts: new Date().toISOString(), ctx, msg: msg ?? 'unknown' });
+        if (log.length > 100) log.splice(0, log.length - 100);
+        localStorage.setItem('ll_error_log', JSON.stringify(log));
+    } catch { /* ignore */ }
+}
 
 // ── Blob → Base64 ────────────────────────────────────────────────────────────
 function blobToBase64(blob: Blob): Promise<string> {
@@ -407,24 +420,64 @@ export default function SpeakWithAITab() {
 
         try {
             abortRef.current = new AbortController();
+            const signal = abortRef.current.signal;
 
-            // 1. Get DeepSeek reply
-            const replyText = await callDeepSeek(deepseekMessages, abortRef.current.signal);
+            // 1. Get DeepSeek reply — retry up to 2 times with 3s delay
+            let replyText = '';
+            {
+                let lastErr: any;
+                for (let attempt = 0; attempt <= 2; attempt++) {
+                    try {
+                        replyText = await callDeepSeek(deepseekMessages, signal);
+                        break;
+                    } catch (e: any) {
+                        if (e?.name === 'AbortError') throw e;
+                        lastErr = e;
+                        logError(`DeepSeek attempt ${attempt + 1}`, e?.message);
+                        if (attempt < 2) {
+                            await new Promise(r => setTimeout(r, 3000));
+                            if (signal.aborted) throw new Error('AbortError');
+                        }
+                    }
+                }
+                if (!replyText) throw lastErr ?? new Error('DeepSeek failed after retries');
+            }
 
-            // 2. Get audio FIRST (audio-first pattern)
-            const base64Audio = await getEdgeTTSAudio(replyText, selectedVoice, useMacosSay);
+            // 2. TTS — Edge WS → macOS say fallback → SpeechSynthesis fallback
+            //    Errors here are logged but never crash the main flow.
+            let base64Audio: string | null = null;
+            if (isTauriDesktop()) {
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    base64Audio = await invoke<string>('get_edge_tts_audio', {
+                        text: replyText, voice: selectedVoice, useMacosSay,
+                    });
+                } catch (e: any) {
+                    logError('TTS Edge', e?.message);
+                    // Fallback: force macOS say (works even on non-macOS? Rust returns Err, caught below)
+                    if (!useMacosSay) {
+                        try {
+                            const { invoke } = await import('@tauri-apps/api/core');
+                            base64Audio = await invoke<string>('get_edge_tts_audio', {
+                                text: replyText, voice: selectedVoice, useMacosSay: true,
+                            });
+                        } catch (e2: any) {
+                            logError('TTS macOS fallback', e2?.message);
+                        }
+                    }
+                }
+            }
 
-            // 3. Start speaking — audio plays, then text appears
+            // 3. Show AI message + play audio
             setAppState('speaking');
             const aiMsg = addMessage(activeConvoId, { role: 'assistant', text: replyText });
 
             if (base64Audio) {
-                // Start audio immediately, delay text 0.5s to sync with speech onset
                 const playPromise = playBase64Audio(base64Audio, speakingAudioRef);
                 setTimeout(() => setMessages(prev => [...prev, aiMsg]), 500);
                 await playPromise;
             } else {
-                // Fallback: show text then try speech synthesis
+                // Final fallback: browser SpeechSynthesis (works on all platforms)
                 setMessages(prev => [...prev, aiMsg]);
                 await speakWithSynthesis(replyText);
             }
@@ -433,17 +486,21 @@ export default function SpeakWithAITab() {
             setAppState('idle');
         } catch (err: any) {
             setAppState('error');
-            if (err?.name === 'AbortError') {
+            if (err?.name === 'AbortError' || err?.message === 'AbortError') {
                 setAppState('idle');
                 return;
             }
+            logError('handleSpeechEnd', err?.message);
             if (err?.message === 'RATE_LIMIT' || err?.message === 'QUOTA_EXCEEDED') {
                 setErrorMsg(t(
                     'Truy cập quá nhiều! Vui lòng thử lại sau vài giây.',
                     'Too many requests! Please wait a moment and try again.',
                 ));
             } else {
-                setErrorMsg(err?.message ?? 'Unknown error');
+                setErrorMsg(t(
+                    `Lỗi: ${err?.message ?? 'Không rõ'}`,
+                    `Error: ${err?.message ?? 'Unknown'}`,
+                ));
             }
         }
     }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, usePremiumMode, useMacosSay]);

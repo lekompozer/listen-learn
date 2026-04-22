@@ -33,6 +33,23 @@ export async function getEdgeTTSAudio(
 }
 
 /**
+ * Convert base64 audio → Blob Object URL.
+ * WKWebView (Tauri/macOS) blocks data: URIs for audio elements ("Load failed").
+ * Object URLs from Blobs work correctly.
+ */
+function base64ToObjectURL(base64: string, mime: string): string | null {
+    try {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: mime });
+        return URL.createObjectURL(blob);
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Play base64 MP3. Returns a Promise that resolves when audio ends.
  * Also accepts an optional ref to receive the HTMLAudioElement (for external cancel).
  */
@@ -42,41 +59,56 @@ export function playBase64Audio(
     audioRef?: { current: HTMLAudioElement | null },
 ): Promise<void> {
     return new Promise((resolve) => {
-        // Parse tagged format produced by Rust TTS command
-        let mime = 'audio/mp4';
-        let base64 = tagged;
-        if (tagged.startsWith('mp3:')) { mime = 'audio/mpeg'; base64 = tagged.slice(4); }
-        else if (tagged.startsWith('m4a:')) { mime = 'audio/mp4'; base64 = tagged.slice(4); }
-        const audio = new Audio(`data:${mime};base64,${base64}`);
-        if (audioRef) audioRef.current = audio;
+        try {
+            // Parse tagged format produced by Rust TTS command
+            let mime = 'audio/mp4';
+            let base64 = tagged;
+            if (tagged.startsWith('mp3:')) { mime = 'audio/mpeg'; base64 = tagged.slice(4); }
+            else if (tagged.startsWith('m4a:')) { mime = 'audio/mp4'; base64 = tagged.slice(4); }
 
-        let settled = false;
-        const done = () => {
-            if (settled) return;
-            settled = true;
-            if (audioRef) audioRef.current = null;
+            // Blob → Object URL (WKWebView rejects data: URIs for audio → "Load failed")
+            const objectURL = base64ToObjectURL(base64, mime);
+            const src = objectURL ?? `data:${mime};base64,${base64}`;
+
+            const audio = new Audio(src);
+            if (audioRef) audioRef.current = audio;
+
+            let settled = false;
+            const done = () => {
+                if (settled) return;
+                settled = true;
+                // Revoke object URL to free memory
+                if (objectURL) { try { URL.revokeObjectURL(objectURL); } catch { /* ignore */ } }
+                if (audioRef) audioRef.current = null;
+                resolve();
+            };
+
+            // Primary: direct onended (most reliable in WKWebView)
+            audio.onended = done;
+            audio.addEventListener('ended', done);
+            // Fallback 1: error → still resolve so state returns to idle
+            audio.addEventListener('error', done);
+
+            // Fallback 2: duration-based timeout after we know how long the track is
+            audio.addEventListener('canplaythrough', () => {
+                const durationMs = isFinite(audio.duration) && audio.duration > 0
+                    ? audio.duration * 1000 + 1500  // +1.5s buffer
+                    : 12_000;                        // unknown duration → 12s fallback
+                setTimeout(done, durationMs);
+            });
+
+            // Fallback 3: hard cap in case canplaythrough never fires (15s max)
+            setTimeout(done, 15_000);
+
+            const playResult = audio.play();
+            // play() may return undefined in old WebKit — check before .catch()
+            if (playResult && typeof playResult.catch === 'function') {
+                playResult.catch(done);
+            }
+        } catch {
+            // Any synchronous error (e.g. atob fails) → resolve to keep app running
             resolve();
-        };
-
-        // Primary: direct onended (most reliable in WKWebView)
-        audio.onended = done;
-        // Also addEventListener for redundancy
-        audio.addEventListener('ended', done);
-        // Fallback 1: error → still resolve so state returns to idle
-        audio.addEventListener('error', done);
-
-        // Fallback 2: duration-based timeout after we know how long the track is
-        audio.addEventListener('canplaythrough', () => {
-            const durationMs = isFinite(audio.duration) && audio.duration > 0
-                ? audio.duration * 1000 + 1500  // +1.5s buffer
-                : 12_000;                        // unknown duration → 12s fallback
-            setTimeout(done, durationMs);
-        });
-
-        // Fallback 3: hard cap in case canplaythrough never fires (15s max)
-        setTimeout(done, 15_000);
-
-        audio.play().catch(done);
+        }
     });
 }
 
