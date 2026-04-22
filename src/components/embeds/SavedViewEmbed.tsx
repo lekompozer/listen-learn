@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, BookOpen, AlignLeft, Video, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import YoutubeShortsPlayer from '@/components/videos/YoutubeShortsPlayer';
+import type { YTShortItem } from '@/components/videos/YTShortItem';
 import {
     getSavedVocabulary,
     getSavedGrammar,
@@ -127,6 +129,59 @@ function GrammarDetail({ item, isDark, onBack }: { item: SavedGrammarItem; isDar
     );
 }
 
+/** Convert SavedVideoItem → YTShortItem for YoutubeShortsPlayer */
+function toYTItem(v: SavedVideoItem): YTShortItem {
+    const durStr = v.duration_sec
+        ? `${Math.floor(v.duration_sec / 60)}:${String(v.duration_sec % 60).padStart(2, '0')}`
+        : '0:00';
+    return {
+        id: v.youtube_id,
+        youtube_id: v.youtube_id,
+        title: v.title,
+        channel_name: v.channel,
+        channel: v.channel,
+        view_count: v.view_count ?? 0,
+        youtube_url: v.youtube_url,
+        duration: durStr,
+        thumb_url: v.thumbnail ?? '',
+        source_tag: v.source_tag,
+    };
+}
+
+function SavedVideosPlayer({ videos, initialIndex, isDark, onBack }: {
+    videos: SavedVideoItem[];
+    initialIndex: number;
+    isDark: boolean;
+    onBack: () => void;
+}) {
+    const items = videos.map(toYTItem);
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    const noop = useCallback(() => {}, []);
+
+    return (
+        <div className="h-full w-full relative overflow-hidden">
+            {/* Back button overlay */}
+            <div className="absolute top-3 left-3 z-50">
+                <button
+                    onClick={onBack}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-sm text-white text-xs font-semibold hover:bg-black/80 transition-colors"
+                >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Saved Videos
+                </button>
+            </div>
+            <YoutubeShortsPlayer
+                items={items}
+                loading={false}
+                loadingMore={false}
+                onLoadMore={noop}
+                initialIndex={initialIndex}
+                showControls={false}
+            />
+        </div>
+    );
+}
+
 function VideoCard({ item, isDark, onClick }: { item: SavedVideoItem; isDark: boolean; onClick: () => void }) {
     const fmt = (n?: number) => !n ? null : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M views` : n >= 1_000 ? `${Math.floor(n / 1_000)}K views` : `${n} views`;
     const dur = (s?: number) => s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : null;
@@ -149,36 +204,7 @@ function VideoCard({ item, isDark, onClick }: { item: SavedVideoItem; isDark: bo
     );
 }
 
-function VideoDetail({ item, isDark, onBack }: { item: SavedVideoItem; isDark: boolean; onBack: () => void }) {
-    const openVideo = async () => {
-        try { const { invoke } = await import('@tauri-apps/api/core'); await invoke('open_url', { url: item.youtube_url }); }
-        catch { window.open(item.youtube_url, '_blank'); }
-    };
-    return (
-        <div className="h-full flex flex-col overflow-hidden">
-            <div className={`flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                <button onClick={onBack} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}><ArrowLeft className="w-5 h-5" /></button>
-                <span className={`text-sm font-semibold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Videos</span>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
-                {item.thumbnail && <div className="rounded-2xl overflow-hidden aspect-video bg-gray-900"><img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" /></div>}
-                <div>
-                    <h2 className={`text-lg font-bold leading-snug mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.title}</h2>
-                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{item.channel}</p>
-                    <div className="flex gap-4 mt-1.5 text-xs flex-wrap">
-                        {item.view_count ? <span className={isDark ? 'text-gray-500' : 'text-gray-400'}>{item.view_count.toLocaleString()} views</span> : null}
-                        {item.duration_sec ? <span className={isDark ? 'text-gray-500' : 'text-gray-400'}>{Math.floor(item.duration_sec / 60)}:{String(item.duration_sec % 60).padStart(2, '0')}</span> : null}
-                        {item.source_tag ? <span className={`px-2 py-0.5 rounded-full ${isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>#{item.source_tag}</span> : null}
-                    </div>
-                </div>
-                <button onClick={openVideo} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all active:scale-95">
-                    <Video className="w-4 h-4" />Watch on YouTube
-                </button>
-                {item.saved_at && <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Saved {new Date(item.saved_at).toLocaleDateString()}</p>}
-            </div>
-        </div>
-    );
-}
+// VideoDetail replaced by SavedVideosPlayer above
 
 const TABS: { id: SavedTab; label: string; icon: React.ElementType }[] = [
     { id: 'words', label: 'Words', icon: BookOpen },
@@ -195,7 +221,7 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
     const [error, setError] = useState<string | null>(null);
     const [selectedWord, setSelectedWord] = useState<SavedVocabularyItem | null>(null);
     const [selectedGrammar, setSelectedGrammar] = useState<SavedGrammarItem | null>(null);
-    const [selectedVideo, setSelectedVideo] = useState<SavedVideoItem | null>(null);
+    const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
 
     const loadWords = useCallback(async () => {
         setLoading(true); setError(null);
@@ -221,7 +247,7 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
     const reload = tab === 'words' ? loadWords : tab === 'grammar' ? loadGrammar : loadVideos;
 
     useEffect(() => {
-        setSelectedWord(null); setSelectedGrammar(null); setSelectedVideo(null);
+        setSelectedWord(null); setSelectedGrammar(null); setSelectedVideoIndex(null);
         if (tab === 'words') loadWords();
         else if (tab === 'grammar') loadGrammar();
         else loadVideos();
@@ -233,7 +259,7 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
 
     if (selectedWord) return <WordDetail item={selectedWord} isDark={isDark} onBack={() => setSelectedWord(null)} />;
     if (selectedGrammar) return <GrammarDetail item={selectedGrammar} isDark={isDark} onBack={() => setSelectedGrammar(null)} />;
-    if (selectedVideo) return <VideoDetail item={selectedVideo} isDark={isDark} onBack={() => setSelectedVideo(null)} />;
+    if (selectedVideoIndex !== null) return <SavedVideosPlayer videos={videos} initialIndex={selectedVideoIndex} isDark={isDark} onBack={() => setSelectedVideoIndex(null)} />;
 
     return (
         <div className="h-full flex overflow-hidden">
@@ -282,7 +308,7 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
                     {tab === 'videos' && !loading && !error && (
                         videos.length === 0
                             ? <div className={`h-full flex flex-col items-center justify-center gap-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}><Video className="w-8 h-8 opacity-30" /><p className="text-sm">No saved videos yet</p></div>
-                            : <div className="space-y-2">{videos.map(item => <VideoCard key={item.youtube_id} item={item} isDark={isDark} onClick={() => setSelectedVideo(item)} />)}</div>
+                            : <div className="space-y-2">{videos.map((item, idx) => <VideoCard key={item.youtube_id} item={item} isDark={isDark} onClick={() => setSelectedVideoIndex(idx)} />)}</div>
                     )}
                 </div>
             </div>
