@@ -16,6 +16,13 @@ import {
 } from '@/hooks/useSpeakConversations';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
+const VERTEX_API_KEY = process.env.NEXT_PUBLIC_VERTEX_API_KEY;
+// Gemini 2.5 Flash Lite — audio transcription (STT)
+const GEMINI_MODEL = 'gemini-2.5-flash-lite-preview-04-17';
+const GEMINI_STT_URL = VERTEX_API_KEY
+    ? `https://aiplatform.googleapis.com/v1beta1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${VERTEX_API_KEY}`
+    : null;
+
 import { useTheme, useLanguage } from '@/contexts/AppContext';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 
@@ -79,6 +86,38 @@ async function analyzeAudioWithAPI(
         lines.push(data.feedback);
     }
     return lines.join('\n') || '✓ Sounds great!';
+}
+
+// ── Gemini STT — transcribe audio blob → text ─────────────────────────────────
+async function transcribeWithGemini(audioBlob: Blob): Promise<string> {
+    if (!GEMINI_STT_URL) throw new Error('Vertex API key not configured');
+    const dataUrl = await blobToBase64(audioBlob);
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) throw new Error('Invalid audio blob');
+    const [, mimeType, rawBase64] = match;
+
+    const body = {
+        contents: [{
+            role: 'user',
+            parts: [
+                { inline_data: { mime_type: mimeType, data: rawBase64 } },
+                { text: 'Transcribe this audio accurately. Return ONLY the spoken words, nothing else. No punctuation corrections, no formatting, no explanations.' },
+            ],
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 300 },
+    };
+
+    const resp = await fetch(GEMINI_STT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error?.message || `Gemini STT ${resp.status}`);
+    }
+    const data = await resp.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
 }
 
 // ── Mic Button ────────────────────────────────────────────────────────────────
@@ -219,6 +258,11 @@ export default function SpeakWithAITab() {
     const [grammarResults, setGrammarResults] = useState<Record<string, string>>({});
     const [checkingGrammarFor, setCheckingGrammarFor] = useState<string | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
+    // Audio Mode: use Gemini STT instead of Web Speech API for final transcript
+    const [audioMode, setAudioMode] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return localStorage.getItem('ll_speak_audio_mode') === '1';
+    });
 
     const chatBottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -269,22 +313,37 @@ export default function SpeakWithAITab() {
     }, [newTopicValue, openConvo]);
 
     // Handle final transcript → send to DeepSeek
-    const handleSpeechEnd = useCallback(async (transcript: string) => {
-        if (!transcript.trim() || !activeConvoId) return;
+    const handleSpeechEnd = useCallback(async (webSpeechTranscript: string) => {
+        if (!activeConvoId) return;
         if (!canSendMessage(isPremium)) return;
+
+        // Capture audio blob first (used for Gemini STT and replay)
+        let audioBlob: Blob | null = null;
+        if (recordingBlobRef.current.length > 0) {
+            audioBlob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
+            recordingBlobRef.current = [];
+        }
+
+        // In Audio Mode: use Gemini STT to get accurate transcript
+        let transcript = webSpeechTranscript;
+        if (audioMode && audioBlob && GEMINI_STT_URL) {
+            setAppState('processing');
+            setInterimText('');
+            try {
+                const geminiText = await transcribeWithGemini(audioBlob);
+                if (geminiText) transcript = geminiText;
+            } catch (e) {
+                console.warn('Gemini STT failed, using Web Speech fallback:', e);
+            }
+        }
+
+        if (!transcript.trim()) { setAppState('idle'); return; }
         setAppState('processing');
 
-        // Save user recording as base64 (persisted in localStorage for replay)
+        // Save user recording as base64 for replay (< 200KB)
         let audioBase64: string | undefined;
-        if (recordingBlobRef.current.length > 0) {
-            try {
-                const blob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
-                // Only store if < 200KB to avoid localStorage overflow
-                if (blob.size < 200_000) {
-                    audioBase64 = await blobToBase64(blob);
-                }
-            } catch { /* ignore */ }
-            recordingBlobRef.current = [];
+        if (audioBlob && audioBlob.size < 200_000) {
+            try { audioBase64 = await blobToBase64(audioBlob); } catch { /* ignore */ }
         }
 
         // Add user message to local state immediately
@@ -349,7 +408,7 @@ export default function SpeakWithAITab() {
                 setErrorMsg(err?.message ?? 'Unknown error');
             }
         }
-    }, [activeConvoId, topic, selectedVoice, isVietnamese, t]);
+    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, audioMode]);
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
@@ -557,6 +616,27 @@ export default function SpeakWithAITab() {
                         </span>
                     )}
                     <div className="ml-auto flex items-center gap-2">
+                        {/* Audio Mode toggle — Gemini STT vs Web Speech */}
+                        {GEMINI_STT_URL && (
+                            <button
+                                onClick={() => setAudioMode(v => {
+                                    const next = !v;
+                                    localStorage.setItem('ll_speak_audio_mode', next ? '1' : '0');
+                                    return next;
+                                })}
+                                title={audioMode
+                                    ? t('Đang dùng Gemini STT (chính xác hơn)', 'Using Gemini STT (accurate)')
+                                    : t('Đang dùng Web Speech (chuyển sang Gemini?)', 'Using Web Speech (switch to Gemini?)')}
+                                className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border transition-all font-medium
+                                    ${audioMode
+                                        ? isDark ? 'bg-violet-600/20 border-violet-500/50 text-violet-300' : 'bg-violet-50 border-violet-400 text-violet-700'
+                                        : isDark ? 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200' : 'bg-white border-gray-300 text-gray-500 hover:text-gray-700'
+                                    }`}
+                            >
+                                <span className={`w-1.5 h-1.5 rounded-full ${audioMode ? 'bg-violet-400' : 'bg-gray-500'}`} />
+                                {audioMode ? 'Gemini STT' : 'Web STT'}
+                            </button>
+                        )}
                         {/* Voice selector */}
                         <div className="relative">
                             <select
@@ -653,7 +733,9 @@ export default function SpeakWithAITab() {
                             {appState === 'processing' && (
                                 <span className="flex items-center gap-1.5 justify-center">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    {t('AI đang trả lời…', 'AI is thinking…')}
+                                    {interimText === '' && audioMode
+                                        ? t('Đang nhận dạng giọng nói…', 'Transcribing…')
+                                        : t('AI đang trả lời…', 'AI is thinking…')}
                                 </span>
                             )}
                             {appState === 'speaking' && (
