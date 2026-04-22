@@ -172,8 +172,8 @@ export const CommunityTestsMarketplace: React.FC<CommunityTestsMarketplaceProps>
 
             // Fetch all data in parallel - using new statistics API with language filter
             const [topRatedResponse, latestResponse, popularTestsData, activeUsersData, statsResponse] = await Promise.all([
-                marketplaceService.getTopRatedTests(8, 1, languageParam),
-                marketplaceService.getLatestTests(8, 1, languageParam),
+                marketplaceService.getTopRatedTests(8, 1, languageParam, selectedCategory),
+                marketplaceService.getLatestTests(8, 1, languageParam, selectedCategory),
                 marketplaceService.getPopularTests(10), // Get most submitted tests
                 marketplaceService.getActiveUsers(10), // Get most active users
                 fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/marketplace/stats`)
@@ -474,7 +474,7 @@ export const CommunityTestsMarketplace: React.FC<CommunityTestsMarketplaceProps>
         setIsLoadingMore(true);
         try {
             const nextPage = topRatingPage + 1;
-            const response = await marketplaceService.getTopRatedTests(8, nextPage);
+            const response = await marketplaceService.getTopRatedTests(8, nextPage, selectedLanguage !== 'all' ? selectedLanguage : undefined, selectedCategory);
 
             if (response.tests && response.tests.length > 0) {
                 setTopRatingTests(prev => [...prev, ...response.tests]);
@@ -497,7 +497,7 @@ export const CommunityTestsMarketplace: React.FC<CommunityTestsMarketplaceProps>
         setIsLoadingMore(true);
         try {
             const nextPage = latestPage + 1;
-            const response = await marketplaceService.getLatestTests(8, nextPage);
+            const response = await marketplaceService.getLatestTests(8, nextPage, selectedLanguage !== 'all' ? selectedLanguage : undefined, selectedCategory);
 
             if (response.tests && response.tests.length > 0) {
                 setLatestTests(prev => [...prev, ...response.tests]);

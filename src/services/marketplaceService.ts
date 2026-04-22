@@ -5,6 +5,7 @@
 
 import { logger } from '@/lib/logger';
 import { getValidAuthToken } from '@/lib/auth-utils';
+import { categoryToApiValue } from '@/components/online-tests/constants/categories';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 
@@ -302,8 +303,9 @@ export const marketplaceService = {
         const queryParams = new URLSearchParams();
 
         // Add all parameters to query string
-        if (params.category && params.category !== 'all') {
-            queryParams.append('category', params.category);
+        const apiCategory = categoryToApiValue(params.category ?? '');
+        if (apiCategory) {
+            queryParams.append('category', apiCategory);
         }
         if (params.tag && params.tag !== 'all') {
             queryParams.append('tag', params.tag);
@@ -593,12 +595,16 @@ export const marketplaceService = {
     /**
      * Get top rated tests
      */
-    async getTopRatedTests(limit: number = 8, page: number = 1, language?: string): Promise<{ tests: MarketplaceTest[] }> {
-        logger.info('⭐ Fetching top rated tests:', { limit, page, language });
+    async getTopRatedTests(limit: number = 8, page: number = 1, language?: string, category?: string): Promise<{ tests: MarketplaceTest[] }> {
+        logger.info('⭐ Fetching top rated tests:', { limit, page, language, category });
 
         let url = `/api/v1/marketplace/tests?sort_by=top_rated&page_size=${limit}&page=${page}`;
         if (language) {
             url += `&language=${language}`;
+        }
+        const apiCategory = categoryToApiValue(category ?? '');
+        if (apiCategory) {
+            url += `&category=${encodeURIComponent(apiCategory)}`;
         }
 
         const response = await apiRequest<{ success: boolean; data: { tests: MarketplaceTest[] } }>(
@@ -616,12 +622,16 @@ export const marketplaceService = {
     /**
      * Get latest tests
      */
-    async getLatestTests(limit: number = 8, page: number = 1, language?: string): Promise<{ tests: MarketplaceTest[] }> {
-        logger.info('✨ Fetching latest tests:', { limit, page, language });
+    async getLatestTests(limit: number = 8, page: number = 1, language?: string, category?: string): Promise<{ tests: MarketplaceTest[] }> {
+        logger.info('✨ Fetching latest tests:', { limit, page, language, category });
 
         let url = `/api/v1/marketplace/tests?sort_by=newest&page_size=${limit}&page=${page}`;
         if (language) {
             url += `&language=${language}`;
+        }
+        const apiCategory = categoryToApiValue(category ?? '');
+        if (apiCategory) {
+            url += `&category=${encodeURIComponent(apiCategory)}`;
         }
 
         const response = await apiRequest<{ success: boolean; data: { tests: MarketplaceTest[] } }>(

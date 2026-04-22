@@ -56,3 +56,25 @@ export const isValidCategory = (categoryValue: string): boolean => {
 export const getValidCategoryValues = (): string[] => {
     return TEST_CATEGORIES.map(cat => cat.value);
 };
+
+/**
+ * Map internal category ID (e.g. 'self_development') → API-expected value (e.g. 'Self-Development').
+ * The API is case-insensitive for simple names, but compound names with spaces/hyphens must match exactly.
+ * Returns undefined when id is 'all' or unknown (caller omits the param).
+ */
+export const categoryToApiValue = (id: string): string | undefined => {
+    if (!id || id === 'all') return undefined;
+    const map: Record<string, string> = {
+        language:        'Language',
+        self_development: 'Self-Development',
+        exam_prep:       'Exam Prep',
+        math:            'Mathematics',
+        programming:     'Programming',
+        science:         'Science',
+        business:        'Business',
+        technology:      'Technology',
+        certification:   'Certification',
+        other:           'Other',
+    };
+    return map[id] ?? id; // fallback: pass as-is (API is case-insensitive for simple names)
+};
