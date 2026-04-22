@@ -6,7 +6,7 @@ import {
     Play, Loader2, AlertCircle, Volume2, CheckCircle2, ChevronDown,
 } from 'lucide-react';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
-import { callDeepSeek, buildSystemPrompt, type DeepSeekMessage } from '@/hooks/useDeepSeekChat';
+import { callDeepSeek, buildSystemPrompt, callGemma4, canUseGemma4, incrementGemma4DailyUsage, getGemma4DailyUsage, type DeepSeekMessage } from '@/hooks/useDeepSeekChat';
 import { playBase64Audio, speakWithSynthesis } from '@/hooks/useEdgeTTS';
 
 const isTauriDesktop = () => typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
@@ -310,6 +310,7 @@ export default function SpeakWithAITab() {
     const [newTopicValue, setNewTopicValue] = useState('');
     const [selectedVoice, setSelectedVoice] = useState(VOICES[0].value);
     const [dailyUsage, setDailyUsage] = useState(0);
+    const [gemma4Usage, setGemma4Usage] = useState(() => getGemma4DailyUsage());
     const [isPremium, setIsPremium] = useState(false);
     const [grammarResults, setGrammarResults] = useState<Record<string, string>>({});
     const [checkingGrammarFor, setCheckingGrammarFor] = useState<string | null>(null);
@@ -468,25 +469,45 @@ export default function SpeakWithAITab() {
             abortRef.current = new AbortController();
             const signal = abortRef.current.signal;
 
-            // 1. Get DeepSeek reply — retry up to 2 times with 3s delay
+            // 1. Get AI reply:
+            //    Attempt 1 — Gemma 4 26B (Cloudflare, free 5×/day)
+            //    Fallback   — DeepSeek (retry 2×)
             let replyText = '';
             {
                 let lastErr: any;
-                for (let attempt = 0; attempt <= 2; attempt++) {
+
+                // Try Gemma 4 first if daily quota available
+                if (canUseGemma4()) {
                     try {
-                        replyText = await callDeepSeek(deepseekMessages, signal);
-                        break;
+                        replyText = await callGemma4(deepseekMessages, signal);
+                        incrementGemma4DailyUsage();
+                        setGemma4Usage(getGemma4DailyUsage());
                     } catch (e: any) {
                         if (e?.name === 'AbortError') throw e;
+                        logError('Gemma4', e?.message);
                         lastErr = e;
-                        logError(`DeepSeek attempt ${attempt + 1}`, e?.message);
-                        if (attempt < 2) {
-                            await new Promise(r => setTimeout(r, 3000));
-                            if (signal.aborted) throw new Error('AbortError');
+                    }
+                }
+
+                // Fallback: DeepSeek (retry up to 2 times with 3s delay)
+                if (!replyText) {
+                    for (let attempt = 0; attempt <= 2; attempt++) {
+                        try {
+                            replyText = await callDeepSeek(deepseekMessages, signal);
+                            break;
+                        } catch (e: any) {
+                            if (e?.name === 'AbortError') throw e;
+                            lastErr = e;
+                            logError(`DeepSeek attempt ${attempt + 1}`, e?.message);
+                            if (attempt < 2) {
+                                await new Promise(r => setTimeout(r, 3000));
+                                if (signal.aborted) throw new Error('AbortError');
+                            }
                         }
                     }
                 }
-                if (!replyText) throw lastErr ?? new Error('DeepSeek failed after retries');
+
+                if (!replyText) throw lastErr ?? new Error('All AI providers failed');
             }
 
             // 2. TTS — Edge WS → macOS say fallback → SpeechSynthesis fallback
@@ -746,6 +767,19 @@ export default function SpeakWithAITab() {
 
                     {/* Usage quota */}
                     <div className={`px-4 py-3 border-t text-[10px] ${isDark ? 'border-gray-700/60 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
+                        {/* Gemma 4 free quota */}
+                        <div className="flex items-center gap-1 mb-1.5">
+                            <span className={`px-1.5 py-0.5 rounded font-semibold ${isDark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
+                                Gemma 4 Free
+                            </span>
+                            <span>{t('Hôm nay', 'Today')}: {gemma4Usage}/5</span>
+                        </div>
+                        <div className={`h-1 rounded-full mb-2 ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                            <div
+                                className="h-full rounded-full transition-all duration-500 bg-emerald-500"
+                                style={{ width: `${Math.min(100, (gemma4Usage / 5) * 100)}%` }}
+                            />
+                        </div>
                         <div className="flex items-center gap-1 mb-1">
                             <span className={`px-1.5 py-0.5 rounded font-semibold ${isPremium
                                 ? isDark ? 'bg-violet-600/20 text-violet-400' : 'bg-violet-100 text-violet-700'
