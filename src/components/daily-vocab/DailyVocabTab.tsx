@@ -79,7 +79,7 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
 
     return (
         <div className="h-full overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-6 py-10 space-y-6">
+            <div className="max-w-[1018px] mx-auto px-6 py-10 space-y-6">
                 {/* Product card — same structure as /download */}
                 <section className={`overflow-hidden rounded-[32px] border ${isDark ? 'border-gray-700/50 bg-gray-800/80 shadow-[0_8px_40px_rgba(0,0,0,0.35)]' : 'border-slate-200/80 bg-white shadow-[0_8px_40px_rgba(15,23,42,0.07)]'}`}>
                     {/* 3px gradient accent bar */}
@@ -102,7 +102,7 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
                         <p className={`text-base leading-7 ${isDark ? 'text-gray-400' : 'text-slate-600'}`}>{description}</p>
 
                         {/* Platform grid — 4 cards */}
-                        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                             {PLATFORMS.map((p) => {
                                 const url = urls[p.key];
                                 return (
@@ -155,8 +155,8 @@ const PRACTICE_ITEMS = [
     { label: 'Speak with AI', icon: Volume2 },
 ];
 const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
-    { id: 'wynai-music', label: 'WynAI Music', icon: Music },
     { id: 'ai-learning', label: 'WynAI Tutor', icon: GraduationCap },
+    { id: 'wynai-music', label: 'WynAI Music', icon: Music },
     { id: 'wyncode', label: 'WynCode AI', icon: Code2 },
 ];
 const SYSTEM_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [

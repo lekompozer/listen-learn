@@ -200,7 +200,7 @@ function SavedVideosPlayer({ videos, initialIndex, isDark, onBack }: {
                 loadingMore={false}
                 onLoadMore={noop}
                 initialIndex={initialIndex}
-                showControls={false}
+                showControls={true}
             />
         </div>
     );
