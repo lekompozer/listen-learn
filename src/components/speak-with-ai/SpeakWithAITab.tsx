@@ -450,11 +450,21 @@ export default function SpeakWithAITab() {
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
-        onInterim: (transcript) => setInterimText(transcript),
+        onInterim: (transcript) => {
+            // In Premium mode, don't show Web Speech interim text (Gemini will transcribe accurately)
+            if (!(isPremium && usePremiumMode)) setInterimText(transcript);
+        },
         onEnd: (finalTranscript) => {
             setInterimText('');
-            if (finalTranscript) handleSpeechEnd(finalTranscript);
-            else setAppState('idle');
+            // Always stop MediaRecorder when speech ends (silence auto-fire or manual stop)
+            stopMediaRecorder();
+            // Premium mode: send audio to Gemini even if Web Speech returned empty transcript
+            const hasPremiumAudio = isPremium && usePremiumMode && recordingBlobRef.current.length > 0;
+            if (finalTranscript || hasPremiumAudio) {
+                handleSpeechEnd(finalTranscript);
+            } else {
+                setAppState('idle');
+            }
         },
         onError: (err) => {
             setAppState('error');
@@ -766,8 +776,8 @@ export default function SpeakWithAITab() {
                     <div className={`flex-shrink-0 px-4 py-4 border-t flex flex-col items-center gap-3
                         ${isDark ? 'border-gray-700/60 bg-gray-900/60' : 'border-gray-200 bg-white/60'}`}>
 
-                        {/* Interim transcript */}
-                        {interimText && (
+                        {/* Interim transcript — hidden in Premium mode (Gemini transcribes after) */}
+                        {interimText && !(isPremium && usePremiumMode) && (
                             <div className={`w-full max-w-md px-4 py-2.5 rounded-2xl text-sm text-center
                                 ${isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
                                 <span className="italic opacity-80">{interimText}</span>
@@ -778,7 +788,7 @@ export default function SpeakWithAITab() {
                         {/* Status text */}
                         <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                             {appState === 'idle' && t('Nhấn mic để nói', 'Tap mic to speak')}
-                            {appState === 'listening' && t('Đang nghe… (tự dừng sau 2.5s)', 'Listening… (stops after 2.5s silence)')}
+                            {appState === 'listening' && t('Đang nghe… (tự dừng sau 3s)', 'Listening… (stops after 3s silence)')}
                             {appState === 'processing' && (
                                 <span className="flex items-center gap-1.5 justify-center">
                                     <Loader2 className="w-3 h-3 animate-spin" />
