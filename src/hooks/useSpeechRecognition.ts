@@ -3,11 +3,10 @@
 import { useRef, useCallback, useEffect } from 'react';
 
 // SpeechRecognition is a browser API — not in TypeScript's default lib
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySpeechRecognition = any;
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface UseSpeechRecognitionOptions {
-    // finalTranscript is passed so caller never needs to read stale React state
+    // Called with the accumulated final transcript when recording ends
     onEnd: (finalTranscript: string) => void;
     onInterim?: (transcript: string) => void;
     onError?: (error: string) => void;
@@ -22,44 +21,58 @@ export function useSpeechRecognition({
     silenceMs = 2500,
     lang = 'en-US',
 }: UseSpeechRecognitionOptions) {
-    const recognitionRef = useRef<AnySpeechRecognition>(null);
+    const recognitionRef = useRef<any>(null);
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const transcriptRef = useRef('');
+    // true = actively recording, false = stopping/stopped
     const isRunningRef = useRef(false);
-    // Prevent double onEnd calls (silence timer + onend can both fire)
+    // prevent double onEnd calls
     const endFiredRef = useRef(false);
 
+    // keep latest callbacks in refs so we never have stale closures
+    const onEndRef = useRef(onEnd);
+    const onInterimRef = useRef(onInterim);
+    const onErrorRef = useRef(onError);
+    useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
+    useEffect(() => { onInterimRef.current = onInterim; }, [onInterim]);
+    useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
     const clearSilenceTimer = useCallback(() => {
-        if (silenceTimerRef.current) {
+        if (silenceTimerRef.current !== null) {
             clearTimeout(silenceTimerRef.current);
             silenceTimerRef.current = null;
         }
     }, []);
 
-    const resetSilenceTimer = useCallback(() => {
+    const fireEnd = useCallback(() => {
+        if (endFiredRef.current) return;
+        endFiredRef.current = true;
         clearSilenceTimer();
-        silenceTimerRef.current = setTimeout(() => {
-            if (!isRunningRef.current) return;
-            // Mark stopped BEFORE calling recognition.stop() so onend doesn't restart
-            isRunningRef.current = false;
-            try { recognitionRef.current?.stop(); } catch { /* ignore */ }
-            // onEnd fires from recognition.onend
-        }, silenceMs);
-    }, [clearSilenceTimer, silenceMs]);
-
-    // stop() — can be called manually (mic click) or from silence timer
-    const stop = useCallback(() => {
-        clearSilenceTimer();
-        if (!isRunningRef.current) return;
-        isRunningRef.current = false;
-        try { recognitionRef.current?.stop(); } catch { /* ignore */ }
-        // onEnd fires from recognition.onend
+        const transcript = transcriptRef.current.trim();
+        // Set state via ref so caller gets fresh value
+        onEndRef.current(transcript);
     }, [clearSilenceTimer]);
 
-    const _startRecognition = useCallback((SpeechRecognitionCtor: any) => {
-        // Clean up any previous instance
+    const stop = useCallback(() => {
+        if (!isRunningRef.current) return;
+        isRunningRef.current = false;
+        clearSilenceTimer();
+        try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+        // fireEnd will be called from recognition.onend
+    }, [clearSilenceTimer]);
+
+    const start = useCallback(() => {
+        const SpeechRecognitionCtor =
+            (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognitionCtor) {
+            onErrorRef.current?.('not-supported');
+            return;
+        }
+
+        // Abort any previous instance
         if (recognitionRef.current) {
             try { recognitionRef.current.abort(); } catch { /* ignore */ }
+            recognitionRef.current = null;
         }
 
         const recognition = new SpeechRecognitionCtor() as any;
@@ -72,8 +85,15 @@ export function useSpeechRecognition({
         isRunningRef.current = true;
         endFiredRef.current = false;
 
-        // Start silence timer immediately — covers case where user never speaks
-        resetSilenceTimer();
+        // Start silence timer immediately — fires if user never speaks
+        clearSilenceTimer();
+        silenceTimerRef.current = setTimeout(() => {
+            if (isRunningRef.current) {
+                isRunningRef.current = false;
+                try { recognition.stop(); } catch { /* ignore */ }
+                // onend will fire → fireEnd()
+            }
+        }, silenceMs);
 
         recognition.onresult = (event: any) => {
             let interim = '';
@@ -84,24 +104,32 @@ export function useSpeechRecognition({
                 else interim += text;
             }
             if (final) transcriptRef.current += final;
-            const combined = transcriptRef.current + interim;
-            onInterim?.(combined);
+            onInterimRef.current?.(transcriptRef.current + interim);
 
             // Reset silence timer on every speech event
-            resetSilenceTimer();
+            clearSilenceTimer();
+            silenceTimerRef.current = setTimeout(() => {
+                if (isRunningRef.current) {
+                    isRunningRef.current = false;
+                    try { recognition.stop(); } catch { /* ignore */ }
+                    // onend → fireEnd()
+                }
+            }, silenceMs);
         };
 
         recognition.onerror = (event: any) => {
+            const err: string = event?.error ?? 'unknown';
             clearSilenceTimer();
             isRunningRef.current = false;
-            if (event.error !== 'aborted') {
-                onError?.(event.error || 'speech-recognition-error');
+            if (err !== 'aborted' && err !== 'no-speech') {
+                onErrorRef.current?.(err); // 'not-allowed', 'audio-capture', etc.
             }
+            // for 'not-allowed': onerror fires, then onend fires — fireEnd handles it
         };
 
         recognition.onend = () => {
             if (isRunningRef.current) {
-                // Unexpected mid-session end (browser killed it) — restart
+                // Unexpected end mid-session — try to restart
                 try {
                     recognition.start();
                     return;
@@ -109,12 +137,7 @@ export function useSpeechRecognition({
                     isRunningRef.current = false;
                 }
             }
-            // Recognition has fully stopped — fire onEnd exactly once
-            if (!endFiredRef.current) {
-                endFiredRef.current = true;
-                clearSilenceTimer();
-                onEnd(transcriptRef.current.trim());
-            }
+            fireEnd();
         };
 
         recognitionRef.current = recognition;
@@ -122,35 +145,17 @@ export function useSpeechRecognition({
             recognition.start();
         } catch (e) {
             isRunningRef.current = false;
-            onError?.(`Cannot start recognition: ${e}`);
+            clearSilenceTimer();
+            onErrorRef.current?.(`start-failed: ${e}`);
         }
-    }, [lang, onInterim, onEnd, onError, clearSilenceTimer, resetSilenceTimer]);
+    }, [lang, silenceMs, clearSilenceTimer, fireEnd]);
 
-    const start = useCallback(() => {
-        const SpeechRecognitionCtor =
-            (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognitionCtor) {
-            onError?.('SpeechRecognition not supported in this browser');
-            return;
-        }
-
-        navigator.mediaDevices?.getUserMedia({ audio: true })
-            .then((stream) => {
-                stream.getTracks().forEach(t => t.stop());
-                _startRecognition(SpeechRecognitionCtor);
-            })
-            .catch(() => {
-                onError?.('not-allowed');
-            });
-    }, [_startRecognition, onError]);
-
+    // Cleanup on unmount
     useEffect(() => {
         return () => {
+            isRunningRef.current = false;
             clearSilenceTimer();
-            if (recognitionRef.current) {
-                isRunningRef.current = false;
-                try { recognitionRef.current.abort(); } catch { /* ignore */ }
-            }
+            try { recognitionRef.current?.abort(); } catch { /* ignore */ }
         };
     }, [clearSilenceTimer]);
 
