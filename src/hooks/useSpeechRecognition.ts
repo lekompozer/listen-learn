@@ -7,16 +7,17 @@ import { useRef, useCallback, useEffect } from 'react';
 type AnySpeechRecognition = any;
 
 interface UseSpeechRecognitionOptions {
-    onResult: (transcript: string) => void;
-    onEnd: () => void;
+    // finalTranscript is passed so caller never needs to read stale React state
+    onEnd: (finalTranscript: string) => void;
+    onInterim?: (transcript: string) => void;
     onError?: (error: string) => void;
-    silenceMs?: number; // default 2500ms
+    silenceMs?: number;
     lang?: string;
 }
 
 export function useSpeechRecognition({
-    onResult,
     onEnd,
+    onInterim,
     onError,
     silenceMs = 2500,
     lang = 'en-US',
@@ -25,6 +26,8 @@ export function useSpeechRecognition({
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const transcriptRef = useRef('');
     const isRunningRef = useRef(false);
+    // Prevent double onEnd calls (silence timer + onend can both fire)
+    const endFiredRef = useRef(false);
 
     const clearSilenceTimer = useCallback(() => {
         if (silenceTimerRef.current) {
@@ -33,43 +36,32 @@ export function useSpeechRecognition({
         }
     }, []);
 
+    const resetSilenceTimer = useCallback(() => {
+        clearSilenceTimer();
+        silenceTimerRef.current = setTimeout(() => {
+            if (!isRunningRef.current) return;
+            // Mark stopped BEFORE calling recognition.stop() so onend doesn't restart
+            isRunningRef.current = false;
+            try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+            // onEnd fires from recognition.onend
+        }, silenceMs);
+    }, [clearSilenceTimer, silenceMs]);
+
+    // stop() — can be called manually (mic click) or from silence timer
     const stop = useCallback(() => {
         clearSilenceTimer();
-        if (recognitionRef.current && isRunningRef.current) {
-            isRunningRef.current = false;
-            try { recognitionRef.current.stop(); } catch { /* ignore */ }
-        }
+        if (!isRunningRef.current) return;
+        isRunningRef.current = false;
+        try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+        // onEnd fires from recognition.onend
     }, [clearSilenceTimer]);
 
-    const start = useCallback(() => {
-        const SpeechRecognitionCtor =
-            (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognitionCtor) {
-            onError?.('SpeechRecognition not supported in this browser');
-            return false;
-        }
-
-        // Request mic permission first — triggers OS permission dialog on macOS/iOS
-        navigator.mediaDevices?.getUserMedia({ audio: true })
-            .then((stream) => {
-                // Got permission — stop the stream immediately (SpeechRecognition manages its own)
-                stream.getTracks().forEach(t => t.stop());
-                _startRecognition(SpeechRecognitionCtor);
-            })
-            .catch(() => {
-                onError?.('not-allowed');
-            });
-
-        return true;
-    }, [clearSilenceTimer, stop, onResult, onEnd, onError, silenceMs, lang]); // eslint-disable-line
-
     const _startRecognition = useCallback((SpeechRecognitionCtor: any) => {
-        // Clean up previous instance
+        // Clean up any previous instance
         if (recognitionRef.current) {
             try { recognitionRef.current.abort(); } catch { /* ignore */ }
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const recognition = new SpeechRecognitionCtor() as any;
         recognition.continuous = true;
         recognition.interimResults = true;
@@ -78,8 +70,11 @@ export function useSpeechRecognition({
 
         transcriptRef.current = '';
         isRunningRef.current = true;
+        endFiredRef.current = false;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // Start silence timer immediately — covers case where user never speaks
+        resetSilenceTimer();
+
         recognition.onresult = (event: any) => {
             let interim = '';
             let final = '';
@@ -89,58 +84,81 @@ export function useSpeechRecognition({
                 else interim += text;
             }
             if (final) transcriptRef.current += final;
-            onResult(transcriptRef.current + interim);
+            const combined = transcriptRef.current + interim;
+            onInterim?.(combined);
 
             // Reset silence timer on every speech event
-            clearSilenceTimer();
-            silenceTimerRef.current = setTimeout(() => {
-                if (isRunningRef.current) {
-                    stop();
-                    onEnd();
-                }
-            }, silenceMs);
+            resetSilenceTimer();
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         recognition.onerror = (event: any) => {
             clearSilenceTimer();
             isRunningRef.current = false;
             if (event.error !== 'aborted') {
-                onError?.(event.error || 'Speech recognition error');
+                onError?.(event.error || 'speech-recognition-error');
             }
         };
 
         recognition.onend = () => {
-            // If still marked running (unexpected end), restart
             if (isRunningRef.current) {
-                try { recognition.start(); } catch { isRunningRef.current = false; }
+                // Unexpected mid-session end (browser killed it) — restart
+                try {
+                    recognition.start();
+                    return;
+                } catch {
+                    isRunningRef.current = false;
+                }
+            }
+            // Recognition has fully stopped — fire onEnd exactly once
+            if (!endFiredRef.current) {
+                endFiredRef.current = true;
+                clearSilenceTimer();
+                onEnd(transcriptRef.current.trim());
             }
         };
 
         recognitionRef.current = recognition;
         try {
             recognition.start();
-            return true;
         } catch (e) {
             isRunningRef.current = false;
             onError?.(`Cannot start recognition: ${e}`);
-            return false;
         }
-    }, [lang, silenceMs, onResult, onEnd, onError, clearSilenceTimer, stop]);
+    }, [lang, onInterim, onEnd, onError, clearSilenceTimer, resetSilenceTimer]);
 
-    // Cleanup on unmount
+    const start = useCallback(() => {
+        const SpeechRecognitionCtor =
+            (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognitionCtor) {
+            onError?.('SpeechRecognition not supported in this browser');
+            return;
+        }
+
+        navigator.mediaDevices?.getUserMedia({ audio: true })
+            .then((stream) => {
+                stream.getTracks().forEach(t => t.stop());
+                _startRecognition(SpeechRecognitionCtor);
+            })
+            .catch(() => {
+                onError?.('not-allowed');
+            });
+    }, [_startRecognition, onError]);
+
     useEffect(() => {
         return () => {
             clearSilenceTimer();
             if (recognitionRef.current) {
+                isRunningRef.current = false;
                 try { recognitionRef.current.abort(); } catch { /* ignore */ }
             }
         };
     }, [clearSilenceTimer]);
 
     return {
-        start, stop, isSupported: typeof window !== 'undefined' && !!(
+        start,
+        stop,
+        isSupported: typeof window !== 'undefined' && !!(
             (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-        )
+        ),
     };
 }

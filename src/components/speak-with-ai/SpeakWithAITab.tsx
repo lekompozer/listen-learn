@@ -298,11 +298,10 @@ export default function SpeakWithAITab() {
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
-        onResult: (transcript) => setInterimText(transcript),
-        onEnd: () => {
-            const final = interimText.trim();
+        onInterim: (transcript) => setInterimText(transcript),
+        onEnd: (finalTranscript) => {
             setInterimText('');
-            if (final) handleSpeechEnd(final);
+            if (finalTranscript) handleSpeechEnd(finalTranscript);
             else setAppState('idle');
         },
         onError: (err) => {
