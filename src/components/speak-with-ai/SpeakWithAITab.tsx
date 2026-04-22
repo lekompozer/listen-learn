@@ -866,8 +866,8 @@ export default function SpeakWithAITab() {
                         {/* Mic + mode toggle row */}
                         <div className="flex items-center gap-4">
                             <MicButton state={appState} onClick={handleMicClick} isDark={isDark} />
-                            {/* Flash / Premium toggle — only show for premium users */}
-                            {isPremium && GEMINI_STT_URL && (
+                            {/* Flash / Premium toggle — show whenever Gemini STT key is available */}
+                            {GEMINI_STT_URL && (
                                 <button
                                     onClick={() => setUsePremiumMode(v => {
                                         const next = !v;
