@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Listen & Learn",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "identifier": "pro.wynai.listenlearn",
   "build": {
     "frontendDist": "../out",
@@ -50,7 +50,10 @@
     "macOS": {
       "minimumSystemVersion": "10.15",
       "entitlements": "entitlements.plist",
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Listen & Learn needs microphone access for the Speak with AI feature — so you can practise speaking English."
+      }
     },
     "windows": {
       "wix": {},
