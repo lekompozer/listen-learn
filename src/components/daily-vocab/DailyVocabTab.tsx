@@ -182,7 +182,7 @@ function VocabNavRail({ isDark, section, onSelect }: {
             <div className="flex flex-col h-full overflow-y-auto px-4 py-5">
                 {/* Logo */}
                 <div className={`pb-4 mb-2 border-b ${isDark ? 'border-gray-700/60' : 'border-gray-100'}`}>
-                    <span className={`text-sm font-black tracking-wide ${isDark ? 'text-white' : 'text-gray-900'}`}>WynAI</span>
+                    <img src="/Logo-WynAI-Web.png" alt="WynAI" className="h-7 w-auto object-contain" />
                 </div>
 
                 {/* QUICK ACTIONS */}

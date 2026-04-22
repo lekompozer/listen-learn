@@ -139,7 +139,7 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
 
     // AI Provider state
     const [aiProvider, setAiProvider] = useState<'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan'>(
-        () => isTauriDesktop() ? 'jan' : 'deepseek'
+        () => 'deepseek'
     );
 
     // Security settings — filter disabled online models
