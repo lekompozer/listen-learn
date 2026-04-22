@@ -12,6 +12,44 @@ import {
     type JanLocalConversation,
 } from '@/services/jan/janLocalHistoryService';
 
+// ── Gemma 4 Free (Cloudflare Workers AI) ───────────────────────────────
+const CF_ACCOUNT_ID = process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '';
+const CF_AI_TOKEN = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY || '';
+const GEMMA4_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+const GEMMA4_DAILY_KEY = 'll_gemma4_daily_chat';
+const GEMMA4_DAILY_LIMIT = 5;
+
+function getGemma4DailyUsage(): number {
+    try {
+        const raw = localStorage.getItem(GEMMA4_DAILY_KEY);
+        if (!raw) return 0;
+        const { date, count } = JSON.parse(raw);
+        const today = new Date().toISOString().slice(0, 10);
+        return date === today ? (count as number) : 0;
+    } catch { return 0; }
+}
+function incrementGemma4DailyUsage(): void {
+    try {
+        const today = new Date().toISOString().slice(0, 10);
+        const current = getGemma4DailyUsage();
+        localStorage.setItem(GEMMA4_DAILY_KEY, JSON.stringify({ date: today, count: current + 1 }));
+    } catch { /* non-fatal */ }
+}
+function canUseGemma4(): boolean { return getGemma4DailyUsage() < GEMMA4_DAILY_LIMIT; }
+async function callGemma4Direct(
+    messages: { role: string; content: string }[]
+): Promise<string> {
+    const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${GEMMA4_MODEL}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CF_AI_TOKEN}` },
+        body: JSON.stringify({ messages, max_tokens: 800 }),
+    });
+    if (!res.ok) throw new Error(`Gemma4 API error: ${res.status}`);
+    const data = await res.json();
+    return data?.result?.response || data?.choices?.[0]?.message?.content || '';
+}
+
 // Desktop detection (SSR-safe)
 const isTauriDesktop = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -138,15 +176,18 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
     }, [currentSelection]);
 
     // AI Provider state
-    const [aiProvider, setAiProvider] = useState<'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan'>(
-        () => 'deepseek'
+    const [aiProvider, setAiProvider] = useState<'gemma4' | 'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan'>(
+        () => 'gemma4'
     );
+    const [gemma4Usage, setGemma4Usage] = useState(() => typeof window !== 'undefined' ? getGemma4DailyUsage() : 0);
 
     // Security settings — filter disabled online models
     const { isOnlineModelDisabled } = useSecuritySettings();
 
     // Map frontend provider key → security settings OnlineModelId
     const providerToModelId = (p: string): 'gemini' | 'chatgpt' | 'deepseek' | 'qwen' | null => {
+        if (p === 'gemma4') return null; // handled client-side
+        if (p === 'gemma4') return null; // handled client-side
         if (p === 'gemini') return 'gemini';
         if (p === 'chatgpt') return 'chatgpt';
         if (p === 'deepseek' || p === 'deepseek_reasoner') return 'deepseek';
@@ -664,6 +705,104 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
             return;
         }
 
+        // ── Gemma 4 Free (Cloudflare Workers AI — client-side) ──
+        if (aiProvider === 'gemma4') {
+            if (!canUseGemma4()) {
+                const limitMsg: AIEditMessage = {
+                    type: 'ai',
+                    content: `⚠️ Bạn đã dùng hết ${GEMMA4_DAILY_LIMIT} lần miễn phí hôm nay. Vui lòng chuyển sang DeepSeek hoặc thử lại vào ngày mai.\n\nYou've used all ${GEMMA4_DAILY_LIMIT} free Gemma 4 turns for today. Please switch to another model or try again tomorrow.`,
+                    timestamp: new Date(),
+                };
+                setAiChatMessages(prev => [...prev, limitMsg]);
+                setIsStreaming(false);
+                return;
+            }
+            try {
+                const systemContent = `You are a helpful AI assistant for learning. Be concise and helpful.`;
+                const historyMessages = conversationHistoryRef.current.map(m => ({
+                    role: m.role as 'user' | 'assistant',
+                    content: m.content,
+                }));
+                const messages = [
+                    { role: 'system' as const, content: systemContent },
+                    ...historyMessages,
+                    { role: 'user' as const, content: userQuery },
+                ];
+                const reply = await callGemma4Direct(messages);
+                incrementGemma4DailyUsage();
+                setGemma4Usage(getGemma4DailyUsage());
+                if (reply) {
+                    const aiMsg: AIEditMessage = { type: 'ai', content: reply, timestamp: new Date() };
+                    setAiChatMessages(prev => [...prev, aiMsg]);
+                    setConversationHistory(prev => [
+                        ...prev,
+                        { role: 'user', content: userQuery },
+                        { role: 'assistant', content: reply },
+                    ]);
+                }
+            } catch (err: any) {
+                const errMsg: AIEditMessage = {
+                    type: 'ai',
+                    content: `Gemma 4 Error: ${err?.message || err}`,
+                    timestamp: new Date(),
+                };
+                setAiChatMessages(prev => [...prev, errMsg]);
+            } finally {
+                setIsStreaming(false);
+                setStreamingContent('');
+            }
+            return;
+        }
+
+        // ── Gemma 4 Free (Cloudflare Workers AI — client-side) ──
+        if (aiProvider === 'gemma4') {
+            if (!canUseGemma4()) {
+                const limitMsg: AIEditMessage = {
+                    type: 'ai',
+                    content: `⚠️ Bạn đã dùng hết ${GEMMA4_DAILY_LIMIT} lần miễn phí hôm nay. Vui lòng chuyển sang DeepSeek hoặc thử lại vào ngày mai.\n\nYou've used all ${GEMMA4_DAILY_LIMIT} free Gemma 4 turns for today. Please switch to another model or try again tomorrow.`,
+                    timestamp: new Date(),
+                };
+                setAiChatMessages(prev => [...prev, limitMsg]);
+                setIsStreaming(false);
+                return;
+            }
+            try {
+                const systemContent = `You are a helpful AI assistant for learning. Be concise and helpful.`;
+                const historyMessages = conversationHistoryRef.current.map(m => ({
+                    role: m.role as 'user' | 'assistant',
+                    content: m.content,
+                }));
+                const messages = [
+                    { role: 'system' as const, content: systemContent },
+                    ...historyMessages,
+                    { role: 'user' as const, content: userQuery },
+                ];
+                const reply = await callGemma4Direct(messages);
+                incrementGemma4DailyUsage();
+                setGemma4Usage(getGemma4DailyUsage());
+                if (reply) {
+                    const aiMsg: AIEditMessage = { type: 'ai', content: reply, timestamp: new Date() };
+                    setAiChatMessages(prev => [...prev, aiMsg]);
+                    setConversationHistory(prev => [
+                        ...prev,
+                        { role: 'user', content: userQuery },
+                        { role: 'assistant', content: reply },
+                    ]);
+                }
+            } catch (err: any) {
+                const errMsg: AIEditMessage = {
+                    type: 'ai',
+                    content: `Gemma 4 Error: ${err?.message || err}`,
+                    timestamp: new Date(),
+                };
+                setAiChatMessages(prev => [...prev, errMsg]);
+            } finally {
+                setIsStreaming(false);
+                setStreamingContent('');
+            }
+            return;
+        }
+
         try {
             // Format conversation history for API (only role + content)
             // ✅ Use ref to get latest value without causing re-renders
@@ -980,6 +1119,7 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                         setAiProvider={setAiProvider}
                         showProviderDropdown={showProviderDropdown}
                         setShowProviderDropdown={setShowProviderDropdown}
+                        gemma4Usage={gemma4Usage}
                         loadingConversations={loadingConversations}
                         handleNewChat={handleNewChat}
                         handleDeleteConversation={handleDeleteConversation}

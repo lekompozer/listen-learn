@@ -11,10 +11,11 @@ interface ChatHeaderProps {
     conversationHistory: any[];
     showConversationList: boolean;
     setShowConversationList: (show: boolean) => void;
-    aiProvider: 'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan';
-    setAiProvider: (provider: 'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan') => void;
+    aiProvider: 'gemma4' | 'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan';
+    setAiProvider: (provider: 'gemma4' | 'deepseek' | 'deepseek_reasoner' | 'chatgpt' | 'gemini' | 'qwen' | 'jan') => void;
     showProviderDropdown: boolean;
     setShowProviderDropdown: (show: boolean) => void;
+    gemma4Usage?: number;
     loadingConversations: boolean;
     handleNewChat: () => void;
     handleDeleteConversation: (id: string, e: React.MouseEvent) => void;
@@ -37,6 +38,7 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
     setAiProvider,
     showProviderDropdown,
     setShowProviderDropdown,
+    gemma4Usage = 0,
     loadingConversations,
     handleNewChat,
     handleDeleteConversation,
@@ -103,11 +105,13 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
                                 }`}
                         >
                             <span>
+                                {aiProvider === 'gemma4' && <>🌟 Gemma 4 <span style={{ fontSize: '0.7em', background: '#065f46', color: '#6ee7b7', borderRadius: '4px', padding: '1px 4px', marginLeft: '2px' }}>Free</span></>}
                                 {aiProvider === 'deepseek' && 'DeepSeek'}
                                 {aiProvider === 'deepseek_reasoner' && 'DeepSeek R1'}
                                 {aiProvider === 'chatgpt' && 'GPT-5 Mini'}
                                 {aiProvider === 'gemini' && 'Gemini'}
                                 {aiProvider === 'qwen' && 'GPT OS 120B (Fast!)'}
+                                {aiProvider === 'jan' && '🖥️ Jan Local'}
                             </span>
                             <ChevronDown className="w-3 h-3" />
                         </button>
@@ -119,7 +123,7 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
                                 : 'bg-white border-gray-200'
                                 }`}>
                                 <div className="py-1">
-                                    {(['deepseek', 'deepseek_reasoner', 'chatgpt', 'gemini', 'qwen'] as const).map((provider) => (
+                                    {(['gemma4', 'deepseek', 'deepseek_reasoner', 'chatgpt', 'gemini', 'qwen'] as const).map((provider) => (
                                         <button
                                             key={provider}
                                             onClick={() => {
@@ -135,6 +139,7 @@ export const ChatHeader = React.memo<ChatHeaderProps>(({
                                                     : 'text-gray-700 hover:bg-gray-100'
                                                 }`}
                                         >
+                                            {provider === 'gemma4' && <>🌟 Gemma 4 26B <span style={{ fontSize: '0.75em', background: '#065f46', color: '#6ee7b7', borderRadius: '4px', padding: '1px 5px', marginLeft: '4px' }}>Free {5 - gemma4Usage}/5</span></>}
                                             {provider === 'deepseek' && 'DeepSeek'}
                                             {provider === 'deepseek_reasoner' && 'DeepSeek (Thinking Mode)'}
                                             {provider === 'chatgpt' && 'GPT-5 Mini'}
