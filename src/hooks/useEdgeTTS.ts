@@ -4,21 +4,31 @@ const isTauriDesktop = () =>
     typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
 
 /**
- * Convert text → base64 MP3 via Rust Edge TTS command (Tauri only).
- * On web fallback, uses SpeechSynthesis if available.
+ * Convert text → tagged audio string via Rust TTS command (Tauri only).
+ * Returns "mp3:<base64>" (Edge TTS) or "m4a:<base64>" (macOS say).
+ * useMacosSay: true = force macOS say (offline); false (default) = Edge TTS WS first, say as fallback.
  */
-export async function getEdgeTTSAudio(text: string, voice = 'en-US-JennyNeural'): Promise<string | null> {
+export async function getEdgeTTSAudio(
+    text: string,
+    voice = 'en-US-JennyNeural',
+    useMacosSay = false,
+): Promise<string | null> {
     if (isTauriDesktop()) {
         try {
             const { invoke } = await import('@tauri-apps/api/core');
-            const base64 = await invoke<string>('get_edge_tts_audio', { text, voice });
-            return base64;
+            // Returns tagged string: "mp3:<base64>" or "m4a:<base64>"
+            const tagged = await invoke<string>('get_edge_tts_audio', {
+                text,
+                voice,
+                useMacosSay,
+            });
+            return tagged;
         } catch (e) {
             console.error('Edge TTS error:', e);
             return null;
         }
     }
-    // Web fallback — no audio (or use browser SpeechSynthesis as best-effort)
+    // Web: no Tauri — SpeechSynthesis is used via speakWithSynthesis() at call site
     return null;
 }
 
@@ -27,13 +37,17 @@ export async function getEdgeTTSAudio(text: string, voice = 'en-US-JennyNeural')
  * Also accepts an optional ref to receive the HTMLAudioElement (for external cancel).
  */
 export function playBase64Audio(
-    base64: string,
+    /** Tagged string: "mp3:<base64>" | "m4a:<base64>" or raw base64 (legacy). */
+    tagged: string,
     audioRef?: { current: HTMLAudioElement | null },
 ): Promise<void> {
     return new Promise((resolve) => {
-        // macOS say+afconvert produces M4A/AAC; old Edge TTS produced MP3.
-        // audio/mp4 covers both — WKWebView sniffs the actual format.
-        const audio = new Audio(`data:audio/mp4;base64,${base64}`);
+        // Parse tagged format produced by Rust TTS command
+        let mime = 'audio/mp4';
+        let base64 = tagged;
+        if (tagged.startsWith('mp3:')) { mime = 'audio/mpeg'; base64 = tagged.slice(4); }
+        else if (tagged.startsWith('m4a:')) { mime = 'audio/mp4'; base64 = tagged.slice(4); }
+        const audio = new Audio(`data:${mime};base64,${base64}`);
         if (audioRef) audioRef.current = audio;
 
         let settled = false;

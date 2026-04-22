@@ -286,6 +286,11 @@ export default function SpeakWithAITab() {
         const saved = localStorage.getItem('ll_speak_use_premium');
         return saved === null ? true : saved === '1';
     });
+    // TTS engine: false = Edge TTS (WebSocket, natural voices), true = macOS say (offline, macOS only)
+    const [useMacosSay, setUseMacosSay] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return localStorage.getItem('ll_tts_macos_say') === '1';
+    });
 
     const chatBottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -407,7 +412,7 @@ export default function SpeakWithAITab() {
             const replyText = await callDeepSeek(deepseekMessages, abortRef.current.signal);
 
             // 2. Get audio FIRST (audio-first pattern)
-            const base64Audio = await getEdgeTTSAudio(replyText, selectedVoice);
+            const base64Audio = await getEdgeTTSAudio(replyText, selectedVoice, useMacosSay);
 
             // 3. Start speaking — audio plays, then text appears
             setAppState('speaking');
@@ -441,7 +446,7 @@ export default function SpeakWithAITab() {
                 setErrorMsg(err?.message ?? 'Unknown error');
             }
         }
-    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, usePremiumMode]);
+    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, usePremiumMode, useMacosSay]);
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
@@ -462,7 +467,7 @@ export default function SpeakWithAITab() {
                 setErrorMsg(`Mic error: ${err}`);
             }
         },
-        silenceMs: 2500,
+        silenceMs: 3000,
         lang: 'en-US',
     });
 
@@ -663,6 +668,24 @@ export default function SpeakWithAITab() {
                         </span>
                     )}
                     <div className="ml-auto flex items-center gap-2">
+                        {/* TTS engine toggle: Edge TTS (natural) vs macOS say (offline) */}
+                        <button
+                            onClick={() => {
+                                const next = !useMacosSay;
+                                setUseMacosSay(next);
+                                localStorage.setItem('ll_tts_macos_say', next ? '1' : '0');
+                            }}
+                            title={useMacosSay
+                                ? t('Đang dùng giọng macOS (offline). Nhấn để chuyển sang Edge TTS', 'Using macOS voice (offline). Click to switch to Edge TTS')
+                                : t('Đang dùng Edge TTS (tự nhiên hơn). Nhấn để chuyển sang macOS', 'Using Edge TTS (more natural). Click to switch to macOS voice')}
+                            className={`text-[11px] px-2 py-1 rounded-lg border font-medium transition-colors select-none
+                                ${useMacosSay
+                                    ? (isDark ? 'bg-orange-900/40 border-orange-700 text-orange-300 hover:bg-orange-900/60' : 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100')
+                                    : (isDark ? 'bg-teal-900/40 border-teal-700 text-teal-300 hover:bg-teal-900/60' : 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100')
+                                }`}
+                        >
+                            {useMacosSay ? '🍎 macOS' : '🔊 Edge'}
+                        </button>
                         {/* Voice selector */}
                         <div className="relative">
                             <select

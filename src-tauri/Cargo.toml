@@ -1,6 +1,6 @@
 [package]
 name = "listen-learn"
-version = "0.1.50"
+version = "0.1.51"
 description = "WynAI Listen & Learn — Learn English through songs and podcasts"
 authors = ["WordAI"]
 license = ""
@@ -27,6 +27,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-localhost = "2"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 rand = "0.8"
 sha2 = "0.10"
 base64 = "0.22"
