@@ -848,7 +848,7 @@ export default function SpeakWithAITab() {
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium select-none opacity-70
                                 ${ttsEngineUsed === 'edge' ? (isDark ? 'text-teal-400' : 'text-teal-600')
                                     : ttsEngineUsed === 'macos-say' ? (isDark ? 'text-orange-400' : 'text-orange-600')
-                                    : (isDark ? 'text-gray-400' : 'text-gray-500')}`}
+                                        : (isDark ? 'text-gray-400' : 'text-gray-500')}`}
                                 title={t('Engine TTS vừa dùng', 'Last TTS engine used')}
                             >
                                 {ttsEngineUsed === 'edge' ? 'Edge✓' : ttsEngineUsed === 'macos-say' ? 'Say✓' : 'Synth✓'}
