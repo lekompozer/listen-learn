@@ -96,6 +96,8 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro' }}
           NEXT_PUBLIC_DEEPSEEK_API_KEY: ${{ secrets.NEXT_PUBLIC_DEEPSEEK_API_KEY }}
           NEXT_PUBLIC_VERTEX_API_KEY: ${{ secrets.NEXT_PUBLIC_VERTEX_API_KEY }}
+          NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID }}
+          NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY }}
         run: npm run build
 
       - name: Delete stale draft release assets (avoid already_exists on re-runs)
@@ -128,6 +130,8 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro' }}
           NEXT_PUBLIC_DEEPSEEK_API_KEY: ${{ secrets.NEXT_PUBLIC_DEEPSEEK_API_KEY }}
           NEXT_PUBLIC_VERTEX_API_KEY: ${{ secrets.NEXT_PUBLIC_VERTEX_API_KEY }}
+          NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID }}
+          NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY: ${{ secrets.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Listen & Learn ${{ github.ref_name }}'

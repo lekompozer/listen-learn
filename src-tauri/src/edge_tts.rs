@@ -92,7 +92,7 @@ async fn edge_tts_websocket(text: &str, voice: &str) -> Result<String, String> {
     let req_id = uuid_v4_no_dashes();
     let ssml = format!(
         "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>\
-         <voice name='{voice}'>{text}</voice></speak>",
+         <voice name='{voice}'><prosody rate='0.8'>{text}</prosody></voice></speak>",
         voice = voice,
         text = escape_xml(text),
     );
@@ -161,7 +161,7 @@ async fn macos_say_tts(text: &str, voice: &str) -> Result<String, String> {
     let m4a_path  = format!("/tmp/ll_tts_{rand_id}.m4a");
 
     let ok = std::process::Command::new("say")
-        .args(["-v", mac_voice, "-r", "185", text, "-o", &aiff_path])
+        .args(["-v", mac_voice, "-r", "160", text, "-o", &aiff_path])
         .status()
         .map_err(|e| format!("say error: {e}"))?
         .success();

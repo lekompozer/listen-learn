@@ -19,11 +19,16 @@ import {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 const VERTEX_API_KEY = process.env.NEXT_PUBLIC_VERTEX_API_KEY;
-// Gemini 2.5 Flash Lite — audio transcription (STT)
-// Region must be us-central1.
+// Gemini 2.5 Flash Lite — audio transcription (STT, Premium fallback)
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_STT_URL = VERTEX_API_KEY
     ? `https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${VERTEX_API_KEY}`
+    : null;
+// Cloudflare Workers AI — Whisper Large v3 Turbo (Flash STT, free 10k/month)
+const CF_ACCOUNT_ID = process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '';
+const CF_AI_TOKEN = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY || '';
+const CF_WHISPER_URL = CF_ACCOUNT_ID && CF_AI_TOKEN
+    ? `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/@cf/openai/whisper-large-v3-turbo`
     : null;
 
 import { useTheme, useLanguage } from '@/contexts/AppContext';
@@ -47,6 +52,22 @@ function logError(ctx: string, msg: string | undefined) {
         if (log.length > 100) log.splice(0, log.length - 100);
         localStorage.setItem('ll_error_log', JSON.stringify(log));
     } catch { /* ignore */ }
+}
+
+// ── Cloudflare Whisper STT ──────────────────────────────────────────────────
+async function transcribeWithCloudflareWhisper(audioBlob: Blob): Promise<string> {
+    if (!CF_WHISPER_URL || !CF_AI_TOKEN) throw new Error('CF Whisper not configured');
+    const form = new FormData();
+    form.append('file', audioBlob, 'audio.webm');
+    const resp = await fetch(CF_WHISPER_URL, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${CF_AI_TOKEN}` },
+        body: form,
+    });
+    if (!resp.ok) throw new Error(`CF Whisper ${resp.status}: ${await resp.text()}`);
+    const json = await resp.json();
+    if (!json.success) throw new Error(`CF Whisper failed: ${JSON.stringify(json.errors)}`);
+    return (json.result?.text ?? '').trim();
 }
 
 // ── Blob → Base64 ────────────────────────────────────────────────────────────
@@ -310,6 +331,14 @@ export default function SpeakWithAITab() {
     const recordingBlobRef = useRef<Blob[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const speakingAudioRef = useRef<HTMLAudioElement | null>(null);
+    // abort fn for current TTS playback — called when user interrupts AI speech
+    const playAbortRef = useRef<(() => void) | null>(null);
+    // which TTS engine was last used: 'edge' | 'macos-say' | 'synthesis'
+    const [ttsEngineUsed, setTtsEngineUsed] = useState<string>(() =>
+        typeof window !== 'undefined' ? (localStorage.getItem('ll_tts_engine_last') ?? '') : ''
+    );
+    // round counter — prevents stale async callbacks from setting state after new round started
+    const roundRef = useRef(0);
 
     // Load conversations + check premium on mount
     useEffect(() => {
@@ -358,19 +387,24 @@ export default function SpeakWithAITab() {
         if (!activeConvoId) return;
         if (!canSendMessage(isPremium)) return;
 
-        // Capture audio blob (used for Gemini Premium STT + replay)
+        // Bump round counter — any previous async round that resolves late will see mismatched round
+        const myRound = ++roundRef.current;
+        const isCurrentRound = () => roundRef.current === myRound;
+
+        // Capture audio blob (used for STT + replay)
         let audioBlob: Blob | null = null;
         if (recordingBlobRef.current.length > 0) {
             audioBlob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
             recordingBlobRef.current = [];
         }
 
-        // Premium: use Gemini STT (accurate transcript + auto pronunciation analysis)
-        // Free (Flash): use Web Speech transcript directly
+        // STT mode:
+        //   usePremiumMode=true  → Gemini (accurate, pronunciation analysis)
+        //   usePremiumMode=false → Cloudflare Whisper (free, fast) → Web Speech fallback
         let transcript = webSpeechTranscript;
         let prefilledAnalysis: string | undefined;
 
-        if (isPremium && usePremiumMode && audioBlob && GEMINI_STT_URL) {
+        if (usePremiumMode && audioBlob && GEMINI_STT_URL) {
             setAppState('processing');
             setInterimText('');
             try {
@@ -378,7 +412,19 @@ export default function SpeakWithAITab() {
                 if (result.text) transcript = result.text;
                 prefilledAnalysis = result.analysis;
             } catch (e) {
+                logError('Gemini STT', (e as any)?.message);
                 console.warn('Gemini STT failed, using Web Speech fallback:', e);
+            }
+        } else if (!usePremiumMode && audioBlob && CF_WHISPER_URL) {
+            // Flash mode: Cloudflare Whisper STT
+            setAppState('processing');
+            setInterimText('');
+            try {
+                const cfText = await transcribeWithCloudflareWhisper(audioBlob);
+                if (cfText) transcript = cfText;
+            } catch (e) {
+                logError('CF Whisper STT', (e as any)?.message);
+                // Fall back to Web Speech transcript already in `transcript`
             }
         }
 
@@ -446,21 +492,23 @@ export default function SpeakWithAITab() {
             // 2. TTS — Edge WS → macOS say fallback → SpeechSynthesis fallback
             //    Errors here are logged but never crash the main flow.
             let base64Audio: string | null = null;
+            let engineUsed = 'synthesis';
             if (isTauriDesktop()) {
                 try {
                     const { invoke } = await import('@tauri-apps/api/core');
                     base64Audio = await invoke<string>('get_edge_tts_audio', {
                         text: replyText, voice: selectedVoice, useMacosSay,
                     });
+                    engineUsed = base64Audio?.startsWith('mp3:') ? 'edge' : 'macos-say';
                 } catch (e: any) {
                     logError('TTS Edge', e?.message);
-                    // Fallback: force macOS say (works even on non-macOS? Rust returns Err, caught below)
                     if (!useMacosSay) {
                         try {
                             const { invoke } = await import('@tauri-apps/api/core');
                             base64Audio = await invoke<string>('get_edge_tts_audio', {
                                 text: replyText, voice: selectedVoice, useMacosSay: true,
                             });
+                            engineUsed = 'macos-say';
                         } catch (e2: any) {
                             logError('TTS macOS fallback', e2?.message);
                         }
@@ -468,13 +516,18 @@ export default function SpeakWithAITab() {
                 }
             }
 
+            if (!isCurrentRound()) return; // aborted by user starting new round
+
             // 3. Show AI message + play audio
             setAppState('speaking');
             const aiMsg = addMessage(activeConvoId, { role: 'assistant', text: replyText });
+            // Save engine used
+            localStorage.setItem('ll_tts_engine_last', engineUsed);
+            setTtsEngineUsed(engineUsed);
 
             if (base64Audio) {
-                const playPromise = playBase64Audio(base64Audio, speakingAudioRef);
-                setTimeout(() => setMessages(prev => [...prev, aiMsg]), 500);
+                const playPromise = playBase64Audio(base64Audio, speakingAudioRef, playAbortRef);
+                setTimeout(() => { if (isCurrentRound()) setMessages(prev => [...prev, aiMsg]); }, 500);
                 await playPromise;
             } else {
                 // Final fallback: browser SpeechSynthesis (works on all platforms)
@@ -482,6 +535,7 @@ export default function SpeakWithAITab() {
                 await speakWithSynthesis(replyText);
             }
 
+            if (!isCurrentRound()) return; // user started new round while TTS was playing
             setConversations(listConversations());
             setAppState('idle');
         } catch (err: any) {
@@ -565,6 +619,8 @@ export default function SpeakWithAITab() {
             // onEnd callback will fire with final text
         } else if (appState === 'speaking') {
             // Interrupt AI speech → start recording immediately
+            // Abort TTS playback promise immediately (no stale state override later)
+            if (playAbortRef.current) { playAbortRef.current(); playAbortRef.current = null; }
             if (speakingAudioRef.current) {
                 speakingAudioRef.current.pause();
                 speakingAudioRef.current = null;
@@ -753,6 +809,17 @@ export default function SpeakWithAITab() {
                         >
                             {useMacosSay ? '🍎 macOS' : '🔊 Edge'}
                         </button>
+                        {/* Last used TTS engine indicator */}
+                        {ttsEngineUsed && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium select-none opacity-70
+                                ${ttsEngineUsed === 'edge' ? (isDark ? 'text-teal-400' : 'text-teal-600')
+                                    : ttsEngineUsed === 'macos-say' ? (isDark ? 'text-orange-400' : 'text-orange-600')
+                                    : (isDark ? 'text-gray-400' : 'text-gray-500')}`}
+                                title={t('Engine TTS vừa dùng', 'Last TTS engine used')}
+                            >
+                                {ttsEngineUsed === 'edge' ? 'Edge✓' : ttsEngineUsed === 'macos-say' ? 'Say✓' : 'Synth✓'}
+                            </span>
+                        )}
                         {/* Voice selector */}
                         <div className="relative">
                             <select

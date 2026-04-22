@@ -52,11 +52,13 @@ function base64ToObjectURL(base64: string, mime: string): string | null {
 /**
  * Play base64 MP3. Returns a Promise that resolves when audio ends.
  * Also accepts an optional ref to receive the HTMLAudioElement (for external cancel).
+ * abortRef: set .current to a fn — calling it immediately resolves (stops) the audio.
  */
 export function playBase64Audio(
     /** Tagged string: "mp3:<base64>" | "m4a:<base64>" or raw base64 (legacy). */
     tagged: string,
     audioRef?: { current: HTMLAudioElement | null },
+    abortRef?: { current: (() => void) | null },
 ): Promise<void> {
     return new Promise((resolve) => {
         try {
@@ -80,8 +82,17 @@ export function playBase64Audio(
                 // Revoke object URL to free memory
                 if (objectURL) { try { URL.revokeObjectURL(objectURL); } catch { /* ignore */ } }
                 if (audioRef) audioRef.current = null;
+                if (abortRef) abortRef.current = null;
                 resolve();
             };
+
+            // Expose abort fn — called externally when user interrupts AI speech
+            if (abortRef) {
+                abortRef.current = () => {
+                    try { audio.pause(); } catch { /* ignore */ }
+                    done();
+                };
+            }
 
             // Primary: direct onended (most reliable in WKWebView)
             audio.onended = done;
