@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen,
+    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Mic2,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
@@ -34,6 +34,7 @@ const TABS: { id: TabType; labelVi: string; labelEn: string; icon: React.Compone
     { id: 'conversations', labelVi: 'Hội Thoại', labelEn: 'Conversations', icon: MessageCircle },
     { id: 'podcast', labelVi: 'Podcast', labelEn: 'Podcast', icon: Radio },
     { id: 'videos', labelVi: 'Videos', labelEn: 'Videos', icon: Play },
+    { id: 'speak', labelVi: 'Speak AI', labelEn: 'Speak AI', icon: Mic2 },
 ];
 
 interface LLHeaderProps {

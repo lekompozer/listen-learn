@@ -20,9 +20,10 @@ const GamificationSidebar = dynamic(() => import('@/components/conversations/Gam
 const ConversationsUpgradeModal = dynamic(() => import('@/components/conversations/ConversationsUpgradeModal'), { ssr: false });
 const PodcastGridPage = dynamic(() => import('@/components/podcast/PodcastGridPage'), { ssr: false });
 const EnglishVideosFeed = dynamic(() => import('@/components/videos/EnglishVideosFeed'), { ssr: false });
+const SpeakWithAITab = dynamic(() => import('@/components/speak-with-ai/SpeakWithAITab'), { ssr: false });
 const SubscriptionModal = dynamic(() => import('@/components/songs/SubscriptionModal'), { ssr: false });
 
-export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast' | 'videos';
+export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast' | 'videos' | 'speak';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 
@@ -36,7 +37,7 @@ export default function ListenLearnApp() {
     const [activeTab, setActiveTab] = useState<TabType>(() => {
         try {
             const saved = typeof window !== 'undefined' ? localStorage.getItem('ll_active_tab') : null;
-            if (saved && ['daily-vocab', 'songs', 'conversations', 'podcast', 'videos'].includes(saved)) {
+            if (saved && ['daily-vocab', 'songs', 'conversations', 'podcast', 'videos', 'speak'].includes(saved)) {
                 return saved as TabType;
             }
         } catch { /* ignore */ }
@@ -365,6 +366,10 @@ export default function ListenLearnApp() {
                 {/* Videos Tab */}
                 {activeTab === 'videos' && (
                     <EnglishVideosFeed />
+                )}
+                {/* Speak with AI Tab */}
+                {activeTab === 'speak' && (
+                    <SpeakWithAITab />
                 )}
 
             </div>

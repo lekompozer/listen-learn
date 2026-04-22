@@ -1,4 +1,5 @@
 mod google_auth;
+mod edge_tts;
 
 use tauri::{WebviewWindowBuilder, WebviewUrl};
 
@@ -198,6 +199,7 @@ pub fn run() {
             google_auth::open_google_auth,
             read_audio_files_in_dir,
             copy_files_to_playlist_dir,
+            edge_tts::get_edge_tts_audio,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");
