@@ -49,6 +49,21 @@ export function useSpeechRecognition({
             return false;
         }
 
+        // Request mic permission first — triggers OS permission dialog on macOS/iOS
+        navigator.mediaDevices?.getUserMedia({ audio: true })
+            .then((stream) => {
+                // Got permission — stop the stream immediately (SpeechRecognition manages its own)
+                stream.getTracks().forEach(t => t.stop());
+                _startRecognition(SpeechRecognitionCtor);
+            })
+            .catch(() => {
+                onError?.('not-allowed');
+            });
+
+        return true;
+    }, [clearSilenceTimer, stop, onResult, onEnd, onError, silenceMs, lang]); // eslint-disable-line
+
+    const _startRecognition = useCallback((SpeechRecognitionCtor: any) => {
         // Clean up previous instance
         if (recognitionRef.current) {
             try { recognitionRef.current.abort(); } catch { /* ignore */ }

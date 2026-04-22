@@ -47,9 +47,7 @@ pub async fn get_edge_tts_audio(text: String, voice: Option<String>) -> Result<S
         text = escape_xml(&text),
     );
 
-    // Use edge-tts compatible endpoint
-    let synthesis_url = "https://eastus.tts.speech.microsoft.com/cognitiveservices/v1";
-    // Fallback: use the browser-compatible free endpoint
+    // Use the browser-compatible free endpoint
     let free_url = "https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1";
 
     let api_key_header = format!(

@@ -307,7 +307,14 @@ export default function SpeakWithAITab() {
         },
         onError: (err) => {
             setAppState('error');
-            setErrorMsg(`Mic error: ${err}`);
+            if (err === 'not-allowed') {
+                setErrorMsg(t(
+                    'Chưa cấp quyền micro. Vào System Settings → Privacy → Microphone → bật cho app này.',
+                    'Microphone access denied. Go to System Settings → Privacy → Microphone and enable it for this app.',
+                ));
+            } else {
+                setErrorMsg(`Mic error: ${err}`);
+            }
         },
         silenceMs: 2500,
         lang: 'en-US',

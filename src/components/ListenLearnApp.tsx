@@ -23,7 +23,7 @@ const EnglishVideosFeed = dynamic(() => import('@/components/videos/EnglishVideo
 const SpeakWithAITab = dynamic(() => import('@/components/speak-with-ai/SpeakWithAITab'), { ssr: false });
 const SubscriptionModal = dynamic(() => import('@/components/songs/SubscriptionModal'), { ssr: false });
 
-export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast' | 'videos' | 'speak';
+export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast' | 'videos';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 
@@ -37,7 +37,7 @@ export default function ListenLearnApp() {
     const [activeTab, setActiveTab] = useState<TabType>(() => {
         try {
             const saved = typeof window !== 'undefined' ? localStorage.getItem('ll_active_tab') : null;
-            if (saved && ['daily-vocab', 'songs', 'conversations', 'podcast', 'videos', 'speak'].includes(saved)) {
+            if (saved && ['daily-vocab', 'songs', 'conversations', 'podcast', 'videos'].includes(saved)) {
                 return saved as TabType;
             }
         } catch { /* ignore */ }
@@ -251,7 +251,7 @@ export default function ListenLearnApp() {
     return (
         <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-[#c6d4d4] text-gray-900'}`}>
             {/* macOS traffic lights area — 28px padding above header */}
-            <div className="pt-[28px]" data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+            <div className={`pt-[28px] ${isDark ? 'bg-gray-900/80' : 'bg-white/85'}`} data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
                 <LLHeader
                     activeTab={activeTab}
                     onTabChange={handleTabChange}
@@ -367,10 +367,7 @@ export default function ListenLearnApp() {
                 {activeTab === 'videos' && (
                     <EnglishVideosFeed />
                 )}
-                {/* Speak with AI Tab */}
-                {activeTab === 'speak' && (
-                    <SpeakWithAITab />
-                )}
+
 
             </div>
             {showSubscriptionModal && (

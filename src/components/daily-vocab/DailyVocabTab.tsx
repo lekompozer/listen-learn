@@ -13,6 +13,7 @@ import { SavedViewEmbed } from '@/components/embeds/SavedViewEmbed';
 import { logEvent } from 'firebase/analytics';
 import { analytics } from '@/lib/wordai-firebase';
 
+const SpeakWithAITab = dynamic(() => import('@/components/speak-with-ai/SpeakWithAITab'), { ssr: false });
 const DailyVocabClient = dynamic(
     () => import('@/components/daily-vocab/DailyVocabClient'),
     { ssr: false, loading: () => null }
@@ -22,7 +23,7 @@ const OnlineTestsView = dynamic(
     { ssr: false }
 );
 
-type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved';
+type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved' | 'speak';
 
 interface DailyVocabTabProps {
     isDark: boolean;
@@ -149,10 +150,10 @@ const QUICK_ACTIONS: { id: VocabSection; label: string; icon: React.ElementType 
     { id: 'ai-chat', label: 'AI Chat', icon: MessageCircle },
     { id: 'saved', label: 'Saved', icon: Bookmark },
 ];
-const PRACTICE_ITEMS = [
-    { label: 'FreeTalk', icon: Mic },
-    { label: 'Study Buddy', icon: Users },
-    { label: 'Speak with AI', icon: Volume2 },
+const PRACTICE_ITEMS: { label: string; icon: React.ElementType; id: VocabSection | null }[] = [
+    { label: 'FreeTalk', icon: Mic, id: null },
+    { label: 'Study Buddy', icon: Users, id: null },
+    { label: 'Speak with AI', icon: Volume2, id: 'speak' },
 ];
 const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
     { id: 'ai-learning', label: 'WynAI Tutor', icon: GraduationCap },
@@ -199,12 +200,19 @@ function VocabNavRail({ isDark, section, onSelect }: {
                 {/* PRACTICE */}
                 <div className="space-y-1 mt-5">
                     <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Practice</p>
-                    {PRACTICE_ITEMS.map(({ label, icon: Icon }) => (
-                        <div key={label} className={`${base} cursor-default opacity-50`}>
-                            <Icon className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{label}</span>
-                            <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'}`}>Soon</span>
-                        </div>
+                    {PRACTICE_ITEMS.map(({ label, icon: Icon, id }) => (
+                        id ? (
+                            <button key={label} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
+                                <Icon className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{label}</span>
+                            </button>
+                        ) : (
+                            <div key={label} className={`${base} cursor-default opacity-50`}>
+                                <Icon className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{label}</span>
+                                <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'}`}>Soon</span>
+                            </div>
+                        )
                     ))}
                 </div>
 
@@ -289,6 +297,10 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTab
 
                 {section === 'saved' && (
                     <SavedViewEmbed isDark={isDark} />
+                )}
+
+                {section === 'speak' && (
+                    <SpeakWithAITab />
                 )}
 
                 {section === 'wynai-music' && (
