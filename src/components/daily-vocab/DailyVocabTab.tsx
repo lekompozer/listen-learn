@@ -4,11 +4,12 @@ import dynamic from 'next/dynamic';
 import { useState, useCallback } from 'react';
 import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
-    Download, ExternalLink, BookOpen, Award,
+    Download, ExternalLink, BookOpen, Award, Bookmark,
 } from 'lucide-react';
 import { AIChatEmbed } from '@/components/embeds/AIChatEmbed';
 import { UsagePlanEmbed } from '@/components/embeds/UsagePlanEmbed';
 import { AILearningEmbed } from '@/components/embeds/AILearningEmbed';
+import { SavedViewEmbed } from '@/components/embeds/SavedViewEmbed';
 import { logEvent } from 'firebase/analytics';
 import { analytics } from '@/lib/wordai-firebase';
 
@@ -21,7 +22,7 @@ const OnlineTestsView = dynamic(
     { ssr: false }
 );
 
-type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests';
+type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved';
 
 interface DailyVocabTabProps {
     isDark: boolean;
@@ -147,10 +148,11 @@ const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType
     { id: 'usage-plan', label: 'Usage & Plan', icon: FileText },
 ];
 const TOOLS_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
+    { id: 'saved', label: 'Saved', icon: Bookmark },
     { id: 'online-tests', label: 'Online Tests', icon: Award },
     { id: 'ai-chat', label: 'AI Chat', icon: MessageCircle },
     { id: 'wynai-music', label: 'WynAI Music', icon: Music },
-    { id: 'ai-learning', label: 'AI Learning Assistant', icon: GraduationCap },
+    { id: 'ai-learning', label: 'WynAI Tutor', icon: GraduationCap },
     { id: 'wyncode', label: 'WynCode AI', icon: Code2 },
 ];
 
@@ -253,6 +255,10 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTab
 
                 {section === 'ai-learning' && (
                     <AILearningEmbed isDark={isDark} />
+                )}
+
+                {section === 'saved' && (
+                    <SavedViewEmbed isDark={isDark} />
                 )}
 
                 {section === 'wynai-music' && (
