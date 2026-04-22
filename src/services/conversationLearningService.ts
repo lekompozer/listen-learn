@@ -1543,3 +1543,58 @@ export async function checkoutPreview(params: CheckoutPreviewRequest): Promise<C
     }
     return res.json();
 }
+
+// ========== SAVED VIDEOS ==========
+
+export interface SavedVideoItem {
+    youtube_id: string;
+    title: string;
+    channel: string;
+    channel_url?: string;
+    thumbnail?: string;
+    view_count?: number;
+    duration_sec?: number;
+    youtube_url: string;
+    source_tag?: string;
+    saved_at: string;
+}
+
+export interface SavedVideosResponse {
+    videos: SavedVideoItem[];
+    pagination: {
+        page: number;
+        page_size: number;
+        total_items: number;
+        total_pages: number;
+        has_next: boolean;
+        has_prev: boolean;
+    };
+}
+
+/**
+ * Get saved videos
+ * GET /api/v1/saved-videos?page=1&page_size=20
+ */
+export async function getSavedVideos(params?: {
+    page?: number;
+    page_size?: number;
+}): Promise<SavedVideosResponse> {
+    const token = await getAuthToken();
+    const query = new URLSearchParams();
+    query.set('page', String(params?.page ?? 1));
+    query.set('page_size', String(params?.page_size ?? 20));
+
+    const url = `${API_BASE_URL}/api/v1/saved-videos?${query.toString()}`;
+    const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to fetch saved videos');
+    }
+    const data = await response.json();
+    return {
+        videos: data.data?.videos || [],
+        pagination: data.data?.pagination || { page: 1, page_size: 20, total_items: 0, total_pages: 1, has_next: false, has_prev: false },
+    };
+}
