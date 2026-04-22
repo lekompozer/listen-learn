@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useState, useCallback } from 'react';
 import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
-    Download, ExternalLink, BookOpen, Award, Bookmark,
+    Download, ExternalLink, BookOpen, Award, Bookmark, Mic, Users, Volume2,
 } from 'lucide-react';
 import { AIChatEmbed } from '@/components/embeds/AIChatEmbed';
 import { UsagePlanEmbed } from '@/components/embeds/UsagePlanEmbed';
@@ -144,16 +144,23 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
 // AppPanelSection removed — replaced by embedded components
 
 // ─── Nav rail ─────────────────────────────────────────────────────────────────
-const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
-    { id: 'usage-plan', label: 'Usage & Plan', icon: FileText },
-];
-const TOOLS_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
-    { id: 'saved', label: 'Saved', icon: Bookmark },
+const QUICK_ACTIONS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
     { id: 'online-tests', label: 'Online Tests', icon: Award },
     { id: 'ai-chat', label: 'AI Chat', icon: MessageCircle },
+    { id: 'saved', label: 'Saved', icon: Bookmark },
+];
+const PRACTICE_ITEMS = [
+    { label: 'FreeTalk', icon: Mic },
+    { label: 'Study Buddy', icon: Users },
+    { label: 'Speak with AI', icon: Volume2 },
+];
+const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
     { id: 'wynai-music', label: 'WynAI Music', icon: Music },
     { id: 'ai-learning', label: 'WynAI Tutor', icon: GraduationCap },
     { id: 'wyncode', label: 'WynCode AI', icon: Code2 },
+];
+const SYSTEM_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
+    { id: 'usage-plan', label: 'Plan & Usage', icon: FileText },
 ];
 
 function VocabNavRail({ isDark, section, onSelect }: {
@@ -178,13 +185,47 @@ function VocabNavRail({ isDark, section, onSelect }: {
                     <span className={`text-sm font-black tracking-wide ${isDark ? 'text-white' : 'text-gray-900'}`}>WynAI</span>
                 </div>
 
-                {/* DISCOVER */}
+                {/* QUICK ACTIONS */}
                 <div className="space-y-1 mt-3">
+                    <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Quick Actions</p>
+                    {QUICK_ACTIONS.map(({ id, label, icon: Icon }) => (
+                        <button key={id} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
+                            <Icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* PRACTICE */}
+                <div className="space-y-1 mt-5">
+                    <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Practice</p>
+                    {PRACTICE_ITEMS.map(({ label, icon: Icon }) => (
+                        <div key={label} className={`${base} cursor-default opacity-50`}>
+                            <Icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{label}</span>
+                            <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-400'}`}>Soon</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* DISCOVER */}
+                <div className="space-y-1 mt-5">
                     <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Discover</p>
                     {DISCOVER_ITEMS.map(({ id, label, icon: Icon }) => (
                         <button key={id} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
                             <Icon className="w-4 h-4 flex-shrink-0" />
-                            {label}
+                            <span className="truncate">{label}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {/* SYSTEM */}
+                <div className="space-y-1 mt-5">
+                    <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>System</p>
+                    {SYSTEM_ITEMS.map(({ id, label, icon: Icon }) => (
+                        <button key={id} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
+                            <Icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{label}</span>
                         </button>
                     ))}
                     <button onClick={openBlog} className={`${base} ${inactive}`}>
@@ -192,17 +233,6 @@ function VocabNavRail({ isDark, section, onSelect }: {
                         Blog
                         <ExternalLink className="w-3 h-3 ml-auto opacity-40" />
                     </button>
-                </div>
-
-                {/* AI TOOLS */}
-                <div className="space-y-1 mt-5">
-                    <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>AI Tools</p>
-                    {TOOLS_ITEMS.map(({ id, label, icon: Icon }) => (
-                        <button key={id} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
-                            <Icon className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{label}</span>
-                        </button>
-                    ))}
                 </div>
 
                 {/* Daily Vocab box */}
