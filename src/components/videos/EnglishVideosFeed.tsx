@@ -3,12 +3,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import YoutubeShortsPlayer from './YoutubeShortsPlayer';
 import type { YTShortItem } from './YTShortItem';
+import {
+    getLocalSavedVideos,
+    setLocalSavedVideos,
+    saveVideoToServer,
+    unsaveVideoFromServer,
+    type SavedVideoItem,
+} from '@/services/conversationLearningService';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 const LIMIT = 30;
 const PREFETCH_THRESHOLD = 5;
 const SEEN_KEY = 'll-videos-seen';
-const SAVED_KEY = 'll-videos-saved';
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 
@@ -29,12 +35,8 @@ function saveSeenIds(ids: Set<string>) {
 }
 
 function loadSavedIds(): Set<string> {
-    try { return new Set(JSON.parse(localStorage.getItem(SAVED_KEY) ?? '[]') as string[]); }
+    try { return new Set(getLocalSavedVideos().map(v => v.youtube_id)); }
     catch { return new Set(); }
-}
-
-function persistSavedIds(ids: Set<string>) {
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(Array.from(ids))); } catch { }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -117,9 +119,31 @@ export default function EnglishVideosFeed() {
     const handleSave = useCallback((item: YTShortItem) => {
         setSavedIds(prev => {
             const next = new Set(prev);
-            if (next.has(item.youtube_id)) next.delete(item.youtube_id);
-            else next.add(item.youtube_id);
-            persistSavedIds(next);
+            const current = getLocalSavedVideos();
+            if (next.has(item.youtube_id)) {
+                // unsave
+                next.delete(item.youtube_id);
+                setLocalSavedVideos(current.filter(v => v.youtube_id !== item.youtube_id));
+                unsaveVideoFromServer(item.youtube_id);
+            } else {
+                // save — store full metadata locally
+                next.add(item.youtube_id);
+                const viewCount = typeof item.view_count === 'string' ? parseInt(item.view_count) || undefined : item.view_count || undefined;
+                const durationSec = item.duration ? (() => { const p = item.duration.split(':').map(Number); return p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]; })() : undefined;
+                const videoItem: SavedVideoItem = {
+                    youtube_id: item.youtube_id,
+                    title: item.title,
+                    channel: item.channel_name || item.channel || '',
+                    thumbnail: item.thumb_url,
+                    view_count: viewCount,
+                    duration_sec: durationSec,
+                    youtube_url: item.youtube_url,
+                    source_tag: item.source_tag,
+                    saved_at: new Date().toISOString(),
+                };
+                setLocalSavedVideos([videoItem, ...current]);
+                saveVideoToServer(videoItem);
+            }
             return next;
         });
     }, []);

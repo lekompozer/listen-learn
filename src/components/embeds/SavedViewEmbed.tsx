@@ -5,7 +5,7 @@ import { ArrowLeft, BookOpen, AlignLeft, Video, Loader2, AlertCircle, RefreshCw 
 import {
     getSavedVocabulary,
     getSavedGrammar,
-    getSavedVideos,
+    getLocalSavedVideos,
     type SavedVocabularyItem,
     type SavedGrammarItem,
     type SavedVideoItem,
@@ -213,7 +213,7 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
 
     const loadVideos = useCallback(async () => {
         setLoading(true); setError(null);
-        try { const d = await getSavedVideos({ page: 1, page_size: 20 }); setVideos(d.videos); }
+        try { setVideos(getLocalSavedVideos()); }
         catch { setError('Failed to load saved videos'); }
         finally { setLoading(false); }
     }, []);

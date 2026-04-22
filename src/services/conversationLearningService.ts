@@ -1546,6 +1546,46 @@ export async function checkoutPreview(params: CheckoutPreviewRequest): Promise<C
 
 // ========== SAVED VIDEOS ==========
 
+const LOCAL_SAVED_VIDEOS_KEY = 'll-saved-videos-full';
+
+export function getLocalSavedVideos(): SavedVideoItem[] {
+    try { return JSON.parse(localStorage.getItem(LOCAL_SAVED_VIDEOS_KEY) ?? '[]'); }
+    catch { return []; }
+}
+
+export function setLocalSavedVideos(videos: SavedVideoItem[]) {
+    try { localStorage.setItem(LOCAL_SAVED_VIDEOS_KEY, JSON.stringify(videos)); } catch { }
+}
+
+/**
+ * Save a video to server (fire-and-forget — errors silently ignored)
+ * POST /api/v1/saved-videos
+ */
+export async function saveVideoToServer(item: SavedVideoItem): Promise<void> {
+    try {
+        const token = await getAuthToken();
+        await fetch(`${API_BASE_URL}/api/v1/saved-videos`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ youtube_id: item.youtube_id, youtube_url: item.youtube_url, title: item.title, channel: item.channel, thumbnail: item.thumbnail, view_count: item.view_count, duration_sec: item.duration_sec, source_tag: item.source_tag }),
+        });
+    } catch { /* silently ignore — local is source of truth */ }
+}
+
+/**
+ * Remove a saved video from server (fire-and-forget)
+ * DELETE /api/v1/saved-videos/:youtube_id
+ */
+export async function unsaveVideoFromServer(youtubeId: string): Promise<void> {
+    try {
+        const token = await getAuthToken();
+        await fetch(`${API_BASE_URL}/api/v1/saved-videos/${youtubeId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+    } catch { /* silently ignore */ }
+}
+
 export interface SavedVideoItem {
     youtube_id: string;
     title: string;
