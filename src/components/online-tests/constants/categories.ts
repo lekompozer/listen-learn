@@ -65,16 +65,16 @@ export const getValidCategoryValues = (): string[] => {
 export const categoryToApiValue = (id: string): string | undefined => {
     if (!id || id === 'all') return undefined;
     const map: Record<string, string> = {
-        language:        'Language',
+        language: 'Language',
         self_development: 'Self-Development',
-        exam_prep:       'Exam Prep',
-        math:            'Mathematics',
-        programming:     'Programming',
-        science:         'Science',
-        business:        'Business',
-        technology:      'Technology',
-        certification:   'Certification',
-        other:           'Other',
+        exam_prep: 'Exam Prep',
+        math: 'Mathematics',
+        programming: 'Programming',
+        science: 'Science',
+        business: 'Business',
+        technology: 'Technology',
+        certification: 'Certification',
+        other: 'Other',
     };
     return map[id] ?? id; // fallback: pass as-is (API is case-insensitive for simple names)
 };
