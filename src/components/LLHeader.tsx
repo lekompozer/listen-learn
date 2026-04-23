@@ -37,7 +37,6 @@ const TABS: { id: TabType; labelVi: string; labelEn: string; icon: React.Compone
     { id: 'conversations', labelVi: 'Hội Thoại', labelEn: 'Conversations', icon: MessageCircle },
     { id: 'podcast', labelVi: 'Podcast', labelEn: 'Podcast', icon: Radio },
     { id: 'videos', labelVi: 'Videos', labelEn: 'Videos', icon: Play },
-    { id: 'study-buddy', labelVi: 'Study Buddy', labelEn: 'Study Buddy', icon: Users },
 ];
 
 interface LLHeaderProps {

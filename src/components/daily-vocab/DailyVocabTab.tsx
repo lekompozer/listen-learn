@@ -12,8 +12,10 @@ import { AILearningEmbed } from '@/components/embeds/AILearningEmbed';
 import { SavedViewEmbed } from '@/components/embeds/SavedViewEmbed';
 import { logEvent } from 'firebase/analytics';
 import { analytics } from '@/lib/wordai-firebase';
+import { useTheme, useLanguage } from '@/contexts/AppContext';
 
 const SpeakWithAITab = dynamic(() => import('@/components/speak-with-ai/SpeakWithAITab'), { ssr: false });
+const StudyBuddyTab = dynamic(() => import('@/components/study-buddy/StudyBuddyTab'), { ssr: false });
 const DailyVocabClient = dynamic(
     () => import('@/components/daily-vocab/DailyVocabClient'),
     { ssr: false, loading: () => null }
@@ -23,7 +25,7 @@ const OnlineTestsView = dynamic(
     { ssr: false }
 );
 
-type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved' | 'speak';
+type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved' | 'speak' | 'study-buddy';
 
 interface DailyVocabTabProps {
     isDark: boolean;
@@ -152,7 +154,7 @@ const QUICK_ACTIONS: { id: VocabSection; label: string; icon: React.ElementType 
 ];
 const PRACTICE_ITEMS: { label: string; icon: React.ElementType; id: VocabSection | null }[] = [
     { label: 'Speak with AI', icon: Volume2, id: 'speak' },
-    { label: 'Study Buddy', icon: Users, id: null },
+    { label: 'Study Buddy', icon: Users, id: 'study-buddy' },
     { label: 'FreeTalk', icon: Mic, id: null },
 ];
 const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
@@ -266,6 +268,12 @@ function VocabNavRail({ isDark, section, onSelect }: {
     );
 }
 
+// ─── Study Buddy wrapper (reads lang from context) ────────────────────────────
+function StudyBuddyTabWrapper({ isDark }: { isDark: boolean }) {
+    const { isVietnamese } = useLanguage();
+    return <StudyBuddyTab isDark={isDark} isVi={isVietnamese} />;
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTabProps) {
     const [section, setSection] = useState<VocabSection>('daily-vocab');
@@ -301,6 +309,10 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTab
 
                 {section === 'speak' && (
                     <SpeakWithAITab />
+                )}
+
+                {section === 'study-buddy' && (
+                    <StudyBuddyTabWrapper isDark={isDark} />
                 )}
 
                 {section === 'wynai-music' && (

@@ -1235,6 +1235,112 @@ function HistoryModal({ isDark, isVi, onClose, onOpenSquad }: HistoryModalProps)
     return createPortal(card, document.body);
 }
 
+// ─── SquadChatPanel ────────────────────────────────────────────────────────────
+
+interface SquadChatPanelProps {
+    squadId: string;
+    isDark: boolean;
+    isVi: boolean;
+    currentUserId: string | null;
+    userDisplayName: string;
+    userPhotoURL: string | null;
+    onOpenDetail: () => void;
+    onClose: () => void;
+}
+
+function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, onClose }: SquadChatPanelProps) {
+    const [squad, setSquad] = useState<StudySquad | null>(null);
+    const [members, setMembers] = useState<StudyMember[]>([]);
+    const [isHost, setIsHost] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        setLoading(true);
+        getSquad(squadId).then(res => {
+            setSquad(res.squad);
+            setMembers(res.members);
+            setIsHost(res.is_host);
+        }).catch(() => { /* ignore */ }).finally(() => setLoading(false));
+    }, [squadId]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <RefreshCw className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+            </div>
+        );
+    }
+
+    if (!squad) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{t('Không tải được squad', 'Failed to load squad', isVi)}</p>
+            </div>
+        );
+    }
+
+    const langInfo = COMMON_LANGUAGES.find(l => l.id === squad.language);
+    const mtIcon = MEETING_TYPE_ICONS[squad.meeting_type] ?? '📚';
+
+    return (
+        <div className="flex flex-col h-full">
+            {/* Panel header */}
+            <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b
+                ${isDark ? 'border-white/8 bg-gray-800/40' : 'border-gray-200/60 bg-white/60'}`}>
+                <button
+                    onClick={onClose}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}
+                >
+                    <X className="w-4 h-4" />
+                </button>
+                <span className="text-base">{mtIcon}</span>
+                <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{squad.title}</p>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            <Users className="w-3 h-3 inline mr-0.5" />
+                            {squad.member_count}/{squad.max_members}
+                        </span>
+                        {langInfo && (
+                            <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {langInfo.flag} {isVi ? langInfo.labelVi : langInfo.labelEn}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <button
+                    onClick={onOpenDetail}
+                    className={`flex-shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors
+                        ${isDark ? 'border-white/10 text-gray-300 hover:bg-white/10 hover:text-white' : 'border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+                >
+                    {t('Chi tiết', 'Details', isVi)}
+                </button>
+            </div>
+
+            {/* Chat panel body */}
+            <div className="flex-1 overflow-hidden">
+                {currentUserId ? (
+                    <ChatPanel
+                        squadId={squadId}
+                        isHost={isHost}
+                        members={members}
+                        isDark={isDark}
+                        isVi={isVi}
+                        currentUserId={currentUserId}
+                    />
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
+                        <MessageSquare className={`w-8 h-8 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
+                        <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {t('Đăng nhập để xem chat', 'Login to view chat', isVi)}
+                        </p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // ─── StudyBuddyTab (main) ─────────────────────────────────────────────────────
 
 interface StudyBuddyTabProps {
@@ -1258,6 +1364,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [showDetailModal, setShowDetailModal] = useState(false);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const loadSquads = useCallback(async (opts: {
@@ -1303,151 +1410,199 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const userPhotoURL = user?.photoURL ?? null;
 
     return (
-        <div className={`flex flex-col h-full ${isDark ? 'bg-gray-900' : 'bg-[#c6d4d4]/30'}`}>
-            {/* Toolbar */}
-            <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b
-                ${isDark ? 'border-white/8 bg-gray-900/60' : 'border-gray-200/60 bg-white/60'}`}>
+        <div className={`flex h-full overflow-hidden ${isDark ? 'bg-gray-900' : 'bg-[#c6d4d4]/30'}`}>
 
-                {/* Search */}
-                <div className={`flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-xl border text-sm
-                    ${isDark ? 'bg-gray-800/60 border-white/8' : 'bg-white border-gray-200'}`}>
-                    <Search className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                    <input
-                        value={search}
-                        onChange={e => handleSearch(e.target.value)}
-                        placeholder={t('Tìm kiếm squad...', 'Search squads...', isVi)}
-                        className={`flex-1 bg-transparent outline-none text-sm ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+            {/* ── LEFT PANEL: search/filter + squad list ── */}
+            <div className={`flex flex-col flex-shrink-0 border-r overflow-hidden
+                ${selectedSquadId ? 'w-[320px]' : 'flex-1'}
+                ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
+
+                {/* Toolbar */}
+                <div className={`flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b flex-wrap
+                    ${isDark ? 'border-white/8 bg-gray-900/60' : 'border-gray-200/60 bg-white/60'}`}>
+
+                    {/* Search */}
+                    <div className={`flex items-center gap-1.5 flex-1 min-w-[120px] px-3 py-1.5 rounded-xl border text-sm
+                        ${isDark ? 'bg-gray-800/60 border-white/8' : 'bg-white border-gray-200'}`}>
+                        <Search className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        <input
+                            value={search}
+                            onChange={e => handleSearch(e.target.value)}
+                            placeholder={t('Tìm kiếm squad...', 'Search squads...', isVi)}
+                            className={`flex-1 bg-transparent outline-none text-sm ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                        />
+                    </div>
+
+                    {/* Meeting type filter */}
+                    <div className="relative">
+                        <select
+                            value={meetingTypeFilter}
+                            onChange={e => setMeetingTypeFilter(e.target.value as 'all' | MeetingType)}
+                            className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
+                                ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                        >
+                            <option value="all">{t('Tất cả', 'All', isVi)}</option>
+                            <option value="online">💻 {t('Online', 'Online', isVi)}</option>
+                            <option value="offline">🏠 {t('Offline', 'Offline', isVi)}</option>
+                            <option value="both">🌐 {t('Cả hai', 'Both', isVi)}</option>
+                        </select>
+                        <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                    </div>
+
+                    {/* Language filter */}
+                    <div className="relative">
+                        <select
+                            value={languageFilter}
+                            onChange={e => setLanguageFilter(e.target.value)}
+                            className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
+                                ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                        >
+                            <option value="">{t('Ngôn ngữ', 'Lang', isVi)}</option>
+                            {COMMON_LANGUAGES.map(l => (
+                                <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                    </div>
+
+                    {/* Sort: Hot / Latest buttons */}
+                    <div className={`flex items-center rounded-xl border overflow-hidden
+                        ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
+                        <button
+                            onClick={() => setSort('hot')}
+                            className={`text-xs px-2.5 py-1.5 font-medium transition-colors
+                                ${sort === 'hot'
+                                    ? 'bg-orange-500 text-white'
+                                    : isDark ? 'bg-gray-800/60 text-gray-400 hover:text-white' : 'bg-white text-gray-600 hover:text-gray-900'}`}
+                        >
+                            🔥 {t('Nóng', 'Hot', isVi)}
+                        </button>
+                        <button
+                            onClick={() => setSort('latest')}
+                            className={`text-xs px-2.5 py-1.5 font-medium transition-colors border-l
+                                ${sort === 'latest'
+                                    ? 'bg-blue-600 text-white'
+                                    : isDark ? 'bg-gray-800/60 border-white/8 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900'}`}
+                        >
+                            {t('Mới nhất', 'Latest', isVi)}
+                        </button>
+                    </div>
+
+                    {/* History */}
+                    {user && (
+                        <button
+                            onClick={() => setShowHistory(true)}
+                            className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
+                            title={t('Squad của tôi', 'My squads', isVi)}
+                        >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+
+                    {/* Refresh */}
+                    <button
+                        onClick={() => loadSquads()}
+                        className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
+                        title={t('Làm mới', 'Refresh', isVi)}
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
+
+                    {/* Create */}
+                    {user && (
+                        <button
+                            onClick={() => setShowCreate(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            {t('Tạo mới', 'Create', isVi)}
+                        </button>
+                    )}
+                </div>
+
+                {/* Squad list */}
+                <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+                    {loading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className={`w-full h-20 rounded-xl animate-pulse ${isDark ? 'bg-gray-800/60' : 'bg-white'}`} />
+                        ))
+                    ) : squads.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 gap-3">
+                            <Users className={`w-10 h-10 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
+                            <p className={`text-sm text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {search
+                                    ? t('Không tìm thấy squad nào', 'No squads found', isVi)
+                                    : t('Chưa có squad học tập nào.\nHãy tạo squad đầu tiên!', 'No study squads yet.\nCreate the first one!', isVi)}
+                            </p>
+                            {user && !search && (
+                                <button
+                                    onClick={() => setShowCreate(true)}
+                                    className="mt-1 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    {t('Tạo Study Squad', 'Create Study Squad', isVi)}
+                                </button>
+                            )}
+                        </div>
+                    ) : (
+                        <>
+                            {squads.map(squad => (
+                                <SquadCard
+                                    key={squad.id}
+                                    squad={squad}
+                                    isDark={isDark}
+                                    isVi={isVi}
+                                    onClick={() => setSelectedSquadId(squad.id)}
+                                />
+                            ))}
+                            {hasMore && (
+                                <button
+                                    onClick={() => loadSquads({ cursor: nextCursor ?? undefined, append: true })}
+                                    disabled={loadingMore}
+                                    className={`w-full py-2.5 text-sm rounded-xl border transition-colors
+                                        ${isDark ? 'border-white/8 text-gray-400 hover:text-white hover:bg-white/5' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                >
+                                    {loadingMore
+                                        ? <RefreshCw className="w-4 h-4 animate-spin mx-auto" />
+                                        : t('Tải thêm', 'Load more', isVi)}
+                                </button>
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* ── RIGHT PANEL: chat sidebar ── */}
+            {selectedSquadId ? (
+                <div className="flex-1 overflow-hidden min-w-0">
+                    <SquadChatPanel
+                        squadId={selectedSquadId}
+                        isDark={isDark}
+                        isVi={isVi}
+                        currentUserId={user?.uid ?? null}
+                        userDisplayName={userDisplayName}
+                        userPhotoURL={userPhotoURL}
+                        onOpenDetail={() => setShowDetailModal(true)}
+                        onClose={() => setSelectedSquadId(null)}
                     />
                 </div>
-
-                {/* Meeting type filter */}
-                <div className="relative">
-                    <select
-                        value={meetingTypeFilter}
-                        onChange={e => setMeetingTypeFilter(e.target.value as 'all' | MeetingType)}
-                        className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
-                            ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
-                    >
-                        <option value="all">{t('Tất cả', 'All', isVi)}</option>
-                        <option value="online">💻 {t('Trực tuyến', 'Online', isVi)}</option>
-                        <option value="offline">🏠 {t('Trực tiếp', 'Offline', isVi)}</option>
-                        <option value="both">🌐 {t('Cả hai', 'Both', isVi)}</option>
-                    </select>
-                    <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+            ) : (
+                <div className="flex-1 hidden md:flex flex-col items-center justify-center gap-3 px-8">
+                    <Users className={`w-12 h-12 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
+                    <p className={`text-sm text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {t('Chọn một squad để xem chat nhóm', 'Select a squad to view the group chat', isVi)}
+                    </p>
+                    {user && (
+                        <button
+                            onClick={() => setShowCreate(true)}
+                            className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            {t('Tạo Study Squad mới', 'Create a Study Squad', isVi)}
+                        </button>
+                    )}
                 </div>
-
-                {/* Language filter */}
-                <div className="relative">
-                    <select
-                        value={languageFilter}
-                        onChange={e => setLanguageFilter(e.target.value)}
-                        className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
-                            ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
-                    >
-                        <option value="">{t('Ngôn ngữ', 'Language', isVi)}</option>
-                        {COMMON_LANGUAGES.map(l => (
-                            <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                </div>
-
-                {/* Sort */}
-                <div className="relative">
-                    <select
-                        value={sort}
-                        onChange={e => setSort(e.target.value as typeof sort)}
-                        className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
-                            ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
-                    >
-                        <option value="hot">🔥 {t('Nóng', 'Hot', isVi)}</option>
-                        <option value="latest">{t('Mới nhất', 'Latest', isVi)}</option>
-                    </select>
-                    <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                </div>
-
-                {/* History */}
-                {user && (
-                    <button
-                        onClick={() => setShowHistory(true)}
-                        className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
-                        title={t('Squad của tôi', 'My squads', isVi)}
-                    >
-                        <CheckCheck className="w-3.5 h-3.5" />
-                    </button>
-                )}
-
-                {/* Refresh */}
-                <button
-                    onClick={() => loadSquads()}
-                    className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
-                    title={t('Làm mới', 'Refresh', isVi)}
-                >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-
-                {/* Create */}
-                {user && (
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        {t('Tạo mới', 'Create', isVi)}
-                    </button>
-                )}
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
-                {loading ? (
-                    Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className={`w-full h-24 rounded-xl animate-pulse ${isDark ? 'bg-gray-800/60' : 'bg-white'}`} />
-                    ))
-                ) : squads.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-3">
-                        <Users className={`w-12 h-12 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
-                        <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {search
-                                ? t('Không tìm thấy squad nào', 'No squads found', isVi)
-                                : t('Chưa có squad học tập nào. Hãy tạo squad đầu tiên!', 'No study squads yet. Create the first one!', isVi)}
-                        </p>
-                        {user && !search && (
-                            <button
-                                onClick={() => setShowCreate(true)}
-                                className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
-                            >
-                                <Plus className="w-4 h-4" />
-                                {t('Tạo Study Squad', 'Create Study Squad', isVi)}
-                            </button>
-                        )}
-                    </div>
-                ) : (
-                    <>
-                        {squads.map(squad => (
-                            <SquadCard
-                                key={squad.id}
-                                squad={squad}
-                                isDark={isDark}
-                                isVi={isVi}
-                                onClick={() => setSelectedSquadId(squad.id)}
-                            />
-                        ))}
-                        {hasMore && (
-                            <button
-                                onClick={() => loadSquads({ cursor: nextCursor ?? undefined, append: true })}
-                                disabled={loadingMore}
-                                className={`w-full py-2.5 text-sm rounded-xl border transition-colors
-                                    ${isDark ? 'border-white/8 text-gray-400 hover:text-white hover:bg-white/5' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                            >
-                                {loadingMore
-                                    ? <RefreshCw className="w-4 h-4 animate-spin mx-auto" />
-                                    : t('Tải thêm', 'Load more', isVi)}
-                            </button>
-                        )}
-                    </>
-                )}
-            </div>
+            )}
 
             {/* Modals */}
             {showCreate && (
@@ -1466,11 +1621,11 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     isDark={isDark}
                     isVi={isVi}
                     onClose={() => setShowHistory(false)}
-                    onOpenSquad={(id) => setSelectedSquadId(id)}
+                    onOpenSquad={(id) => { setSelectedSquadId(id); setShowHistory(false); }}
                 />
             )}
 
-            {selectedSquadId && (
+            {selectedSquadId && showDetailModal && (
                 <SquadDetailModal
                     squadId={selectedSquadId}
                     isDark={isDark}
@@ -1478,7 +1633,55 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     currentUserId={user?.uid ?? null}
                     userDisplayName={userDisplayName}
                     userPhotoURL={userPhotoURL}
-                    onClose={() => setSelectedSquadId(null)}
+                    onClose={() => setShowDetailModal(false
+            ) : (
+                <div className="flex-1 hidden md:flex flex-col items-center justify-center gap-3 px-8">
+                    <Users className={`w-12 h-12 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
+                    <p className={`text-sm text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {t('Chọn một squad để xem chat nhóm', 'Select a squad to view the group chat', isVi)}
+                    </p>
+                    {user && (
+                        <button
+                            onClick={() => setShowCreate(true)}
+                            className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            {t('Tạo Study Squad mới', 'Create a Study Squad', isVi)}
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {/* Modals */}
+            {showCreate && (
+                <CreateSquadModal
+                    isDark={isDark}
+                    isVi={isVi}
+                    onClose={() => setShowCreate(false)}
+                    onCreated={(squad) => { setShowCreate(false); setSquads(prev => [squad, ...prev]); setSelectedSquadId(squad.id); }}
+                    userDisplayName={userDisplayName}
+                    userPhotoURL={userPhotoURL}
+                />
+            )}
+
+            {showHistory && (
+                <HistoryModal
+                    isDark={isDark}
+                    isVi={isVi}
+                    onClose={() => setShowHistory(false)}
+                    onOpenSquad={(id) => { setSelectedSquadId(id); setShowHistory(false); }}
+                />
+            )}
+
+            {selectedSquadId && showDetailModal && (
+                <SquadDetailModal
+                    squadId={selectedSquadId}
+                    isDark={isDark}
+                    isVi={isVi}
+                    currentUserId={user?.uid ?? null}
+                    userDisplayName={userDisplayName}
+                    userPhotoURL={userPhotoURL}
+                    onClose={() => setShowDetailModal(false)}
                     onRefreshList={() => loadSquads()}
                 />
             )}
