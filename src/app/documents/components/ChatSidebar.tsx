@@ -13,6 +13,8 @@ import {
 } from '@/services/jan/janLocalHistoryService';
 
 // ── Gemma 4 Free (Cloudflare Workers AI) ───────────────────────────────
+// On desktop (Tauri): routed through Rust to avoid CORS — invoke('call_gemma4')
+// On web: direct fetch (requires backend proxy for production)
 const CF_ACCOUNT_ID = process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '';
 const CF_AI_TOKEN = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY || '';
 const GEMMA4_MODEL = '@cf/google/gemma-4-26b-a4b-it';
@@ -39,6 +41,12 @@ function canUseGemma4(): boolean { return getGemma4DailyUsage() < GEMMA4_DAILY_L
 async function callGemma4Direct(
     messages: { role: string; content: string }[]
 ): Promise<string> {
+    // Desktop: call Rust command (no CORS)
+    if (typeof window !== 'undefined' && (window as any).__TAURI_DESKTOP__) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<string>('call_gemma4', { messages });
+    }
+    // Web: direct fetch (add server proxy if CORS issues arise)
     const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${GEMMA4_MODEL}`;
     const res = await fetch(url, {
         method: 'POST',

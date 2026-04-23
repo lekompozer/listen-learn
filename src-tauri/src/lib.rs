@@ -1,6 +1,40 @@
 mod google_auth;
 mod edge_tts;
 
+/// Proxy Cloudflare Workers AI call from Rust to avoid browser CORS restrictions.
+/// Credentials come from env vars baked in via build.rs (same as OAuth creds).
+#[tauri::command]
+async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
+    let account_id = env!("CF_ACCOUNT_ID");
+    let api_key = env!("CF_AI_TOKEN");
+    let model = "@cf/google/gemma-4-26b-a4b-it";
+    let url = format!(
+        "https://api.cloudflare.com/client/v4/accounts/{}/ai/run/{}",
+        account_id, model
+    );
+    let client = reqwest::Client::new();
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({ "messages": messages, "max_tokens": 800 }))
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {e}"))?;
+    if !res.status().is_success() {
+        let status = res.status().as_u16();
+        let body = res.text().await.unwrap_or_default();
+        return Err(format!("Gemma4 API error {status}: {body}"));
+    }
+    let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let text = data["result"]["response"]
+        .as_str()
+        .or_else(|| data["choices"][0]["message"]["content"].as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok(text)
+}
+
 use tauri::{WebviewWindowBuilder, WebviewUrl};
 
 /// Open a URL in the system default browser (for SePay payment, OAuth, etc.)
@@ -200,6 +234,7 @@ pub fn run() {
             read_audio_files_in_dir,
             copy_files_to_playlist_dir,
             edge_tts::get_edge_tts_audio,
+            call_gemma4,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");

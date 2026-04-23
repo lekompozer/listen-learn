@@ -21,5 +21,19 @@ fn main() {
         println!("cargo:rustc-env=GOOGLE_CLIENT_SECRET={}", v);
     }
 
+    // Bake Cloudflare Workers AI credentials
+    if let Ok(v) = std::env::var("NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID") {
+        println!("cargo:rustc-env=CF_ACCOUNT_ID={}", v);
+    } else {
+        println!("cargo:rustc-env=CF_ACCOUNT_ID=");
+    }
+    if let Ok(v) = std::env::var("NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY") {
+        println!("cargo:rustc-env=CF_AI_TOKEN={}", v);
+    } else {
+        println!("cargo:rustc-env=CF_AI_TOKEN=");
+    }
+    println!("cargo:rerun-if-env-changed=NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID");
+    println!("cargo:rerun-if-env-changed=NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY");
+
     tauri_build::build()
 }
