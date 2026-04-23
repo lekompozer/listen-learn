@@ -110,19 +110,27 @@ export async function callDeepSeek(
 }
 
 /** Build system prompt for conversation practice on a given topic */
-export function buildSystemPrompt(topic: string, lang: 'vi' | 'en'): string {
+export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: string): string {
     const langNote = lang === 'vi'
         ? 'Respond in English. The user may speak in Vietnamese or broken English — always respond in English to help them practice.'
         : 'Respond in clear, natural English.';
 
+    const whoAmI = role
+        ? `You are playing the role of ${role}. Stay in character throughout the conversation while helping the user practice English.`
+        : `You are a friendly English conversation partner helping a learner practice speaking.`;
+
+    const topicLine = topic && topic.toLowerCase() !== 'general'
+        ? `Today's topic: "${topic}".`
+        : '';
+
     return [
-        `You are a friendly English conversation partner helping a learner practice speaking.`,
-        `Today's topic: "${topic}".`,
+        whoAmI,
+        topicLine,
         langNote,
         `Keep responses concise (2-4 sentences). Be encouraging and natural.`,
         `IMPORTANT: The user's messages are transcribed by Speech-to-Text software which often produces errors — wrong words, missing words, or incorrect grammar. Try to understand their intended meaning even if the text looks garbled.`,
         `After each reply, add a new line starting with "💬 Correction:" then write what the user most likely meant to say, rewritten with correct English grammar and vocabulary. Example format: "💬 Correction: I want to go to the market tomorrow."`,
         `If their speech was already clear and correct, write "💬 Correction: ✓ Great, that was correct!"`,
         `Do not use markdown in your main reply. Plain spoken text only for the main reply. The Correction line may use the exact format above.`,
-    ].join(' ');
+    ].filter(Boolean).join(' ');
 }

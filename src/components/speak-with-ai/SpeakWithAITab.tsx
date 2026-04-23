@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Mic, MicOff, Plus, Trash2, MessageSquare, ChevronLeft,
     Loader2, AlertCircle, Volume2, CheckCircle2, ChevronDown,
-    Minimize2, Send, X,
+    Minimize2, Send, X, Upload,
 } from 'lucide-react';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { callDeepSeek, buildSystemPrompt, callGemma4, canUseGemma4, incrementGemma4DailyUsage, getGemma4DailyUsage, type DeepSeekMessage } from '@/hooks/useDeepSeekChat';
@@ -43,6 +44,183 @@ const VOICES: { value: string; label: string }[] = [
     { value: 'en-GB-SoniaNeural', label: 'Sonia (UK Female)' },
     { value: 'en-AU-NatashaNeural', label: 'Natasha (AU Female)' },
 ];
+
+// ── New Conversation Modal ────────────────────────────────────────────────────
+interface NewConvoModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onCreate: (topic: string, rolePrompt: string, roleEmoji: string, avatarDataUrl: string | null) => void;
+    isDark: boolean;
+    t: (vi: string, en: string) => string;
+}
+
+function NewConvoModal({ isOpen, onClose, onCreate, isDark, t }: NewConvoModalProps) {
+    const [roleText, setRoleText] = useState('');
+    const [topicValue, setTopicValue] = useState('');
+    const [isGeneral, setIsGeneral] = useState(false);
+    const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+    const avatarInputRef = useRef<HTMLInputElement>(null);
+    const roleInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isOpen) setTimeout(() => roleInputRef.current?.focus(), 80);
+        else {
+            setRoleText('');
+            setTopicValue('');
+            setIsGeneral(false);
+            setAvatarDataUrl(null);
+        }
+    }, [isOpen]);
+
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setAvatarDataUrl(reader.result as string);
+        reader.readAsDataURL(file);
+    };
+
+    const handleCreate = () => {
+        const topic = isGeneral ? 'General' : topicValue.trim();
+        if (!topic) return;
+        const rolePrompt = roleText.trim() || 'a friendly English conversation partner';
+        onCreate(topic, rolePrompt, '🤖', avatarDataUrl);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <div className={`relative w-full max-w-sm max-h-[90vh] flex flex-col rounded-2xl shadow-2xl
+                ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+                {/* Header */}
+                <div className={`flex-shrink-0 flex items-center justify-between px-5 py-4 border-b rounded-t-2xl
+                    ${isDark ? 'border-white/10 bg-teal-900/20' : 'border-gray-200 bg-teal-50'}`}>
+                    <div>
+                        <p className={`text-base font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {t('Tạo nhân vật AI', 'Create AI Character')}
+                        </p>
+                        <p className={`text-[11px] mt-0.5 ${isDark ? 'text-teal-400' : 'text-teal-600'}`}>
+                            {t('Đặt vai trò, chủ đề và avatar cho AI', 'Set role, topic and avatar for AI')}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors
+                        ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+                    {/* Avatar + Role in one row */}
+                    <div className="flex items-start gap-4">
+                        {/* Avatar circle */}
+                        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                            <button
+                                onClick={() => avatarInputRef.current?.click()}
+                                className={`relative w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors
+                                    ${isDark ? 'border-gray-600 hover:border-teal-500 bg-gray-700' : 'border-gray-300 hover:border-teal-500 bg-gray-100'}`}
+                                title={t('Tải ảnh đại diện (lưu local)', 'Upload avatar (stored locally)')}
+                            >
+                                {avatarDataUrl
+                                    ? <img src={avatarDataUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                    : <span className="text-2xl">🤖</span>
+                                }
+                                <div className={`absolute inset-0 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity
+                                    ${isDark ? 'bg-black/60' : 'bg-white/70'}`}>
+                                    <Upload className="w-5 h-5 text-teal-500" />
+                                </div>
+                            </button>
+                            <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                            <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Avatar</span>
+                        </div>
+
+                        {/* Role free-text */}
+                        <div className="flex-1 min-w-0">
+                            <label className={`block text-xs font-semibold mb-1.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                {t('Vai trò AI', 'AI Role')}
+                            </label>
+                            <input
+                                ref={roleInputRef}
+                                value={roleText}
+                                onChange={e => setRoleText(e.target.value)}
+                                placeholder={t(
+                                    'VD: bác sĩ, người yêu, giáo sư...',
+                                    'e.g. a doctor, a lover, a professor...',
+                                )}
+                                className={`w-full px-3 py-2.5 text-sm rounded-xl border outline-none transition-colors
+                                    ${isDark ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-teal-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
+                            />
+                            <p className={`text-[10px] mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {t('Để trống = AI là bạn luyện nói tiếng Anh thông thường', 'Leave blank = friendly English speaking partner')}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Topic */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-2">
+                            <p className={`text-xs font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                {t('Chủ đề', 'Topic')}
+                            </p>
+                            <label className="flex items-center gap-1.5 ml-auto cursor-pointer">
+                                <div
+                                    onClick={() => setIsGeneral(v => !v)}
+                                    className={`relative w-8 h-4 rounded-full transition-colors ${isGeneral ? 'bg-teal-500' : isDark ? 'bg-gray-700' : 'bg-gray-300'}`}
+                                >
+                                    <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${isGeneral ? 'translate-x-4 left-0.5' : 'left-0.5'}`} />
+                                </div>
+                                <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {t('Chung chung', 'General')}
+                                </span>
+                            </label>
+                        </div>
+                        {!isGeneral && (
+                            <input
+                                value={topicValue}
+                                onChange={e => setTopicValue(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
+                                placeholder={t('VD: Travel, Food, Job Interview...', 'e.g. Travel, Food, Job Interview...')}
+                                className={`w-full px-3 py-2.5 text-sm rounded-lg border outline-none transition-colors
+                                    ${isDark ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-teal-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
+                            />
+                        )}
+                    </div>
+
+                    {/* Language note */}
+                    <div className={`px-3 py-2.5 rounded-xl text-[11px] leading-relaxed
+                        ${isDark ? 'bg-amber-900/20 text-amber-300' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                        🔊 {t(
+                            'Chỉ hỗ trợ giọng tiếng Anh (Edge TTS / macOS Say). Bạn có thể nói tiếng Việt nhưng AI sẽ luôn trả lời bằng tiếng Anh.',
+                            'Only English voices supported (Edge TTS / macOS Say). You may speak in Vietnamese but AI will always reply in English.',
+                        )}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className={`flex-shrink-0 px-5 py-4 border-t flex gap-3 rounded-b-2xl
+                    ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                    <button
+                        onClick={onClose}
+                        className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors
+                            ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                        {t('Hủy', 'Cancel')}
+                    </button>
+                    <button
+                        onClick={handleCreate}
+                        disabled={!isGeneral && !topicValue.trim()}
+                        className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-40 transition-colors"
+                    >
+                        {t('Tạo nhân vật', 'Create Character')}
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body,
+    );
+}
 
 // ── Error logger → localStorage ─────────────────────────────────────────────
 function logError(ctx: string, msg: string | undefined) {
@@ -324,8 +502,9 @@ export default function SpeakWithAITab() {
     const [interimText, setInterimText] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
     const [topic, setTopic] = useState('');
-    const [showTopicInput, setShowTopicInput] = useState(false);
-    const [newTopicValue, setNewTopicValue] = useState('');
+    const [convoRole, setConvoRole] = useState('');
+    const [convoAvatar, setConvoAvatar] = useState<string | null>(null);
+    const [showNewConvoModal, setShowNewConvoModal] = useState(false);
     const [selectedVoice, setSelectedVoice] = useState(VOICES[0].value);
     const [dailyUsage, setDailyUsage] = useState(0);
     const [gemma4Usage, setGemma4Usage] = useState(() => getGemma4DailyUsage());
@@ -394,20 +573,24 @@ export default function SpeakWithAITab() {
         setActiveConvoId(convo.id);
         setMessages(convo.messages);
         setTopic(convo.topic);
+        setConvoRole(convo.role ?? '');
+        setConvoAvatar(convo.avatarDataUrl ?? null);
         setAppState('idle');
         setInterimText('');
         setErrorMsg('');
     }, []);
 
-    // Create new conversation
-    const handleNewConvo = useCallback(() => {
-        if (!newTopicValue.trim()) return;
-        const convo = createConversation(newTopicValue.trim());
+    // Create new conversation from modal
+    const handleNewConvoCreate = useCallback((
+        newTopic: string,
+        rolePrompt: string,
+        _roleEmoji: string,
+        avatarDataUrl: string | null,
+    ) => {
+        const convo = createConversation(newTopic, rolePrompt, undefined, avatarDataUrl ?? undefined);
         setConversations(listConversations());
-        setShowTopicInput(false);
-        setNewTopicValue('');
         openConvo(convo);
-    }, [newTopicValue, openConvo]);
+    }, [openConvo]);
 
     // Handle final transcript → send to DeepSeek
     const handleSpeechEnd = useCallback(async (webSpeechTranscript: string) => {
@@ -485,7 +668,7 @@ export default function SpeakWithAITab() {
             content: m.text,
         }));
 
-        const systemPrompt = buildSystemPrompt(topic, isVietnamese ? 'vi' : 'en');
+        const systemPrompt = buildSystemPrompt(topic, isVietnamese ? 'vi' : 'en', convoRole || undefined);
         const deepseekMessages: DeepSeekMessage[] = [
             { role: 'system', content: systemPrompt },
             ...history,
@@ -737,8 +920,8 @@ export default function SpeakWithAITab() {
         const userMsg = { role: 'user' as const, text };
         setWidgetMessages(prev => [...prev, userMsg]);
         setWidgetLoading(true);
-        const systemPrompt = `You are an English speaking coach. Help the user prepare natural English phrases and sentences to use in spoken conversation. 
-When user asks for phrases on a topic, give 3-5 short example sentences they can actually say out loud. 
+        const systemPrompt = `You are an English speaking coach. Help the user prepare natural English phrases and sentences to use in spoken conversation.
+When user asks for phrases on a topic, give 3-5 short example sentences they can actually say out loud.
 Keep responses concise and practical. If speaking about topic "${topic || 'general conversation'}", tailor your examples to that topic.`;
         const msgs: DeepSeekMessage[] = [
             { role: 'system', content: systemPrompt },
@@ -775,35 +958,13 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                             Conversations
                         </span>
                         <button
-                            onClick={() => setShowTopicInput(v => !v)}
+                            onClick={() => setShowNewConvoModal(true)}
                             className={`p-1 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
                             title="New conversation"
                         >
                             <Plus className="w-4 h-4" />
                         </button>
                     </div>
-
-                    {/* New topic input */}
-                    {showTopicInput && (
-                        <div className="px-3 pb-2 space-y-1.5">
-                            <input
-                                autoFocus
-                                value={newTopicValue}
-                                onChange={e => setNewTopicValue(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') handleNewConvo(); if (e.key === 'Escape') setShowTopicInput(false); }}
-                                placeholder={t('Chủ đề (VD: Travel)...', 'Topic (e.g. Travel)...')}
-                                className={`w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none transition-colors
-                                    ${isDark ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-teal-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
-                            />
-                            <button
-                                onClick={handleNewConvo}
-                                disabled={!newTopicValue.trim()}
-                                className="w-full text-xs py-1.5 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-500 disabled:opacity-40 transition-colors"
-                            >
-                                {t('Tạo', 'Create')}
-                            </button>
-                        </div>
-                    )}
 
                     {/* Conversation list */}
                     <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
@@ -816,16 +977,25 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                             <button
                                 key={convo.id}
                                 onClick={() => openConvo(convo)}
-                                className={`w-full text-left rounded-xl px-3 py-2 text-xs font-medium transition-all flex items-center gap-2 group
+                                className={`w-full text-left rounded-xl px-2 py-2 text-xs font-medium transition-all flex items-center gap-2 group
                                     ${activeConvoId === convo.id
                                         ? isDark ? 'bg-teal-600/20 text-teal-300' : 'bg-teal-50 text-teal-700'
                                         : isDark ? 'text-gray-300 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'}`}
                             >
-                                <MessageSquare className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
-                                <span className="flex-1 truncate">{convo.topic}</span>
+                                {/* Avatar or icon */}
+                                {convo.avatarDataUrl
+                                    ? <img src={convo.avatarDataUrl} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                                    : <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center text-sm ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>🤖</div>
+                                }
+                                <div className="flex-1 min-w-0">
+                                    <p className="truncate leading-tight">{convo.topic}</p>
+                                    {convo.role && (
+                                        <p className={`text-[10px] truncate leading-tight mt-0.5 opacity-60`}>{convo.role}</p>
+                                    )}
+                                </div>
                                 <button
                                     onClick={e => handleDeleteConvo(convo.id, e)}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-500 p-0.5 rounded"
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-500 p-0.5 rounded flex-shrink-0"
                                     title="Delete"
                                 >
                                     <Trash2 className="w-3 h-3" />
@@ -872,9 +1042,18 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                         <ChevronLeft className={`w-4 h-4 transition-transform ${showSidebar ? '' : 'rotate-180'}`} />
                     </button>
                     {topic ? (
-                        <span className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            {topic}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            {convoAvatar
+                                ? <img src={convoAvatar} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                                : <span className="text-base flex-shrink-0">🤖</span>
+                            }
+                            <div className="min-w-0">
+                                <p className={`text-sm font-semibold truncate leading-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>{topic}</p>
+                                {convoRole && (
+                                    <p className={`text-[10px] truncate leading-tight ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{convoRole}</p>
+                                )}
+                            </div>
+                        </div>
                     ) : (
                         <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                             {t('Chọn hoặc tạo hội thoại mới', 'Select or create a conversation')}
@@ -943,7 +1122,7 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                                 </p>
                             </div>
                             <button
-                                onClick={() => { setShowTopicInput(true); setShowSidebar(true); }}
+                                onClick={() => { setShowNewConvoModal(true); setShowSidebar(true); }}
                                 className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-500 active:scale-95 transition-all"
                             >
                                 <Plus className="w-4 h-4 inline mr-1.5" />
@@ -1049,6 +1228,15 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                     </div>
                 )}
             </div>
+
+            {/* New Conversation Modal */}
+            <NewConvoModal
+                isOpen={showNewConvoModal}
+                onClose={() => setShowNewConvoModal(false)}
+                onCreate={handleNewConvoCreate}
+                isDark={isDark}
+                t={t}
+            />
 
             {/* CSS keyframes */}
             <style>{`

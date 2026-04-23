@@ -12,6 +12,9 @@ export interface SpeakMessage {
 export interface SpeakConversation {
     id: string;
     topic: string;
+    role?: string;         // AI prompt role e.g. "a friendly doctor"
+    roleEmoji?: string;    // display emoji e.g. "👨‍⚕️"
+    avatarDataUrl?: string; // local base64 avatar
     createdAt: number;
     messages: SpeakMessage[];
 }
@@ -103,10 +106,18 @@ export function getConversation(id: string): SpeakConversation | null {
     return listConversations().find((c) => c.id === id) ?? null;
 }
 
-export function createConversation(topic: string): SpeakConversation {
+export function createConversation(
+    topic: string,
+    role?: string,
+    roleEmoji?: string,
+    avatarDataUrl?: string,
+): SpeakConversation {
     const convo: SpeakConversation = {
         id: crypto.randomUUID(),
         topic,
+        role: role || undefined,
+        roleEmoji: roleEmoji || undefined,
+        avatarDataUrl: avatarDataUrl || undefined,
         createdAt: Date.now(),
         messages: [],
     };
