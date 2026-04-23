@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import LLHeader from './LLHeader';
+import { OnboardingWelcome } from './OnboardingWelcome';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
@@ -250,6 +251,8 @@ export default function ListenLearnApp() {
 
     return (
         <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-[#c6d4d4] text-gray-900'}`}>
+            {/* First-run onboarding tour */}
+            <OnboardingWelcome />
             {/* macOS traffic lights area — 28px padding above header */}
             <div className={`pt-[28px] ${isDark ? 'bg-gray-900/80' : 'bg-white/85'}`} data-tauri-drag-region style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
                 <LLHeader

@@ -2,20 +2,12 @@
 
 /**
  * LLHeader — compact draggable title bar for WynAI Listen & Learn desktop app.
- *
- * Features:
- * - data-tauri-drag-region → window dragging
- * - 4 tab buttons: Daily Vocab | Songs | Conversations | Podcast
- * - Language toggle (VI/EN)
- * - Login button (Google OAuth via Tauri system browser or web popup)
- * - User avatar + name when logged in
- * - Crown icon → Upgrade button for non-premium users
- * - Auto-update check & install
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users,
+    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play,
+    Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, ChevronDown, ExternalLink,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -31,13 +23,72 @@ function t(vi: string, en: string, isVi: boolean) {
 const isTauriDesktop = () =>
     typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).__TAURI_DESKTOP__;
 
-const TABS: { id: TabType; labelVi: string; labelEn: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'daily-vocab', labelVi: 'Từ Vựng', labelEn: 'Vocab', icon: BookOpen },
-    { id: 'songs', labelVi: 'Bài Hát', labelEn: 'Songs', icon: Music },
-    { id: 'conversations', labelVi: 'Hội Thoại', labelEn: 'Conversations', icon: MessageCircle },
-    { id: 'podcast', labelVi: 'Podcast', labelEn: 'Podcast', icon: Radio },
-    { id: 'videos', labelVi: 'Videos', labelEn: 'Videos', icon: Play },
+// ─── Tab definitions with tooltips ───────────────────────────────────────────
+const TABS: {
+    id: TabType;
+    labelVi: string;
+    labelEn: string;
+    tooltipVi: string;
+    tooltipEn: string;
+    icon: React.ComponentType<{ className?: string }>;
+}[] = [
+    {
+        id: 'daily-vocab',
+        labelVi: 'Từ Vựng', labelEn: 'Vocab',
+        tooltipVi: 'Flashcard từ vựng hàng ngày — vuốt dọc để đổi từ, vuốt ngang để lưu',
+        tooltipEn: 'Daily vocabulary flashcards — swipe to browse, swipe right to save',
+        icon: BookOpen,
+    },
+    {
+        id: 'songs',
+        labelVi: 'Bài Hát', labelEn: 'Songs',
+        tooltipVi: 'Học tiếng Anh qua lời bài hát — tap từ để tra nghĩa',
+        tooltipEn: 'Learn English through song lyrics — tap words to look up meanings',
+        icon: Music,
+    },
+    {
+        id: 'conversations',
+        labelVi: 'Hội Thoại', labelEn: 'Conversations',
+        tooltipVi: '⭐ Lộ trình học chính — luyện hội thoại AI theo bài học có cấu trúc, dùng Points. Đây là tính năng cốt lõi của app!',
+        tooltipEn: '⭐ Core learning path — AI conversation practice with structured lessons, uses Points. This is the heart of the app!',
+        icon: MessageCircle,
+    },
+    {
+        id: 'podcast',
+        labelVi: 'Podcast', labelEn: 'Podcast',
+        tooltipVi: 'Luyện nghe với Podcast tiếng Anh thực tế từ nhiều chủ đề',
+        tooltipEn: 'Improve listening with real English podcasts across various topics',
+        icon: Radio,
+    },
+    {
+        id: 'videos',
+        labelVi: 'Videos', labelEn: 'Videos',
+        tooltipVi: 'Học qua video ngắn — TikTok, YouTube, clip giáo dục',
+        tooltipEn: 'Learn through short videos — TikTok, YouTube, educational clips',
+        icon: Play,
+    },
 ];
+
+// ─── Simple tooltip wrapper ───────────────────────────────────────────────────
+function TabTooltip({ text, isDark, children }: { text: string; isDark: boolean; children: React.ReactNode }) {
+    return (
+        <div className="relative group/tt">
+            {children}
+            <div className={`
+                pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 z-[200]
+                w-56 px-3 py-2 rounded-xl text-xs leading-relaxed text-center shadow-xl
+                opacity-0 group-hover/tt:opacity-100 transition-opacity duration-150
+                ${isDark ? 'bg-gray-700 text-gray-100 border border-white/10' : 'bg-gray-900 text-white'}
+            `}>
+                {text}
+                {/* arrow */}
+                <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-1.5 overflow-hidden`}>
+                    <span className={`block w-3 h-3 rotate-45 ${isDark ? 'bg-gray-700' : 'bg-gray-900'} -mt-1.5`} />
+                </span>
+            </div>
+        </div>
+    );
+}
 
 interface LLHeaderProps {
     activeTab: TabType;
@@ -56,19 +107,28 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
 
-    type UpdateStatus = 'checking' | 'available' | 'upToDate' | 'error';
-    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('checking');
+    type UpdateStatus = 'idle' | 'checking' | 'available' | 'upToDate';
+    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
     const [updateVersion, setUpdateVersion] = useState('');
-    const [installing, setInstalling] = useState(false);
+    const [updateDownloadUrl, setUpdateDownloadUrl] = useState('');
 
+    // ─── Check latest version via direct JSON fetch (no signature required) ───
     useEffect(() => {
         if (!isTauriDesktop()) { setUpdateStatus('upToDate'); return; }
+        setUpdateStatus('checking');
         (async () => {
             try {
                 const { invoke } = await import('@tauri-apps/api/core');
-                const result = await invoke<{ available: boolean; version?: string }>('check_for_updates');
-                if (result.available && result.version) {
-                    setUpdateVersion(result.version);
+                const result = await invoke<{
+                    available: boolean;
+                    latestVersion: string;
+                    currentVersion: string;
+                    downloadUrl: string;
+                    notes: string;
+                }>('check_latest_version');
+                if (result.available) {
+                    setUpdateVersion(result.latestVersion);
+                    setUpdateDownloadUrl(result.downloadUrl);
                     setUpdateStatus('available');
                 } else {
                     setUpdateStatus('upToDate');
@@ -78,6 +138,18 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
             }
         })();
     }, []);
+
+    // ─── Open download URL in browser ─────────────────────────────────────────
+    const handleOpenDownload = async () => {
+        if (!updateDownloadUrl) return;
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('open_url', { url: updateDownloadUrl });
+        } catch {
+            window.open(updateDownloadUrl, '_blank');
+        }
+        setUserMenuOpen(false);
+    };
 
     // Close user menu on outside click
     useEffect(() => {
@@ -89,18 +161,6 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
-
-    const handleInstallUpdate = async () => {
-        if (installing) return;
-        setInstalling(true);
-        try {
-            const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('download_and_install_update');
-        } catch (e) {
-            console.error('Update install failed:', e);
-            setInstalling(false);
-        }
-    };
 
     const handleLogin = async () => {
         setSigningIn(true);
@@ -143,7 +203,7 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 <span className={`text-xs font-semibold hidden sm:block ${isDark ? 'text-white/70' : 'text-gray-700'}`}>Listen &amp; Learn by WynAI</span>
             </div>
 
-            {/* Center: tab buttons — shifted right 160px to clear sidebar toggle area */}
+            {/* Center: tab buttons with tooltips */}
             <div
                 className="flex items-center gap-1 ml-[160px]"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -151,19 +211,25 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 {TABS.map(tab => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
+                    const tooltip = isVietnamese ? tab.tooltipVi : tab.tooltipEn;
+                    const isCore = tab.id === 'conversations';
                     return (
-                        <button
-                            key={tab.id}
-                            onMouseDown={e => e.stopPropagation()}
-                            onClick={() => onTabChange(tab.id)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
-                                ${isActive
-                                    ? 'bg-gradient-to-r from-[#007574] to-[#189593] text-white'
-                                    : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-black/10'}`}
-                        >
-                            <Icon className="w-3.5 h-3.5" />
-                            <span>{isVietnamese ? tab.labelVi : tab.labelEn}</span>
-                        </button>
+                        <TabTooltip key={tab.id} text={tooltip} isDark={isDark}>
+                            <button
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={() => onTabChange(tab.id)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all relative
+                                    ${isActive
+                                        ? 'bg-gradient-to-r from-[#007574] to-[#189593] text-white'
+                                        : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-black/10'}`}
+                            >
+                                <Icon className="w-3.5 h-3.5" />
+                                <span>{isVietnamese ? tab.labelVi : tab.labelEn}</span>
+                                {isCore && !isActive && (
+                                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" />
+                                )}
+                            </button>
+                        </TabTooltip>
                     );
                 })}
             </div>
@@ -224,13 +290,16 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 {isLoading ? (
                     <div className="w-6 h-6 rounded-full bg-white/10 animate-pulse" />
                 ) : user ? (
-                    /* User dropdown — contains Up to date + Logout */
                     <div ref={userMenuRef} className="relative">
+                        {/* User button — pulses blue when update available */}
                         <button
                             onMouseDown={e => e.stopPropagation()}
                             onClick={() => setUserMenuOpen(o => !o)}
                             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors
+                                ${updateStatus === 'available'
+                                    ? 'text-blue-400 bg-blue-500/10 animate-pulse hover:animate-none hover:bg-blue-500/20'
+                                    : isDark ? 'text-gray-300 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                         >
                             {user.photoURL
                                 ? <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" />
@@ -241,11 +310,12 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                             <span className="max-w-[80px] truncate hidden sm:block">
                                 {user.displayName?.split(' ').slice(-1)[0] ?? user.email?.split('@')[0]}
                             </span>
+                            <ChevronDown className={`w-3 h-3 transition-transform ${userMenuOpen ? 'rotate-180' : ''} ${updateStatus === 'available' ? 'text-blue-400' : isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                         </button>
 
                         {userMenuOpen && (
                             <div
-                                className={`absolute right-0 top-full mt-1 w-52 rounded-xl shadow-xl border z-50 py-1 ${isDark ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-200'}`}
+                                className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border z-50 py-1 ${isDark ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-200'}`}
                                 onMouseDown={e => e.stopPropagation()}
                             >
                                 {/* User info */}
@@ -259,33 +329,35 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                                 </div>
 
                                 {/* Update status */}
-                                {updateStatus !== 'checking' && (
+                                {updateStatus === 'available' ? (
                                     <button
-                                        onClick={updateStatus === 'available' && !installing ? handleInstallUpdate : undefined}
-                                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors
-                                            ${updateStatus === 'available' && !installing
-                                                ? 'text-emerald-400 hover:bg-emerald-600/20 cursor-pointer'
-                                                : installing
-                                                    ? 'text-emerald-400/60 cursor-default'
-                                                    : isDark ? 'text-gray-500 cursor-default' : 'text-gray-400 cursor-default'}`}
+                                        onClick={handleOpenDownload}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/10 transition-colors"
                                     >
-                                        {installing
-                                            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>{isVietnamese ? 'Đang cài...' : 'Updating...'}</span></>
-                                            : updateStatus === 'available'
-                                                ? <><Download className="w-3.5 h-3.5" /><span>{isVietnamese ? `Cập nhật v${updateVersion}` : `Update to v${updateVersion}`}</span></>
-                                                : <><RefreshCw className="w-3.5 h-3.5" /><span>{isVietnamese ? 'Đang dùng bản mới nhất' : 'Up to date'}</span></>
-                                        }
+                                        <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                        <div className="flex-1 text-left">
+                                            <div className="font-semibold">{isVietnamese ? `Tải bản mới v${updateVersion}` : `Download v${updateVersion}`}</div>
+                                            <div className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{isVietnamese ? 'Mở trình duyệt để tải' : 'Opens browser to download'}</div>
+                                        </div>
+                                        <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
                                     </button>
-                                )}
+                                ) : updateStatus === 'upToDate' ? (
+                                    <div className={`flex items-center gap-2 px-3 py-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <span>{isVietnamese ? 'Đang dùng bản mới nhất' : 'Up to date'}</span>
+                                    </div>
+                                ) : null}
 
                                 {/* Logout */}
-                                <button
-                                    onClick={() => { setUserMenuOpen(false); signOut(); }}
-                                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-red-400 hover:bg-white/5' : 'text-gray-600 hover:text-red-500 hover:bg-gray-50'}`}
-                                >
-                                    <LogOut className="w-3.5 h-3.5" />
-                                    <span>{t('Đăng xuất', 'Sign out', isVietnamese)}</span>
-                                </button>
+                                <div className={`border-t ${isDark ? 'border-white/10' : 'border-gray-100'} mt-1 pt-1`}>
+                                    <button
+                                        onClick={() => { setUserMenuOpen(false); signOut(); }}
+                                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-red-400 hover:bg-white/5' : 'text-gray-600 hover:text-red-500 hover:bg-gray-50'}`}
+                                    >
+                                        <LogOut className="w-3.5 h-3.5" />
+                                        <span>{t('Đăng xuất', 'Sign out', isVietnamese)}</span>
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -307,3 +379,4 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
         </header>
     );
 }
+

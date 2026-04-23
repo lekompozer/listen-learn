@@ -83,6 +83,69 @@ fn get_app_build_info() -> serde_json::Value {
     })
 }
 
+/// Compare two semver strings. Returns true if `latest` > `current`.
+fn semver_is_newer(latest: &str, current: &str) -> bool {
+    let parse = |s: &str| -> (u32, u32, u32) {
+        let parts: Vec<u32> = s.split('.').filter_map(|p| p.parse().ok()).collect();
+        (
+            parts.first().copied().unwrap_or(0),
+            parts.get(1).copied().unwrap_or(0),
+            parts.get(2).copied().unwrap_or(0),
+        )
+    };
+    parse(latest) > parse(current)
+}
+
+/// Fetch latest.json from R2 and compare with current version.
+/// Does NOT require signatures — works for all platforms at all times.
+/// Returns: { available, latestVersion, currentVersion, downloadUrl, notes }
+#[tauri::command]
+async fn check_latest_version(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let current = app.package_info().version.to_string();
+    let manifest_url = "https://pub-9e0c13107bce4befa1b3def86de29eb0.r2.dev/desktop-ll/latest.json";
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let data: serde_json::Value = client
+        .get(manifest_url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("Parse error: {e}"))?;
+
+    let latest = data["version"].as_str().unwrap_or("0.0.0").to_string();
+    let available = semver_is_newer(&latest, &current);
+
+    // Pick the right download URL for the current platform/arch
+    let platform_key = if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") { "darwin-aarch64" } else { "darwin-x86_64" }
+    } else if cfg!(target_os = "windows") {
+        "windows-x86_64"
+    } else {
+        "linux-x86_64"
+    };
+
+    let download_url = data["platforms"][platform_key]["url"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    log::info!("[Updater] current={current} latest={latest} available={available} platform={platform_key}");
+
+    Ok(serde_json::json!({
+        "available": available,
+        "latestVersion": latest,
+        "currentVersion": current,
+        "downloadUrl": download_url,
+        "notes": data["notes"].as_str().unwrap_or(""),
+    }))
+}
+
 #[tauri::command]
 async fn check_for_updates(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     use tauri_plugin_updater::UpdaterExt;
@@ -282,6 +345,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_app_build_info,
+            check_latest_version,
             check_for_updates,
             download_and_install_update,
             open_url,
