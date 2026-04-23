@@ -450,33 +450,33 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                         </div>
                     )}
                     <div className="flex justify-between gap-2">
-                    <button
-                        onClick={onClose}
-                        className={`px-4 py-2 text-sm rounded-lg transition-colors ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                        {t('Huỷ', 'Cancel', isVi)}
-                    </button>
-                    {step === 1 ? (
                         <button
-                            onClick={() => {
-                                if (!title.trim()) return toast.error(t('Vui lòng nhập tiêu đề', 'Please enter a title', isVi));
-                                setStep(2);
-                            }}
-                            className="flex items-center gap-1.5 px-5 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 transition-colors font-medium"
+                            onClick={onClose}
+                            className={`px-4 py-2 text-sm rounded-lg transition-colors ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
-                            {t('Tiếp theo', 'Next', isVi)}
-                            <ChevronRight className="w-4 h-4" />
+                            {t('Huỷ', 'Cancel', isVi)}
                         </button>
-                    ) : (
-                        <button
-                            onClick={handleSubmit}
-                            disabled={loading}
-                            className="flex items-center gap-1.5 px-5 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                        >
-                            {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                            {t('Tạo Squad', 'Create Squad', isVi)}
-                        </button>
-                    )}
+                        {step === 1 ? (
+                            <button
+                                onClick={() => {
+                                    if (!title.trim()) return toast.error(t('Vui lòng nhập tiêu đề', 'Please enter a title', isVi));
+                                    setStep(2);
+                                }}
+                                className="flex items-center gap-1.5 px-5 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 transition-colors font-medium"
+                            >
+                                {t('Tiếp theo', 'Next', isVi)}
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleSubmit}
+                                disabled={loading}
+                                className="flex items-center gap-1.5 px-5 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                            >
+                                {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                {t('Tạo Squad', 'Create Squad', isVi)}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1420,7 +1420,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [showCreate, setShowCreate] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
-    const [leftWidth, setLeftWidth] = useState(320);
+    const [chatWidth, setChatWidth] = useState(400);
     const isDragging = useRef(false);
     const dragStartX = useRef(0);
     const dragStartW = useRef(0);
@@ -1473,7 +1473,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const onDragStart = (e: React.MouseEvent) => {
         isDragging.current = true;
         dragStartX.current = e.clientX;
-        dragStartW.current = leftWidth;
+        dragStartW.current = chatWidth;
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
     };
@@ -1481,9 +1481,10 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
             if (!isDragging.current) return;
+            // dragging right → chat shrinks; dragging left → chat grows
             const delta = e.clientX - dragStartX.current;
-            const newW = Math.min(500, Math.max(240, dragStartW.current + delta));
-            setLeftWidth(newW);
+            const newW = Math.min(700, Math.max(360, dragStartW.current - delta));
+            setChatWidth(newW);
         };
         const onUp = () => {
             isDragging.current = false;
@@ -1500,9 +1501,8 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
 
             {/* ── LEFT PANEL: search/filter + squad list ── */}
             <div
-                style={selectedSquadId ? { width: leftWidth, minWidth: 240, maxWidth: 500 } : undefined}
-                className={`flex flex-col flex-shrink-0 border-r overflow-hidden
-                ${selectedSquadId ? '' : 'flex-1'}
+                className={`flex flex-col border-r overflow-hidden
+                flex-1 min-w-[240px]
                 ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
 
                 {/* Toolbar */}
@@ -1673,7 +1673,10 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
 
             {/* ── RIGHT PANEL: chat sidebar ── */}
             {selectedSquadId ? (
-                <div className="flex-1 overflow-hidden min-w-0">
+                <div
+                    className="flex-shrink-0 overflow-hidden"
+                    style={{ width: chatWidth, minWidth: 360, maxWidth: 700 }}
+                >
                     <SquadChatPanel
                         squadId={selectedSquadId}
                         isDark={isDark}

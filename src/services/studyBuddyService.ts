@@ -195,7 +195,7 @@ export async function createSquad(body: {
         const text = await res.text().catch(() => '{}');
         console.error('[StudyBuddy] createSquad failed:', res.status, text);
         let err: any = {};
-        try { err = JSON.parse(text); } catch {}
+        try { err = JSON.parse(text); } catch { }
         throw new Error(err.error || `Failed to create squad (${res.status}): ${text}`);
     }
     const result = await res.json();
