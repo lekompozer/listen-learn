@@ -12,6 +12,7 @@ import {
     Users, Search, Plus, ChevronDown, X, Send, Check, CheckCheck,
     Clock, Crown, MessageSquare, UserCheck, UserX, LogOut, Trash2,
     RefreshCw, ChevronRight, ArrowLeft, Bell, ImagePlus, ChevronLeft,
+    BookMarked, MapPin, AlertTriangle,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useTheme, useLanguage } from '@/contexts/AppContext';
@@ -810,6 +811,7 @@ function SquadDetailModal({
     const [loading, setLoading] = useState(true);
     const [showApply, setShowApply] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [showConfirmCancel, setShowConfirmCancel] = useState(false);
 
     const loadDetail = useCallback(async () => {
         try {
@@ -909,8 +911,10 @@ function SquadDetailModal({
         }
     };
 
-    const handleCancelSquad = async () => {
-        if (!confirm(t('Huỷ squad này? Tất cả thành viên sẽ được thông báo.', 'Cancel this squad? All members will be notified.', isVi))) return;
+    const handleCancelSquad = () => setShowConfirmCancel(true);
+
+    const doActualCancelSquad = async () => {
+        setShowConfirmCancel(false);
         setActionLoading('cancel');
         try {
             await cancelSquad(squadId);
@@ -1230,7 +1234,52 @@ function SquadDetailModal({
         </div>
     );
 
-    return createPortal(card, document.body);
+    const confirmCancelModal = showConfirmCancel ? (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div className={`w-full max-w-sm rounded-2xl shadow-2xl flex flex-col
+                ${isDark ? 'bg-gray-800 border border-white/10' : 'bg-white border border-gray-200'}`}>
+                <div className="flex items-start gap-3 p-5">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center">
+                        <AlertTriangle className="w-5 h-5 text-red-400" />
+                    </div>
+                    <div>
+                        <p className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {t('Huỷ squad này?', 'Cancel this squad?', isVi)}
+                        </p>
+                        <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {t(
+                                'Tất cả thành viên sẽ bị xoá khỏi squad. Hành động này không thể hoàn tác.',
+                                'All members will be removed. This action cannot be undone.',
+                                isVi
+                            )}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex justify-end gap-2 px-5 pb-4 pt-1">
+                    <button
+                        onClick={() => setShowConfirmCancel(false)}
+                        className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors
+                            ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                        {t('Không, giữ lại', 'Keep it', isVi)}
+                    </button>
+                    <button
+                        onClick={doActualCancelSquad}
+                        className="px-4 py-2 text-sm rounded-lg font-medium bg-red-600 text-white hover:bg-red-500 transition-colors"
+                    >
+                        {t('Huỷ squad', 'Yes, cancel squad', isVi)}
+                    </button>
+                </div>
+            </div>
+        </div>
+    ) : null;
+
+    return (
+        <>
+            {createPortal(card, document.body)}
+            {showConfirmCancel && createPortal(confirmCancelModal!, document.body)}
+        </>
+    );
 }
 
 // ─── HistoryModal ─────────────────────────────────────────────────────────────
@@ -1486,6 +1535,8 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [meetingTypeFilter, setMeetingTypeFilter] = useState<'all' | MeetingType>('all');
     const [languageFilter, setLanguageFilter] = useState('');
     const [levelFilter, setLevelFilter] = useState<StudyLevel | ''>('');
+    const [locationCountry, setLocationCountry] = useState('');
+    const [locationCity, setLocationCity] = useState('');
     const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
@@ -1525,9 +1576,9 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [search, meetingTypeFilter, languageFilter, levelFilter, sort, isVi]);
+    }, [search, meetingTypeFilter, languageFilter, levelFilter, locationCountry, locationCity, sort, isVi]);
 
-    useEffect(() => { loadSquads(); }, [sort, meetingTypeFilter, languageFilter, levelFilter]);
+    useEffect(() => { loadSquads(); }, [sort, meetingTypeFilter, languageFilter, levelFilter, locationCountry, locationCity]);
 
     const handleSearch = (val: string) => {
         setSearch(val);
@@ -1536,6 +1587,20 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
             loadSquads({ search: val, cursor: undefined, append: false });
         }, 400);
     };
+
+    // Auto-open first joined/hosted squad when app starts with no squad selected
+    useEffect(() => {
+        if (!user || selectedSquadId) return;
+        (async () => {
+            try {
+                const [hostedRes, joinedRes] = await Promise.all([getMyHosted(), getMyJoined()]);
+                const all = [...hostedRes.items, ...joinedRes.items];
+                const unique = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
+                if (unique.length > 0) setSelectedSquadId(unique[0].id);
+            } catch { /* ignore */ }
+        })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user]);
 
     const userDisplayName = user?.displayName ?? user?.email?.split('@')[0] ?? 'User';
     const userPhotoURL = user?.photoURL ?? null;
@@ -1576,105 +1641,146 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
 
                 {/* Toolbar */}
-                <div className={`flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b flex-wrap
+                <div className={`flex-shrink-0 flex flex-col gap-1.5 px-3 py-2.5 border-b
                     ${isDark ? 'border-white/8 bg-gray-900/60' : 'border-gray-200/60 bg-white/60'}`}>
 
-                    {/* Search */}
-                    <div className={`flex items-center gap-1.5 flex-1 min-w-[120px] px-3 py-1.5 rounded-xl border text-sm
-                        ${isDark ? 'bg-gray-800/60 border-white/8' : 'bg-white border-gray-200'}`}>
-                        <Search className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                        <input
-                            value={search}
-                            onChange={e => handleSearch(e.target.value)}
-                            placeholder={t('Tìm kiếm squad...', 'Search squads...', isVi)}
-                            className={`flex-1 bg-transparent outline-none text-sm ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
-                        />
+                    {/* Row 1: Search + Create button */}
+                    <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-xl border text-sm
+                            ${isDark ? 'bg-gray-800/60 border-white/8' : 'bg-white border-gray-200'}`}>
+                            <Search className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                            <input
+                                value={search}
+                                onChange={e => handleSearch(e.target.value)}
+                                placeholder={t('Tìm kiếm squad...', 'Search squads...', isVi)}
+                                className={`flex-1 bg-transparent outline-none text-sm ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                            />
+                        </div>
+                        {user && (
+                            <button
+                                onClick={() => setShowCreate(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors flex-shrink-0"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                                {t('Tạo mới', 'Create', isVi)}
+                            </button>
+                        )}
                     </div>
 
-                    {/* Meeting type filter */}
-                    <div className="relative">
-                        <select
-                            value={meetingTypeFilter}
-                            onChange={e => setMeetingTypeFilter(e.target.value as 'all' | MeetingType)}
-                            className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
-                                ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
-                        >
-                            <option value="all">{t('Tất cả', 'All', isVi)}</option>
-                            <option value="online">💻 {t('Online', 'Online', isVi)}</option>
-                            <option value="offline">🏠 {t('Offline', 'Offline', isVi)}</option>
-                            <option value="both">🌐 {t('Cả hai', 'Both', isVi)}</option>
-                        </select>
-                        <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                    </div>
+                    {/* Row 2: Sort + My Squads + Refresh + Filters */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Sort: Hot / Latest */}
+                        <div className={`flex items-center rounded-xl border overflow-hidden flex-shrink-0
+                            ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
+                            <button
+                                onClick={() => setSort('hot')}
+                                className={`text-xs px-2.5 py-1.5 font-medium transition-colors
+                                    ${sort === 'hot'
+                                        ? 'bg-orange-500 text-white'
+                                        : isDark ? 'bg-gray-800/60 text-gray-400 hover:text-white' : 'bg-white text-gray-600 hover:text-gray-900'}`}
+                            >
+                                🔥 {t('Nóng', 'Hot', isVi)}
+                            </button>
+                            <button
+                                onClick={() => setSort('latest')}
+                                className={`text-xs px-2.5 py-1.5 font-medium transition-colors border-l
+                                    ${sort === 'latest'
+                                        ? 'bg-blue-600 text-white'
+                                        : isDark ? 'bg-gray-800/60 border-white/8 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900'}`}
+                            >
+                                {t('Mới nhất', 'Latest', isVi)}
+                            </button>
+                        </div>
 
-                    {/* Language filter */}
-                    <div className="relative">
-                        <select
-                            value={languageFilter}
-                            onChange={e => setLanguageFilter(e.target.value)}
-                            className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
-                                ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
-                        >
-                            <option value="">{t('Ngôn ngữ', 'Lang', isVi)}</option>
-                            {COMMON_LANGUAGES.map(l => (
-                                <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
-                            ))}
-                        </select>
-                        <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                    </div>
+                        {/* My Squads */}
+                        {user && (
+                            <button
+                                onClick={() => setShowHistory(true)}
+                                className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-teal-400' : 'border-gray-200 bg-white text-gray-500 hover:text-teal-600'}`}
+                                title={t('Squad của tôi', 'My squads', isVi)}
+                            >
+                                <BookMarked className="w-3.5 h-3.5" />
+                            </button>
+                        )}
 
-                    {/* Sort: Hot / Latest buttons */}
-                    <div className={`flex items-center rounded-xl border overflow-hidden
-                        ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
+                        {/* Refresh */}
                         <button
-                            onClick={() => setSort('hot')}
-                            className={`text-xs px-2.5 py-1.5 font-medium transition-colors
-                                ${sort === 'hot'
-                                    ? 'bg-orange-500 text-white'
-                                    : isDark ? 'bg-gray-800/60 text-gray-400 hover:text-white' : 'bg-white text-gray-600 hover:text-gray-900'}`}
-                        >
-                            🔥 {t('Nóng', 'Hot', isVi)}
-                        </button>
-                        <button
-                            onClick={() => setSort('latest')}
-                            className={`text-xs px-2.5 py-1.5 font-medium transition-colors border-l
-                                ${sort === 'latest'
-                                    ? 'bg-blue-600 text-white'
-                                    : isDark ? 'bg-gray-800/60 border-white/8 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900'}`}
-                        >
-                            {t('Mới nhất', 'Latest', isVi)}
-                        </button>
-                    </div>
-
-                    {/* History */}
-                    {user && (
-                        <button
-                            onClick={() => setShowHistory(true)}
+                            onClick={() => loadSquads()}
                             className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
-                            title={t('Squad của tôi', 'My squads', isVi)}
+                            title={t('Làm mới', 'Refresh', isVi)}
                         >
-                            <CheckCheck className="w-3.5 h-3.5" />
+                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                         </button>
-                    )}
 
-                    {/* Refresh */}
-                    <button
-                        onClick={() => loadSquads()}
-                        className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
-                        title={t('Làm mới', 'Refresh', isVi)}
-                    >
-                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
+                        {/* Meeting type filter */}
+                        <div className="relative flex-shrink-0">
+                            <select
+                                value={meetingTypeFilter}
+                                onChange={e => setMeetingTypeFilter(e.target.value as 'all' | MeetingType)}
+                                className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
+                                    ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                            >
+                                <option value="all">{t('Tất cả', 'All', isVi)}</option>
+                                <option value="online">💻 Online</option>
+                                <option value="offline">🏠 Offline</option>
+                                <option value="both">🌐 {t('Cả hai', 'Both', isVi)}</option>
+                            </select>
+                            <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        </div>
 
-                    {/* Create */}
-                    {user && (
-                        <button
-                            onClick={() => setShowCreate(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
-                        >
-                            <Plus className="w-3.5 h-3.5" />
-                            {t('Tạo mới', 'Create', isVi)}
-                        </button>
+                        {/* Language filter */}
+                        <div className="relative flex-shrink-0">
+                            <select
+                                value={languageFilter}
+                                onChange={e => setLanguageFilter(e.target.value)}
+                                className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
+                                    ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                            >
+                                <option value="">{t('Ngôn ngữ', 'Language', isVi)}</option>
+                                {COMMON_LANGUAGES.map(l => (
+                                    <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        </div>
+
+                        {/* Level filter */}
+                        <div className="relative flex-shrink-0">
+                            <select
+                                value={levelFilter}
+                                onChange={e => setLevelFilter(e.target.value as StudyLevel | '')}
+                                className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
+                                    ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                            >
+                                <option value="">{t('Trình độ', 'Level', isVi)}</option>
+                                <option value="any">{t('Mọi trình độ', 'Any Level', isVi)}</option>
+                                <option value="beginner">{t('Sơ cấp', 'Beginner', isVi)}</option>
+                                <option value="intermediate">{t('Trung cấp', 'Intermediate', isVi)}</option>
+                                <option value="advanced">{t('Nâng cao', 'Advanced', isVi)}</option>
+                            </select>
+                            <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        </div>
+                    </div>
+
+                    {/* Row 3: Location filter (only for offline / both) */}
+                    {(meetingTypeFilter === 'offline' || meetingTypeFilter === 'both') && (
+                        <div className="flex items-center gap-1.5">
+                            <MapPin className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                            <input
+                                value={locationCountry}
+                                onChange={e => setLocationCountry(e.target.value)}
+                                placeholder={t('Quốc gia...', 'Country...', isVi)}
+                                className={`flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded-xl border outline-none transition-colors
+                                    ${isDark ? 'bg-gray-800/60 border-white/8 text-white placeholder-gray-500 focus:border-teal-500' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-400'}`}
+                            />
+                            <input
+                                value={locationCity}
+                                onChange={e => setLocationCity(e.target.value)}
+                                placeholder={t('Thành phố...', 'City...', isVi)}
+                                className={`flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded-xl border outline-none transition-colors
+                                    ${isDark ? 'bg-gray-800/60 border-white/8 text-white placeholder-gray-500 focus:border-teal-500' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-400'}`}
+                            />
+                        </div>
                     )}
                 </div>
 
