@@ -1634,22 +1634,22 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     userDisplayName={userDisplayName}
                     userPhotoURL={userPhotoURL}
                     onClose={() => setShowDetailModal(false
-            ) : (
-                <div className="flex-1 hidden md:flex flex-col items-center justify-center gap-3 px-8">
-                    <Users className={`w-12 h-12 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
-                    <p className={`text-sm text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                        {t('Chọn một squad để xem chat nhóm', 'Select a squad to view the group chat', isVi)}
-                    </p>
-                    {user && (
-                        <button
-                            onClick={() => setShowCreate(true)}
-                            className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
-                        >
-                            <Plus className="w-4 h-4" />
-                            {t('Tạo Study Squad mới', 'Create a Study Squad', isVi)}
-                        </button>
-                    )}
-                </div>
+                    ) : (
+            <div className="flex-1 hidden md:flex flex-col items-center justify-center gap-3 px-8">
+                <Users className={`w-12 h-12 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
+                <p className={`text-sm text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {t('Chọn một squad để xem chat nhóm', 'Select a squad to view the group chat', isVi)}
+                </p>
+                {user && (
+                    <button
+                        onClick={() => setShowCreate(true)}
+                        className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                    >
+                        <Plus className="w-4 h-4" />
+                        {t('Tạo Study Squad mới', 'Create a Study Squad', isVi)}
+                    </button>
+                )}
+            </div>
             )}
 
             {/* Modals */}
