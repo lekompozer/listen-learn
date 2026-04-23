@@ -115,16 +115,22 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: strin
         ? 'Respond in English. The user may speak in Vietnamese or broken English — always respond in English to help them practice.'
         : 'Respond in clear, natural English.';
 
-    const whoAmI = role
-        ? `You are playing the role of ${role}. Stay in character throughout the conversation while helping the user practice English. There are no limits to the topics you can talk to users about, making them more interested in discussing the topic with you.`
+    // Role instruction — MUST come first and be strong so models follow it
+    const roleInstruction = role
+        ? `### ROLE ASSIGNMENT (MANDATORY) ###\nYou are: ${role}.\nYou MUST stay completely in character as ${role} for the entire conversation. NEVER break character. NEVER say you are an AI. Speak, think, and respond exactly as ${role} would. This is your identity.`
+        : null;
+
+    const baseIdentity = role
+        ? null
         : `You are a friendly English conversation partner helping a learner practice speaking.`;
 
     const topicLine = topic && topic.toLowerCase() !== 'general'
-        ? `Today's topic: "${topic}".`
+        ? `Today's conversation topic: "${topic}".`
         : '';
 
     return [
-        whoAmI,
+        roleInstruction,
+        baseIdentity,
         topicLine,
         langNote,
         `Keep responses concise (2-4 sentences). Be encouraging and natural.`,
@@ -132,5 +138,5 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: strin
         `After each reply, add a new line starting with "💬 Correction:" then write what the user most likely meant to say, rewritten with correct English grammar and vocabulary. Example format: "💬 Correction: I want to go to the market tomorrow."`,
         `If their speech was already clear and correct, write "💬 Correction: ✓ Great, that was correct!"`,
         `Do not use markdown in your main reply. Plain spoken text only for the main reply. The Correction line may use the exact format above.`,
-    ].filter(Boolean).join(' ');
+    ].filter(Boolean).join('\n');
 }

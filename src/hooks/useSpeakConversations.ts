@@ -25,6 +25,15 @@ const MONTHLY_KEY = 'll_speak_monthly';
 export const FREE_LIMIT = 5;
 export const PREMIUM_MONTHLY_LIMIT = 150;
 
+// ── Per-user storage isolation ────────────────────────────────────────────────
+let _uid = '';
+/** Call this once per session after the user is authenticated. */
+export function initSpeakStorage(uid: string) { _uid = uid; }
+
+const storageKey   = () => _uid ? `${STORAGE_KEY}_${_uid}`   : STORAGE_KEY;
+const dailyKey     = () => _uid ? `${DAILY_KEY}_${_uid}`     : DAILY_KEY;
+const monthlyKey   = () => _uid ? `${MONTHLY_KEY}_${_uid}`   : MONTHLY_KEY;
+
 function today(): string {
     return new Date().toISOString().slice(0, 10);
 }
@@ -37,7 +46,7 @@ function thisMonth(): string {
 
 export function getDailyUsage(): number {
     try {
-        const raw = localStorage.getItem(DAILY_KEY);
+        const raw = localStorage.getItem(dailyKey());
         if (!raw) return 0;
         const data = JSON.parse(raw) as { date: string; count: number };
         if (data.date !== today()) return 0;
@@ -50,14 +59,14 @@ export function getDailyUsage(): number {
 export function incrementDailyUsage(): number {
     const count = getDailyUsage() + 1;
     try {
-        localStorage.setItem(DAILY_KEY, JSON.stringify({ date: today(), count }));
+        localStorage.setItem(dailyKey(), JSON.stringify({ date: today(), count }));
     } catch { /* ignore */ }
     return count;
 }
 
 export function getMonthlyUsage(): number {
     try {
-        const raw = localStorage.getItem(MONTHLY_KEY);
+        const raw = localStorage.getItem(monthlyKey());
         if (!raw) return 0;
         const data = JSON.parse(raw) as { month: string; count: number };
         if (data.month !== thisMonth()) return 0;
@@ -70,7 +79,7 @@ export function getMonthlyUsage(): number {
 export function incrementMonthlyUsage(): number {
     const count = getMonthlyUsage() + 1;
     try {
-        localStorage.setItem(MONTHLY_KEY, JSON.stringify({ month: thisMonth(), count }));
+        localStorage.setItem(monthlyKey(), JSON.stringify({ month: thisMonth(), count }));
     } catch { /* ignore */ }
     return count;
 }
@@ -86,7 +95,7 @@ export function canSendMessage(isPremium = false): boolean {
 
 export function listConversations(): SpeakConversation[] {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey());
         if (!raw) return [];
         return (JSON.parse(raw) as SpeakConversation[]).sort(
             (a, b) => b.createdAt - a.createdAt,
@@ -98,7 +107,7 @@ export function listConversations(): SpeakConversation[] {
 
 function saveAll(convos: SpeakConversation[]): void {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(convos));
+        localStorage.setItem(storageKey(), JSON.stringify(convos));
     } catch { /* ignore storage full */ }
 }
 

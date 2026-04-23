@@ -1548,13 +1548,19 @@ export async function checkoutPreview(params: CheckoutPreviewRequest): Promise<C
 
 const LOCAL_SAVED_VIDEOS_KEY = 'll-saved-videos-full';
 
+// ── Per-user storage isolation ────────────────────────────────────────────────
+let _savedVideosUid = '';
+/** Call this once per session after the user is authenticated. */
+export function initSavedVideosStorage(uid: string) { _savedVideosUid = uid; }
+const savedVideosKey = () => _savedVideosUid ? `${LOCAL_SAVED_VIDEOS_KEY}_${_savedVideosUid}` : LOCAL_SAVED_VIDEOS_KEY;
+
 export function getLocalSavedVideos(): SavedVideoItem[] {
-    try { return JSON.parse(localStorage.getItem(LOCAL_SAVED_VIDEOS_KEY) ?? '[]'); }
+    try { return JSON.parse(localStorage.getItem(savedVideosKey()) ?? '[]'); }
     catch { return []; }
 }
 
 export function setLocalSavedVideos(videos: SavedVideoItem[]) {
-    try { localStorage.setItem(LOCAL_SAVED_VIDEOS_KEY, JSON.stringify(videos)); } catch { }
+    try { localStorage.setItem(savedVideosKey(), JSON.stringify(videos)); } catch { }
 }
 
 /**

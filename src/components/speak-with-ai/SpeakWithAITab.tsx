@@ -15,7 +15,7 @@ const isTauriDesktop = () => typeof window !== 'undefined' && !!(window as any).
 import {
     listConversations, createConversation, addMessage, deleteConversation,
     getDailyUsage, incrementDailyUsage, incrementMonthlyUsage, canSendMessage,
-    getMonthlyUsage, getConversation,
+    getMonthlyUsage, getConversation, initSpeakStorage,
     type SpeakConversation, type SpeakMessage, FREE_LIMIT, PREMIUM_MONTHLY_LIMIT,
 } from '@/hooks/useSpeakConversations';
 
@@ -546,6 +546,7 @@ export default function SpeakWithAITab() {
 
     // Load conversations + check premium on mount
     useEffect(() => {
+        if (user?.uid) initSpeakStorage(user.uid);
         setConversations(listConversations());
         setDailyUsage(getDailyUsage());
         // Check premium subscription

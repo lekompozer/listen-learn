@@ -8,10 +8,12 @@ import {
     getSavedVocabulary,
     getSavedGrammar,
     getLocalSavedVideos,
+    initSavedVideosStorage,
     type SavedVocabularyItem,
     type SavedGrammarItem,
     type SavedVideoItem,
 } from '@/services/conversationLearningService';
+import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 
 type SavedTab = 'videos' | 'vocab' | 'words' | 'grammar';
 
@@ -238,6 +240,7 @@ const TABS: { id: SavedTab; label: string; icon: React.ElementType }[] = [
 ];
 
 export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
+    const { user } = useWordaiAuth();
     const [tab, setTab] = useState<SavedTab>('videos');
     const [words, setWords] = useState<SavedVocabularyItem[]>([]);
     const [grammar, setGrammar] = useState<SavedGrammarItem[]>([]);
@@ -248,6 +251,9 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
     const [selectedWord, setSelectedWord] = useState<SavedVocabularyItem | null>(null);
     const [selectedGrammar, setSelectedGrammar] = useState<SavedGrammarItem | null>(null);
     const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
+
+    // Init user-specific storage key as soon as we know who's logged in
+    useEffect(() => { if (user?.uid) initSavedVideosStorage(user.uid); }, [user?.uid]);
 
     const loadWords = useCallback(async () => {
         setLoading(true); setError(null);

@@ -8,8 +8,10 @@ import {
     setLocalSavedVideos,
     saveVideoToServer,
     unsaveVideoFromServer,
+    initSavedVideosStorage,
     type SavedVideoItem,
 } from '@/services/conversationLearningService';
+import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
 const LIMIT = 30;
@@ -42,12 +44,16 @@ function loadSavedIds(): Set<string> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function EnglishVideosFeed() {
+    const { user } = useWordaiAuth();
     const [queue, setQueue] = useState<YTShortItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
-    useEffect(() => { setSavedIds(loadSavedIds()); }, []);
+    useEffect(() => {
+        if (user?.uid) initSavedVideosStorage(user.uid);
+        setSavedIds(loadSavedIds());
+    }, [user?.uid]);
 
     const offsetRef = useRef(0);
     const seenIdsRef = useRef<Set<string>>(new Set());
