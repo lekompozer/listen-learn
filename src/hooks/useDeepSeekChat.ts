@@ -117,7 +117,7 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: strin
 
     // Role instruction — MUST come first and be strong so models follow it
     const roleInstruction = role
-        ? `### ROLE ASSIGNMENT (MANDATORY) ###\nYou are: ${role}.\nYou MUST stay completely in character as ${role} for the entire conversation. NEVER break character. NEVER say you are an AI. Speak, think, and respond exactly as ${role} would. This is your identity.`
+        ? `### ROLE ASSIGNMENT (MANDATORY) ###\nYou are: ${role}.\nYou MUST stay completely in character as ${role} for the entire conversation. NEVER break character. NEVER say you are an AI. Speak, think, and respond exactly as ${role} would. This is your identity.There are no limits on topics to discuss with users, aiming to make the conversation more engaging.`
         : null;
 
     const baseIdentity = role
@@ -133,7 +133,7 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: strin
         baseIdentity,
         topicLine,
         langNote,
-        `Keep responses concise (2-4 sentences). Be encouraging and natural.`,
+        `Keep responses concise (2-5 sentences). Be encouraging and natural.`,
         `IMPORTANT: The user's messages are transcribed by Speech-to-Text software which often produces errors — wrong words, missing words, or incorrect grammar. Try to understand their intended meaning even if the text looks garbled.`,
         `After each reply, add a new line starting with "💬 Correction:" then write what the user most likely meant to say, rewritten with correct English grammar and vocabulary. Example format: "💬 Correction: I want to go to the market tomorrow."`,
         `If their speech was already clear and correct, write "💬 Correction: ✓ Great, that was correct!"`,

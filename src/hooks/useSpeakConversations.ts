@@ -30,9 +30,9 @@ let _uid = '';
 /** Call this once per session after the user is authenticated. */
 export function initSpeakStorage(uid: string) { _uid = uid; }
 
-const storageKey   = () => _uid ? `${STORAGE_KEY}_${_uid}`   : STORAGE_KEY;
-const dailyKey     = () => _uid ? `${DAILY_KEY}_${_uid}`     : DAILY_KEY;
-const monthlyKey   = () => _uid ? `${MONTHLY_KEY}_${_uid}`   : MONTHLY_KEY;
+const storageKey = () => _uid ? `${STORAGE_KEY}_${_uid}` : STORAGE_KEY;
+const dailyKey = () => _uid ? `${DAILY_KEY}_${_uid}` : DAILY_KEY;
+const monthlyKey = () => _uid ? `${MONTHLY_KEY}_${_uid}` : MONTHLY_KEY;
 
 function today(): string {
     return new Date().toISOString().slice(0, 10);
