@@ -632,12 +632,14 @@ export default function SpeakWithAITab() {
         else { incrementDailyUsage(); }
         setDailyUsage(isPremium ? getMonthlyUsage() : getDailyUsage());
 
-        // Build messages for DeepSeek
+        // Build messages for DeepSeek — keep last 3 turns (6 msgs) for context depth without bloating tokens
         const currentConvo = getConversation(activeConvoId);
-        const history: DeepSeekMessage[] = (currentConvo?.messages ?? []).map(m => ({
-            role: m.role,
+        const allHistory = (currentConvo?.messages ?? []).map(m => ({
+            role: m.role as DeepSeekMessage['role'],
             content: m.text,
         }));
+        // Slice to last 6 messages (≈ 3 back-and-forth turns)
+        const history: DeepSeekMessage[] = allHistory.slice(-6);
 
         const systemPrompt = buildSystemPrompt(topic, isVietnamese ? 'vi' : 'en', convoRole || undefined);
         const deepseekMessages: DeepSeekMessage[] = [

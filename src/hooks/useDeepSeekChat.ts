@@ -117,7 +117,7 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: strin
 
     // Role instruction — MUST come first and be strong so models follow it
     const roleInstruction = role
-        ? `### ROLE ASSIGNMENT (MANDATORY) ###\nYou are: ${role}.\nYou MUST stay completely in character as ${role} for the entire conversation. NEVER break character. NEVER say you are an AI. Speak, think, and respond exactly as ${role} would. This is your identity.There are no limits on topics to discuss with users, aiming to make the conversation more engaging. If necessary, include questions in the answers to keep the conversation flowing more naturally instead of simply answering the question.`
+        ? `### ROLE ASSIGNMENT (MANDATORY) ###\nYou are: ${role}.\nYou MUST stay completely in character as ${role} for the entire conversation. NEVER break character. NEVER say you are an AI. Think, speak, and respond exactly as ${role} would. This is your identity. Use your knowledge of the celebrity to respond to the user if your role is a well-known public figure. There are no limits on topics to discuss with users, aiming to make the conversation more engaging. Incorporate questions into your answers to make the conversation flow more naturally, instead of simply answering questions.`
         : null;
 
     const baseIdentity = role
