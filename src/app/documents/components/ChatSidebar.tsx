@@ -741,9 +741,10 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
                 const reply = await callGemma4Direct(messages);
                 incrementGemma4DailyUsage();
                 setGemma4Usage(getGemma4DailyUsage());
-                if (reply) {
-                    const aiMsg: AIEditMessage = { type: 'ai', content: reply, timestamp: new Date() };
-                    setAiChatMessages(prev => [...prev, aiMsg]);
+                const replyText = reply?.trim() || '(Gemma 4 did not return a response — please try again)';
+                const aiMsg: AIEditMessage = { type: 'ai', content: replyText, timestamp: new Date() };
+                setAiChatMessages(prev => [...prev, aiMsg]);
+                if (reply?.trim()) {
                     setConversationHistory(prev => [
                         ...prev,
                         { role: 'user', content: userQuery },

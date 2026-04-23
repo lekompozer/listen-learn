@@ -7,11 +7,16 @@ mod edge_tts;
 async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
     let account_id = env!("CF_ACCOUNT_ID");
     let api_key = env!("CF_AI_TOKEN");
+    if account_id.is_empty() || api_key.is_empty() {
+        log::error!("[Gemma4] CF credentials not baked in — rebuild with NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID and NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY in .env.local");
+        return Err("Gemma4 credentials missing — please rebuild the app".to_string());
+    }
     let model = "@cf/google/gemma-4-26b-a4b-it";
     let url = format!(
         "https://api.cloudflare.com/client/v4/accounts/{}/ai/run/{}",
         account_id, model
     );
+    log::info!("[Gemma4] Calling CF Workers AI...");
     let client = reqwest::Client::new();
     let res = client
         .post(&url)
@@ -20,11 +25,13 @@ async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
         .json(&serde_json::json!({ "messages": messages, "max_tokens": 800 }))
         .send()
         .await
-        .map_err(|e| format!("Request failed: {e}"))?;
-    if !res.status().is_success() {
-        let status = res.status().as_u16();
+        .map_err(|e| { log::error!("[Gemma4] Request failed: {e}"); format!("Request failed: {e}") })?;
+    let status = res.status();
+    if !status.is_success() {
+        let code = status.as_u16();
         let body = res.text().await.unwrap_or_default();
-        return Err(format!("Gemma4 API error {status}: {body}"));
+        log::error!("[Gemma4] API error {code}: {body}");
+        return Err(format!("Gemma4 API error {code}: {body}"));
     }
     let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
     let text = data["result"]["response"]
@@ -32,6 +39,7 @@ async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
         .or_else(|| data["choices"][0]["message"]["content"].as_str())
         .unwrap_or("")
         .to_string();
+    log::info!("[Gemma4] Response length: {} chars", text.len());
     Ok(text)
 }
 
