@@ -18,11 +18,31 @@ async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
     );
     log::info!("[Gemma4] Calling CF Workers AI...");
     let client = reqwest::Client::new();
+
+    // Gemma models on CF Workers AI don't support 'system' role.
+    // Extract system message and prepend to first user message instead.
+    let messages_arr = messages.as_array().cloned().unwrap_or_default();
+    let system_content: Option<String> = messages_arr.iter().find_map(|m| {
+        if m.get("role").and_then(|r| r.as_str()) == Some("system") {
+            m.get("content").and_then(|c| c.as_str()).map(|s| s.to_string())
+        } else { None }
+    });
+    let mut filtered: Vec<serde_json::Value> = messages_arr.into_iter()
+        .filter(|m| m.get("role").and_then(|r| r.as_str()) != Some("system"))
+        .collect();
+    if let Some(sys) = system_content {
+        if let Some(first) = filtered.iter_mut().find(|m| {
+            m.get("role").and_then(|r| r.as_str()) == Some("user")
+        }) {
+            let orig = first["content"].as_str().unwrap_or("").to_string();
+            first["content"] = serde_json::Value::String(format!("{sys}\n\n{orig}"));
+        }
+    }
     let res = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", api_key))
         .header("Content-Type", "application/json")
-        .json(&serde_json::json!({ "messages": messages, "max_tokens": 800 }))
+        .json(&serde_json::json!({ "messages": filtered, "max_tokens": 800 }))
         .send()
         .await
         .map_err(|e| { log::error!("[Gemma4] Request failed: {e}"); format!("Request failed: {e}") })?;
