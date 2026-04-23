@@ -1644,75 +1644,9 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 <div className={`flex-shrink-0 flex flex-col gap-1.5 px-3 py-2.5 border-b
                     ${isDark ? 'border-white/8 bg-gray-900/60' : 'border-gray-200/60 bg-white/60'}`}>
 
-                    {/* Row 1: Search + Create button */}
-                    <div className="flex items-center gap-2">
-                        <div className={`flex items-center gap-1.5 flex-1 px-3 py-1.5 rounded-xl border text-sm
-                            ${isDark ? 'bg-gray-800/60 border-white/8' : 'bg-white border-gray-200'}`}>
-                            <Search className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                            <input
-                                value={search}
-                                onChange={e => handleSearch(e.target.value)}
-                                placeholder={t('Tìm kiếm squad...', 'Search squads...', isVi)}
-                                className={`flex-1 bg-transparent outline-none text-sm ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
-                            />
-                        </div>
-                        {user && (
-                            <button
-                                onClick={() => setShowCreate(true)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors flex-shrink-0"
-                            >
-                                <Plus className="w-3.5 h-3.5" />
-                                {t('Tạo mới', 'Create', isVi)}
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Row 2: Sort + My Squads + Refresh + Filters */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Sort: Hot / Latest */}
-                        <div className={`flex items-center rounded-xl border overflow-hidden flex-shrink-0
-                            ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
-                            <button
-                                onClick={() => setSort('hot')}
-                                className={`text-xs px-2.5 py-1.5 font-medium transition-colors
-                                    ${sort === 'hot'
-                                        ? 'bg-orange-500 text-white'
-                                        : isDark ? 'bg-gray-800/60 text-gray-400 hover:text-white' : 'bg-white text-gray-600 hover:text-gray-900'}`}
-                            >
-                                🔥 {t('Nóng', 'Hot', isVi)}
-                            </button>
-                            <button
-                                onClick={() => setSort('latest')}
-                                className={`text-xs px-2.5 py-1.5 font-medium transition-colors border-l
-                                    ${sort === 'latest'
-                                        ? 'bg-blue-600 text-white'
-                                        : isDark ? 'bg-gray-800/60 border-white/8 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900'}`}
-                            >
-                                {t('Mới nhất', 'Latest', isVi)}
-                            </button>
-                        </div>
-
-                        {/* My Squads */}
-                        {user && (
-                            <button
-                                onClick={() => setShowHistory(true)}
-                                className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-teal-400' : 'border-gray-200 bg-white text-gray-500 hover:text-teal-600'}`}
-                                title={t('Squad của tôi', 'My squads', isVi)}
-                            >
-                                <BookMarked className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-
-                        {/* Refresh */}
-                        <button
-                            onClick={() => loadSquads()}
-                            className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
-                            title={t('Làm mới', 'Refresh', isVi)}
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                        </button>
-
-                        {/* Meeting type filter */}
+                    {/* Row 1: All | Language | Level  ──  My Squad icon | Create button */}
+                    <div className="flex items-center gap-1.5">
+                        {/* Meeting type (All/Online/Offline/Both) */}
                         <div className="relative flex-shrink-0">
                             <select
                                 value={meetingTypeFilter}
@@ -1759,6 +1693,79 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                                 <option value="advanced">{t('Nâng cao', 'Advanced', isVi)}</option>
                             </select>
                             <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                        </div>
+
+                        <div className="flex-1" />
+
+                        {/* My Squads icon */}
+                        {user && (
+                            <button
+                                onClick={() => setShowHistory(true)}
+                                className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-teal-400' : 'border-gray-200 bg-white text-gray-500 hover:text-teal-600'}`}
+                                title={t('Squad của tôi', 'My squads', isVi)}
+                            >
+                                <BookMarked className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+
+                        {/* Create button */}
+                        {user && (
+                            <button
+                                onClick={() => setShowCreate(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors flex-shrink-0"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                                {t('Tạo mới', 'Create', isVi)}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Row 2: Hot | Latest | Refresh  ──  Search bar */}
+                    <div className="flex items-center gap-1.5">
+                        {/* Sort: Hot / Latest */}
+                        <div className={`flex items-center rounded-xl border overflow-hidden flex-shrink-0
+                            ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
+                            <button
+                                onClick={() => setSort('hot')}
+                                className={`text-xs px-2.5 py-1.5 font-medium transition-colors
+                                    ${sort === 'hot'
+                                        ? 'bg-orange-500 text-white'
+                                        : isDark ? 'bg-gray-800/60 text-gray-400 hover:text-white' : 'bg-white text-gray-600 hover:text-gray-900'}`}
+                            >
+                                🔥 {t('Nóng', 'Hot', isVi)}
+                            </button>
+                            <button
+                                onClick={() => setSort('latest')}
+                                className={`text-xs px-2.5 py-1.5 font-medium transition-colors border-l
+                                    ${sort === 'latest'
+                                        ? 'bg-blue-600 text-white'
+                                        : isDark ? 'bg-gray-800/60 border-white/8 text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900'}`}
+                            >
+                                {t('Mới nhất', 'Latest', isVi)}
+                            </button>
+                        </div>
+
+                        {/* Refresh */}
+                        <button
+                            onClick={() => loadSquads()}
+                            className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-white' : 'border-gray-200 bg-white text-gray-500 hover:text-gray-900'}`}
+                            title={t('Làm mới', 'Refresh', isVi)}
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+
+                        <div className="flex-1" />
+
+                        {/* Search bar */}
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm
+                            ${isDark ? 'bg-gray-800/60 border-white/8' : 'bg-white border-gray-200'}`}>
+                            <Search className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                            <input
+                                value={search}
+                                onChange={e => handleSearch(e.target.value)}
+                                placeholder={t('Tìm kiếm...', 'Search...', isVi)}
+                                className={`w-36 bg-transparent outline-none text-sm ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                            />
                         </div>
                     </div>
 
