@@ -295,6 +295,52 @@ async function analyzeAudioWithAPI(
     return lines.join('\n') || '✓ Sounds great!';
 }
 
+// ── Backend Speak Chat API ──────────────────────────────────────────────────────
+interface SpeakChatAPIResponse {
+    reply: string;
+    model: string;
+    points_deducted: number;
+    points_remaining: number;
+}
+
+async function callSpeakChatAPI(params: {
+    message: string;
+    topic: string;
+    lang: 'vi' | 'en';
+    role: string | null;
+    model: 'gemma4' | 'deepseek';
+    history: Array<{ role: 'user' | 'assistant'; content: string }>;
+    token: string;
+    signal?: AbortSignal;
+}): Promise<SpeakChatAPIResponse> {
+    const resp = await fetch(`${API_BASE_URL}/api/v1/speak/chat`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${params.token}`,
+        },
+        signal: params.signal,
+        body: JSON.stringify({
+            message: params.message,
+            topic: params.topic || 'general',
+            lang: params.lang,
+            role: params.role || null,
+            model: params.model,
+            history: params.history,
+        }),
+    });
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        if (resp.status === 403 && errBody.detail?.error === 'insufficient_points') {
+            const e = new Error('insufficient_points');
+            (e as any).detail = errBody.detail;
+            throw e;
+        }
+        throw new Error(errBody.detail?.message || errBody.message || `speak/chat ${resp.status}`);
+    }
+    return resp.json();
+}
+
 // ── Gemini Premium STT — transcribe + pronunciation analysis in one call ──────
 interface GeminiSTTResult {
     text: string;       // accurate transcript (sent to DeepSeek)
@@ -536,6 +582,9 @@ export default function SpeakWithAITab() {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('ll_tts_macos_say') === '1';
     });
+    // Points tracking from backend API response
+    const [pointsRemaining, setPointsRemaining] = useState<number | null>(null);
+    const [showInsufficientPoints, setShowInsufficientPoints] = useState(false);
 
     const chatBottomRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -627,38 +676,71 @@ export default function SpeakWithAITab() {
             setGrammarResults(prev => ({ ...prev, [userMsg.id]: prefilledAnalysis! }));
         }
 
-        // Track usage: premium uses monthly counter, free uses daily
-        if (isPremium) { incrementMonthlyUsage(); }
-        else { incrementDailyUsage(); }
-        setDailyUsage(isPremium ? getMonthlyUsage() : getDailyUsage());
+        // Track local usage only for unauthenticated users
+        if (!user) {
+            if (isPremium) { incrementMonthlyUsage(); }
+            else { incrementDailyUsage(); }
+            setDailyUsage(isPremium ? getMonthlyUsage() : getDailyUsage());
+        }
 
-        // Build messages for DeepSeek — keep last 3 turns (6 msgs) for context depth without bloating tokens
+        // Build conversation history — allHistory includes the current user message at the end
+        // so we exclude it (already in `message` param) and keep the last 6 previous messages
         const currentConvo = getConversation(activeConvoId);
         const allHistory = (currentConvo?.messages ?? []).map(m => ({
-            role: m.role as DeepSeekMessage['role'],
+            role: m.role as 'user' | 'assistant',
             content: m.text,
         }));
-        // Slice to last 6 messages (≈ 3 back-and-forth turns)
-        const history: DeepSeekMessage[] = allHistory.slice(-6);
+        const historyForAPI = allHistory.slice(0, -1).slice(-6); // exclude current msg
 
+        // deepseekMessages kept for local fallback (unauthenticated / API error)
         const systemPrompt = buildSystemPrompt(topic, isVietnamese ? 'vi' : 'en', convoRole || undefined);
         const deepseekMessages: DeepSeekMessage[] = [
             { role: 'system', content: systemPrompt },
-            ...history,
+            ...allHistory.slice(-6), // include current msg for context
         ];
 
         try {
             abortRef.current = new AbortController();
             const signal = abortRef.current.signal;
 
-            // 1. Get AI reply — respects selectedModel choice
+            // 1. Get AI reply — backend API (logged in) or direct AI calls (anonymous)
             let replyText = '';
-            {
+
+            if (user) {
+                // Authenticated: use POST /api/v1/speak/chat — handles Points, system prompt, correction
+                const token = await user.getIdToken();
+                const apiModel: 'gemma4' | 'deepseek' = selectedModel === 'deepseek' ? 'deepseek' : 'gemma4';
+                try {
+                    const data = await callSpeakChatAPI({
+                        message: transcript,
+                        topic: topic || 'general',
+                        lang: isVietnamese ? 'vi' : 'en',
+                        role: convoRole || null,
+                        model: apiModel,
+                        history: historyForAPI,
+                        token,
+                        signal,
+                    });
+                    replyText = data.reply;
+                    setPointsRemaining(data.points_remaining);
+                } catch (e: any) {
+                    if (e?.name === 'AbortError' || e?.message === 'AbortError') throw e;
+                    if (e?.message === 'insufficient_points') {
+                        setShowInsufficientPoints(true);
+                        setAppState('idle');
+                        return;
+                    }
+                    // Network/server error — fall through to local direct API calls
+                    logError('speak/chat API', e?.message);
+                }
+            }
+
+            // Fallback: unauthenticated or API error — call AI providers directly
+            if (!replyText) {
                 let lastErr: any;
                 const useGemma4 = selectedModel === 'auto' ? canUseGemma4() : selectedModel === 'gemma4';
                 const useDeepSeek = selectedModel === 'auto' ? true : selectedModel === 'deepseek';
 
-                // Try Gemma 4 if allowed
                 if (useGemma4) {
                     try {
                         replyText = await callGemma4(deepseekMessages, signal);
@@ -671,7 +753,6 @@ export default function SpeakWithAITab() {
                     }
                 }
 
-                // Fallback / forced DeepSeek
                 if (!replyText && useDeepSeek) {
                     for (let attempt = 0; attempt <= 2; attempt++) {
                         try {
@@ -1048,26 +1129,35 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                         ))}
                     </div>
 
-                    {/* Usage quota */}
+                    {/* Usage quota / Points remaining */}
                     <div className={`px-4 py-3 border-t text-[10px] ${isDark ? 'border-gray-700/60 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
                         <div className="flex items-center gap-1 mb-1">
                             <span className={`px-1.5 py-0.5 rounded font-semibold ${isPremium
                                 ? isDark ? 'bg-violet-600/20 text-violet-400' : 'bg-violet-100 text-violet-700'
                                 : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600'
                                 }`}>
-                                {isPremium ? 'Premium' : 'Flash'}
+                                {isPremium ? 'Premium' : user ? 'Free' : 'Flash'}
                             </span>
                             <span>
-                                {isPremium
-                                    ? <>{t('Tháng này', 'This month')}: {dailyUsage}/{PREMIUM_MONTHLY_LIMIT}</>
-                                    : <>{t('Hôm nay', 'Today')}: {dailyUsage}/{FREE_LIMIT}</>
+                                {user && pointsRemaining !== null
+                                    ? <>{t('Points còn lại', 'Points left')}: <strong className={pointsRemaining === 0 ? 'text-red-400' : ''}>{pointsRemaining}</strong></>
+                                    : isPremium
+                                        ? <>{t('Tháng này', 'This month')}: {dailyUsage}/{PREMIUM_MONTHLY_LIMIT}</>
+                                        : <>{t('Hôm nay', 'Today')}: {dailyUsage}/{FREE_LIMIT}</>
                                 }
                             </span>
                         </div>
                         <div className={`h-1 rounded-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>
                             <div
-                                className={`h-full rounded-full transition-all duration-500 ${isPremium ? 'bg-violet-500' : 'bg-teal-500'}`}
-                                style={{ width: `${Math.min(100, (dailyUsage / (isPremium ? PREMIUM_MONTHLY_LIMIT : FREE_LIMIT)) * 100)}%` }}
+                                className={`h-full rounded-full transition-all duration-500
+                                    ${user && pointsRemaining !== null
+                                        ? pointsRemaining === 0 ? 'bg-red-500' : isPremium ? 'bg-violet-500' : 'bg-teal-500'
+                                        : isPremium ? 'bg-violet-500' : 'bg-teal-500'}`}
+                                style={{
+                                    width: user && pointsRemaining !== null
+                                        ? `${Math.min(100, (pointsRemaining / Math.max(pointsRemaining + (dailyUsage || 1), 1)) * 100)}%`
+                                        : `${Math.min(100, (dailyUsage / (isPremium ? PREMIUM_MONTHLY_LIMIT : FREE_LIMIT)) * 100)}%`,
+                                }}
                             />
                         </div>
                     </div>
@@ -1208,6 +1298,29 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
 
                             {/* Processing indicator */}
                             {appState === 'processing' && <ThinkingBubble isDark={isDark} />}
+
+                            {/* Insufficient Points banner */}
+                            {showInsufficientPoints && (
+                                <div className={`flex items-start gap-2 px-4 py-3 rounded-2xl text-sm mb-3
+                                    ${isDark ? 'bg-amber-900/30 text-amber-300 border border-amber-700/40' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold">{t('Hết Points!', 'Out of Points!')}</p>
+                                        <p className="text-xs opacity-80 mt-0.5">
+                                            {t(
+                                                'Vào Plan & Usage ở thanh bên để mua thêm Points và tiếp tục luyện nói.',
+                                                'Go to Plan & Usage in the sidebar to buy more Points and continue practicing.',
+                                            )}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowInsufficientPoints(false)}
+                                        className="ml-auto text-xs underline opacity-70 hover:opacity-100 flex-shrink-0 mt-0.5"
+                                    >
+                                        {t('Đóng', 'Dismiss')}
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Error */}
                             {appState === 'error' && errorMsg && (
