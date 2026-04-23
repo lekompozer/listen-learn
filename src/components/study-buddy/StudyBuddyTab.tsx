@@ -62,9 +62,9 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
 
     // Gradient colors for cards without cover images
     const gradients: Record<string, string> = {
-        online:  isDark ? 'from-teal-900/90 to-cyan-900/90'     : 'from-teal-100 to-cyan-50',
+        online: isDark ? 'from-teal-900/90 to-cyan-900/90' : 'from-teal-100 to-cyan-50',
         offline: isDark ? 'from-purple-900/90 to-indigo-900/90' : 'from-purple-100 to-indigo-50',
-        both:    isDark ? 'from-blue-900/90 to-teal-900/90'     : 'from-blue-100 to-teal-50',
+        both: isDark ? 'from-blue-900/90 to-teal-900/90' : 'from-blue-100 to-teal-50',
     };
     const grad = gradients[squad.meeting_type] ?? gradients.online;
 
@@ -1417,7 +1417,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
             // deduplicate by id
             const seen = new Set<string>();
             setMySquads(all.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; }));
-        }).catch(() => {});
+        }).catch(() => { });
     }, [currentUserId]);
 
     if (loading) {
@@ -1599,7 +1599,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 if (unique.length > 0) setSelectedSquadId(unique[0].id);
             } catch { /* ignore */ }
         })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     const userDisplayName = user?.displayName ?? user?.email?.split('@')[0] ?? 'User';

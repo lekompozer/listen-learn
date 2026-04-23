@@ -195,6 +195,15 @@ async fn copy_files_to_playlist_dir(
     Ok(result)
 }
 
+#[tauri::command]
+fn js_log(level: String, msg: String) {
+    match level.as_str() {
+        "error" => log::error!("[JS] {}", msg),
+        "warn"  => log::warn!("[JS] {}", msg),
+        _       => log::info!("[JS] {}", msg),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -240,6 +249,21 @@ pub fn run() {
             .initialization_script(
                 "window.__TAURI_DESKTOP__ = true; \
                  window.__WORDAI_ERRORS__ = []; \
+                 (function() { \
+                   var _origError = console.error.bind(console); \
+                   var _origWarn  = console.warn.bind(console); \
+                   function _fwdLog(level, args) { \
+                     try { \
+                       var msg = Array.from(args).map(function(a){ \
+                         return (a instanceof Error) ? (a.message + ' ' + a.stack) : String(a); \
+                       }).join(' '); \
+                       window.__TAURI_INTERNALS__ && \
+                         window.__TAURI_INTERNALS__.invoke('js_log', { level: level, msg: msg }); \
+                     } catch(e) {} \
+                   } \
+                   console.error = function() { _origError.apply(console, arguments); _fwdLog('error', arguments); }; \
+                   console.warn  = function() { _origWarn.apply(console, arguments);  _fwdLog('warn',  arguments); }; \
+                 })(); \
                  console.log('[WynAI Listen&Learn] v0.1.0 desktop runtime active');"
             )
             // Enable DevTools in all builds for debugging
@@ -266,6 +290,7 @@ pub fn run() {
             copy_files_to_playlist_dir,
             edge_tts::get_edge_tts_audio,
             call_gemma4,
+            js_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");
