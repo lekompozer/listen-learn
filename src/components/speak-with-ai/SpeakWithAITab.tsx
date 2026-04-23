@@ -683,6 +683,12 @@ export default function SpeakWithAITab() {
                 if (!replyText) throw lastErr ?? new Error('All AI providers failed');
             }
 
+            // Strip "💬 Correction:..." line before speaking — TTS should only read the main reply
+            const correctionSplit = replyText.indexOf('💬 Correction:');
+            const ttsText = correctionSplit !== -1
+                ? replyText.slice(0, correctionSplit).trim()
+                : replyText;
+
             // 2. TTS — Edge WS → macOS say fallback → SpeechSynthesis fallback
             //    Errors here are logged but never crash the main flow.
             let base64Audio: string | null = null;
@@ -691,7 +697,7 @@ export default function SpeakWithAITab() {
                 try {
                     const { invoke } = await import('@tauri-apps/api/core');
                     base64Audio = await invoke<string>('get_edge_tts_audio', {
-                        text: replyText, voice: selectedVoice, useMacosSay,
+                        text: ttsText, voice: selectedVoice, useMacosSay,
                     });
                     engineUsed = base64Audio?.startsWith('mp3:') ? 'edge' : 'macos-say';
                 } catch (e: any) {
@@ -700,7 +706,7 @@ export default function SpeakWithAITab() {
                         try {
                             const { invoke } = await import('@tauri-apps/api/core');
                             base64Audio = await invoke<string>('get_edge_tts_audio', {
-                                text: replyText, voice: selectedVoice, useMacosSay: true,
+                                text: ttsText, voice: selectedVoice, useMacosSay: true,
                             });
                             engineUsed = 'macos-say';
                         } catch (e2: any) {
@@ -726,7 +732,7 @@ export default function SpeakWithAITab() {
             } else {
                 // Final fallback: browser SpeechSynthesis (works on all platforms)
                 setMessages(prev => [...prev, aiMsg]);
-                await speakWithSynthesis(replyText);
+                await speakWithSynthesis(ttsText);
             }
 
             if (!isCurrentRound()) return; // user started new round while TTS was playing
