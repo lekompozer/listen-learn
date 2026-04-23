@@ -361,11 +361,22 @@ export async function getImageUploadUrl(): Promise<{
     error?: string;
 }> {
     const token = await getToken();
+    if (!token) {
+        console.error('[Upload] getImageUploadUrl: no auth token — user not logged in');
+        return { uploadUrl: '', imageId: '', error: 'Not authenticated' };
+    }
+    console.log('[Upload] getImageUploadUrl → POST', `${WORKER_URL}/api/upload/image-token`);
     const res = await fetch(`${WORKER_URL}/api/upload/image-token`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok || data.error) {
+        console.error('[Upload] getImageUploadUrl failed:', res.status, data);
+    } else {
+        console.log('[Upload] getImageUploadUrl OK — imageId:', data.imageId, 'uploadUrl:', data.uploadUrl?.slice(0, 60) + '...');
+    }
+    return data;
 }
 
 /**
@@ -374,15 +385,28 @@ export async function getImageUploadUrl(): Promise<{
  */
 export async function uploadImageToCF(file: File): Promise<string> {
     const CF_ACCOUNT_HASH = 'Pw2WK7nSZVnnzk4LKnBfXQ';
-    const { uploadUrl, imageId, error } = await getImageUploadUrl();
-    if (error || !uploadUrl) throw new Error(error ?? 'Failed to get upload URL');
+    console.log('[Upload] uploadImageToCF start — file:', file.name, file.size, 'bytes', file.type);
 
+    const { uploadUrl, imageId, error } = await getImageUploadUrl();
+    if (error || !uploadUrl) {
+        console.error('[Upload] uploadImageToCF: no uploadUrl —', error);
+        throw new Error(error ?? 'Failed to get upload URL');
+    }
+
+    console.log('[Upload] Uploading to CF Images — imageId:', imageId);
     const form = new FormData();
     form.append('file', file);
     const uploadRes = await fetch(uploadUrl, { method: 'POST', body: form });
-    if (!uploadRes.ok) throw new Error('Image upload failed');
+    const uploadBody = await uploadRes.text().catch(() => '(unreadable)');
+    if (!uploadRes.ok) {
+        console.error('[Upload] CF Images upload failed:', uploadRes.status, uploadBody);
+        throw new Error(`Image upload failed (${uploadRes.status}): ${uploadBody}`);
+    }
+    console.log('[Upload] CF Images upload OK:', uploadRes.status, uploadBody.slice(0, 120));
 
-    return `https://imagedelivery.net/${CF_ACCOUNT_HASH}/${imageId}/public`;
+    const publicUrl = `https://imagedelivery.net/${CF_ACCOUNT_HASH}/${imageId}/public`;
+    console.log('[Upload] Final URL:', publicUrl);
+    return publicUrl;
 }
 
 // ─── Trending / Top / Hot Channels / Random ───────────────────────────────────

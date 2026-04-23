@@ -59,76 +59,85 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
     const langInfo = COMMON_LANGUAGES.find(l => l.id === squad.language);
     const levelInfo = STUDY_LEVELS.find(l => l.id === squad.level);
 
+    // Gradient colors for cards without cover images
+    const gradients: Record<string, string> = {
+        online:  isDark ? 'from-teal-900/90 to-cyan-900/90'     : 'from-teal-100 to-cyan-50',
+        offline: isDark ? 'from-purple-900/90 to-indigo-900/90' : 'from-purple-100 to-indigo-50',
+        both:    isDark ? 'from-blue-900/90 to-teal-900/90'     : 'from-blue-100 to-teal-50',
+    };
+    const grad = gradients[squad.meeting_type] ?? gradients.online;
+
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left p-4 rounded-xl border transition-all hover:scale-[1.01] active:scale-[0.99]
+            className={`w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98] break-inside-avoid mb-2
                 ${isDark
-                    ? 'bg-gray-800/60 border-white/8 hover:bg-gray-700/60 hover:border-white/15'
-                    : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300'}
+                    ? 'bg-gray-800/70 border-white/8 hover:border-white/20'
+                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'}
             `}
         >
-            <div className="flex items-start gap-3">
-                {/* Meeting type icon */}
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0
-                    ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
-                    {mtIcon}
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                        <p className={`font-semibold text-sm leading-tight truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                            {squad.title}
-                        </p>
-                        <span className={`flex-shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full
-                            ${isFull
-                                ? 'bg-red-500/20 text-red-400'
-                                : isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-100 text-teal-700'}`}>
-                            {isFull
-                                ? t('Đầy', 'Full', isVi)
-                                : `${squad.spots_left} ${t('chỗ', 'left', isVi)}`}
-                        </span>
+            {/* Cover image / gradient placeholder */}
+            <div className="relative">
+                {squad.cover_url ? (
+                    <img
+                        src={squad.cover_url}
+                        alt={squad.title}
+                        className="w-full h-28 object-cover"
+                        loading="lazy"
+                    />
+                ) : (
+                    <div className={`w-full h-16 bg-gradient-to-br ${grad} flex items-center justify-center`}>
+                        <span className="text-3xl opacity-50">{mtIcon}</span>
                     </div>
-                    <p className={`text-xs mt-0.5 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {squad.description || t('(không có mô tả)', '(no description)', isVi)}
+                )}
+                {/* Spots badge */}
+                <span className={`absolute top-2 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full backdrop-blur-sm
+                    ${isFull
+                        ? 'bg-red-500/80 text-white'
+                        : 'bg-teal-600/80 text-white'}`}>
+                    {isFull ? t('Đầy', 'Full', isVi) : `${squad.spots_left} ${t('chỗ', 'left', isVi)}`}
+                </span>
+            </div>
+
+            {/* Card body */}
+            <div className="p-3">
+                <p className={`font-semibold text-sm leading-snug line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {squad.title}
+                </p>
+                {squad.description && (
+                    <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {squad.description}
                     </p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className={`flex items-center gap-1 text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                            <Users className="w-3 h-3" />
-                            {squad.member_count}/{squad.max_members}
+                )}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <span className={`flex items-center gap-1 text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <Users className="w-3 h-3" />
+                        {squad.member_count}/{squad.max_members}
+                    </span>
+                    {langInfo && (
+                        <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{langInfo.flag}</span>
+                    )}
+                    {levelInfo && squad.level !== 'any' && (
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
+                            {isVi ? levelInfo.labelVi : levelInfo.labelEn}
                         </span>
-                        {langInfo && (
-                            <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/8 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                                {langInfo.flag} {isVi ? langInfo.labelVi : langInfo.labelEn}
-                            </span>
-                        )}
-                        {levelInfo && squad.level !== 'any' && (
-                            <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
-                                {isVi ? levelInfo.labelVi : levelInfo.labelEn}
-                            </span>
-                        )}
-                        {tagList.slice(0, 1).map(tag => (
-                            <span key={tag} className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
-                                #{tag}
-                            </span>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5">
-                        {squad.host_avatar_url
-                            ? <img src={squad.host_avatar_url} alt="" className="w-4 h-4 rounded-full" />
-                            : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
-                                {squad.host_nickname[0]?.toUpperCase()}
-                            </div>
-                        }
-                        <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {squad.host_nickname} · {timeAgo(squad.created_at, isVi)}
+                    )}
+                    {tagList.slice(0, 1).map(tag => (
+                        <span key={tag} className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                            #{tag}
                         </span>
-                        {squad.deadline && (
-                            <span className={`flex items-center gap-0.5 text-[11px] ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                                <Clock className="w-3 h-3" />
-                                {new Date(squad.deadline).toLocaleDateString(isVi ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric' })}
-                            </span>
-                        )}
-                    </div>
+                    ))}
+                </div>
+                <div className="flex items-center gap-1.5 mt-2">
+                    {squad.host_avatar_url
+                        ? <img src={squad.host_avatar_url} alt="" className="w-4 h-4 rounded-full flex-shrink-0" />
+                        : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
+                            {squad.host_nickname[0]?.toUpperCase()}
+                        </div>
+                    }
+                    <span className={`text-[11px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {squad.host_nickname} · {timeAgo(squad.created_at, isVi)}
+                    </span>
                 </div>
             </div>
         </button>
@@ -585,12 +594,37 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
     const [recipientId, setRecipientId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [newMsgCount, setNewMsgCount] = useState(0);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const scrollDivRef = useRef<HTMLDivElement>(null);
+    const isAtBottomRef = useRef(true);
+    const prevMsgLenRef = useRef(0);
+
+    const scrollToBottom = () => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setNewMsgCount(0);
+        isAtBottomRef.current = true;
+    };
+
+    const handleScroll = () => {
+        const el = scrollDivRef.current;
+        if (!el) return;
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+        isAtBottomRef.current = atBottom;
+        if (atBottom) setNewMsgCount(0);
+    };
 
     const load = useCallback(async () => {
         try {
             const res = await getMessages(squadId);
-            setMessages(res.messages);
+            const newMsgs = res.messages;
+            const prevLen = prevMsgLenRef.current;
+            const added = newMsgs.length - prevLen;
+            if (added > 0 && prevLen > 0 && !isAtBottomRef.current) {
+                setNewMsgCount(c => c + added);
+            }
+            prevMsgLenRef.current = newMsgs.length;
+            setMessages(newMsgs);
         } catch {
             // ignore
         } finally {
@@ -606,8 +640,11 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
         return () => clearInterval(iv);
     }, [load]);
 
+    // Auto-scroll only when user is already at bottom
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (isAtBottomRef.current) {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
     }, [messages]);
 
     const handleSend = async () => {
@@ -627,7 +664,7 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
     const acceptedMembers = members.filter(m => m.status === 'accepted');
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full relative">
             {/* Host DM picker */}
             {isHost && acceptedMembers.length > 0 && (
                 <div className={`flex-shrink-0 px-3 py-2 border-b ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
@@ -654,7 +691,11 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
             )}
 
             {/* Messages list */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div
+                ref={scrollDivRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto p-3 space-y-2 relative"
+            >
                 {loading ? (
                     <div className="flex justify-center pt-8">
                         <RefreshCw className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
@@ -693,6 +734,17 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
                 )}
                 <div ref={bottomRef} />
             </div>
+
+            {/* Floating "new messages" indicator */}
+            {newMsgCount > 0 && (
+                <button
+                    onClick={scrollToBottom}
+                    className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shadow-lg bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                >
+                    <Bell className="w-3 h-3" />
+                    {newMsgCount} {t('tin mới ↓', 'new msg ↓', isVi)}
+                </button>
+            )}
 
             {/* Input — host only can send */}
             {isHost && (
@@ -741,7 +793,7 @@ interface SquadDetailModalProps {
     onRefreshList: () => void;
 }
 
-type DetailTab = 'info' | 'chat' | 'applicants' | 'members';
+type DetailTab = 'info' | 'applicants' | 'members';
 
 function SquadDetailModal({
     squadId, isDark, isVi, currentUserId,
@@ -876,15 +928,17 @@ function SquadDetailModal({
 
     const tabs: { id: DetailTab; labelVi: string; labelEn: string; badge?: number }[] = [
         { id: 'info', labelVi: 'Thông tin', labelEn: 'Info' },
-        { id: 'chat', labelVi: 'Tin nhắn', labelEn: 'Chat' },
         ...(isHost ? [{ id: 'applicants' as DetailTab, labelVi: 'Đơn xin vào', labelEn: 'Applicants', badge: applicants.length }] : []),
         { id: 'members', labelVi: 'Thành viên', labelEn: 'Members' },
     ];
 
     const card = (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className={`w-full max-w-xl max-h-[90vh] flex flex-col rounded-2xl shadow-2xl
-                ${isDark ? 'bg-gray-800 border border-white/8' : 'bg-white border border-gray-200'}`}>
+        <div className="fixed inset-0 z-[9999] flex justify-end bg-black/50 backdrop-blur-sm">
+            <div
+                className={`w-full max-w-md h-full flex flex-col shadow-2xl
+                    ${isDark ? 'bg-gray-800 border-l border-white/8' : 'bg-white border-l border-gray-200'}`}
+                style={{ animation: 'slideInFromRight 0.22s ease-out' }}
+            >
 
                 {/* Header */}
                 <div className={`flex-shrink-0 flex items-center justify-between px-5 py-3 border-b ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
@@ -1019,20 +1073,6 @@ function SquadDetailModal({
                                                 : t('Squad đã hoàn thành', 'Squad completed', isVi)}
                                         </div>
                                     )}
-                                </div>
-                            )}
-
-                            {/* CHAT TAB */}
-                            {activeTab === 'chat' && squad && currentUserId && (
-                                <div className="h-full" style={{ minHeight: '300px' }}>
-                                    <ChatPanel
-                                        squadId={squadId}
-                                        isHost={isHost}
-                                        members={members}
-                                        isDark={isDark}
-                                        isVi={isVi}
-                                        currentUserId={currentUserId}
-                                    />
                                 </div>
                             )}
 
@@ -1301,13 +1341,15 @@ interface SquadChatPanelProps {
     userPhotoURL: string | null;
     onOpenDetail: () => void;
     onClose: () => void;
+    onSelectSquad: (id: string) => void;
 }
 
-function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, onClose }: SquadChatPanelProps) {
+function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, onClose, onSelectSquad }: SquadChatPanelProps) {
     const [squad, setSquad] = useState<StudySquad | null>(null);
     const [members, setMembers] = useState<StudyMember[]>([]);
     const [isHost, setIsHost] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [mySquads, setMySquads] = useState<StudySquad[]>([]);
 
     useEffect(() => {
         setLoading(true);
@@ -1317,6 +1359,17 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
             setIsHost(res.is_host);
         }).catch(() => { /* ignore */ }).finally(() => setLoading(false));
     }, [squadId]);
+
+    // Load user's squads for the switcher
+    useEffect(() => {
+        if (!currentUserId) return;
+        Promise.all([getMyHosted(), getMyJoined()]).then(([h, j]) => {
+            const all = [...h.items, ...j.items.filter((i: any) => i.my_status === 'accepted')];
+            // deduplicate by id
+            const seen = new Set<string>();
+            setMySquads(all.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; }));
+        }).catch(() => {});
+    }, [currentUserId]);
 
     if (loading) {
         return (
@@ -1350,11 +1403,28 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
                 </button>
                 <span className="text-base">{mtIcon}</span>
                 <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{squad.title}</p>
+                    {/* Squad title — or dropdown switcher if user has multiple squads */}
+                    {mySquads.length > 1 ? (
+                        <div className="relative">
+                            <select
+                                value={squadId}
+                                onChange={e => onSelectSquad(e.target.value)}
+                                className={`appearance-none w-full text-sm font-semibold pr-5 bg-transparent border-none outline-none truncate cursor-pointer
+                                    ${isDark ? 'text-white' : 'text-gray-900'}`}
+                            >
+                                {mySquads.map(s => (
+                                    <option key={s.id} value={s.id}>{s.title}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className={`absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                        </div>
+                    ) : (
+                        <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{squad?.title}</p>
+                    )}
                     <div className="flex items-center gap-2">
                         <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                             <Users className="w-3 h-3 inline mr-0.5" />
-                            {squad.member_count}/{squad.max_members}
+                            {squad?.member_count}/{squad?.max_members}
                         </span>
                         {langInfo && (
                             <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1609,7 +1679,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 </div>
 
                 {/* Squad list */}
-                <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+                <div className="flex-1 overflow-y-auto px-3 py-3">
                     {loading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                             <div key={i} className={`w-full h-20 rounded-xl animate-pulse ${isDark ? 'bg-gray-800/60' : 'bg-white'}`} />
@@ -1634,15 +1704,18 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                         </div>
                     ) : (
                         <>
-                            {squads.map(squad => (
-                                <SquadCard
-                                    key={squad.id}
-                                    squad={squad}
-                                    isDark={isDark}
-                                    isVi={isVi}
-                                    onClick={() => setSelectedSquadId(squad.id)}
-                                />
-                            ))}
+                            {/* 2-column staggered masonry grid */}
+                            <div className="columns-2 gap-2">
+                                {squads.map(squad => (
+                                    <SquadCard
+                                        key={squad.id}
+                                        squad={squad}
+                                        isDark={isDark}
+                                        isVi={isVi}
+                                        onClick={() => setSelectedSquadId(squad.id)}
+                                    />
+                                ))}
+                            </div>
                             {hasMore && (
                                 <button
                                     onClick={() => loadSquads({ cursor: nextCursor ?? undefined, append: true })}
@@ -1686,6 +1759,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                         userPhotoURL={userPhotoURL}
                         onOpenDetail={() => setShowDetailModal(true)}
                         onClose={() => setSelectedSquadId(null)}
+                        onSelectSquad={(id) => setSelectedSquadId(id)}
                     />
                 </div>
             ) : (
