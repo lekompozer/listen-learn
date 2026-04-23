@@ -1446,7 +1446,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 limit: 20,
             });
             setSquads(prev => append ? [...prev, ...res.items] : res.items);
-            setNextCursor(res.nextCursor);
+            setNextCursor(res.nextCursor ?? null);
             setHasMore(res.hasMore);
         } catch (e: any) {
             console.error('[StudyBuddy] loadSquads failed:', e);

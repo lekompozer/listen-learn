@@ -136,13 +136,8 @@ export async function listSquads(opts: {
     sort?: 'latest' | 'hot';
     cursor?: string;
     limit?: number;
-}): Promisurl = `${WORKER}/api/squads?${params}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-        const body = await res.clone().text().catch(() => '(unreadable)');
-        console.error(`[StudyBuddy] GET ${url} → ${res.status}`, body);
-        throw new Error(`Failed to fetch squads (${res.status}: ${body})`);
-    }
+}): Promise<{ items: StudySquad[]; nextCursor?: string; hasMore: boolean }> {
+    const params = new URLSearchParams();
     if (opts.meeting_type) params.set('meeting_type', opts.meeting_type);
     if (opts.language) params.set('language', opts.language);
     if (opts.level && opts.level !== 'any') params.set('level', opts.level);
@@ -157,7 +152,10 @@ export async function listSquads(opts: {
         console.error(`[StudyBuddy] GET ${url} → ${res.status}`, body);
         throw new Error(`Failed to fetch squads (${res.status}: ${body})`);
     }
-    return res.json();
+    const data = await res.json();
+    // Normalize: worker may return { squads } or { items }
+    const items: StudySquad[] = data.items ?? data.squads ?? [];
+    return { items, nextCursor: data.nextCursor ?? undefined, hasMore: data.hasMore ?? !!data.nextCursor };
 }
 
 export async function getSquad(id: string): Promise<{
@@ -174,21 +172,15 @@ export async function getSquad(id: string): Promise<{
 
 export async function createSquad(body: {
     title: string;
-    descole.log('[StudyBuddy] createSquad →', { ...body, cover_url: body.cover_url ? '(set)' : null });
-    const res = await authedFetch('/api/squads', {
-        method: 'POST',
-        body: JSON.stringify({ meeting_type: 'online', level: 'any', language: '', ...body }),
-    });
-    if (!res.ok) {
-        const text = await res.text().catch(() => '{}');
-        console.error('[StudyBuddy] createSquad failed:', res.status, text);
-        let err: any = {};
-        try { err = JSON.parse(text); } catch {}
-        throw new Error(err.error || `Failed to create squad (${res.status}): ${text}`);
-    }
-    const result = await res.json();
-    console.log('[StudyBuddy] createSquad success:', result);
-    return result
+    description?: string;
+    cover_url?: string | null;
+    meeting_type?: MeetingType;
+    language?: string;
+    level?: StudyLevel;
+    city?: string;
+    country?: string;
+    max_members?: number;
+    tags?: string[];
     join_conditions?: string;
     deadline?: string | null;
     nickname?: string;
