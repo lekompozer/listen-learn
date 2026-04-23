@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AppProviders } from '@/contexts/AppProviders';
 import SelectionSpeakPopup from '@/components/SelectionSpeakPopup';
+import { Toaster } from 'react-hot-toast';
 
 export const metadata: Metadata = {
     title: 'WynAI Listen & Learn — Học Tiếng Anh Qua Bài Hát, Hội Thoại & Podcast',
@@ -16,8 +17,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <AppProviders>
                     {children}
                     <SelectionSpeakPopup />
+                    <Toaster
+                        position="bottom-center"
+                        toastOptions={{
+                            style: {
+                                background: '#1f2937',
+                                color: '#f9fafb',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                borderRadius: '10px',
+                                fontSize: '14px',
+                            },
+                            success: { iconTheme: { primary: '#14b8a6', secondary: '#f9fafb' } },
+                            error: { iconTheme: { primary: '#ef4444', secondary: '#f9fafb' } },
+                        }}
+                    />
                 </AppProviders>
             </body>
         </html>
     );
 }
+

@@ -168,6 +168,7 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
     const [deadline, setDeadline] = useState('');
 
     const [loading, setLoading] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -178,6 +179,7 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
 
     const handleSubmit = async () => {
         if (!title.trim()) return toast.error(t('Vui lòng nhập tiêu đề', 'Please enter a title', isVi));
+        setSubmitError(null);
         setLoading(true);
         try {
             let cover_url: string | null = null;
@@ -211,7 +213,9 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
             onCreated(res.squad);
         } catch (e: any) {
             console.error('[CreateSquad] error:', e);
-            toast.error(e.message || t('Lỗi tạo squad', 'Failed to create squad', isVi));
+            const msg = e.message || t('Lỗi tạo squad', 'Failed to create squad', isVi);
+            setSubmitError(msg);
+            toast.error(msg);
         } finally {
             setLoading(false);
         }
@@ -439,7 +443,13 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                 </div>
 
                 {/* Footer */}
-                <div className={`flex-shrink-0 flex justify-between gap-2 px-5 py-4 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                <div className={`flex-shrink-0 px-5 pt-3 pb-4 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                    {submitError && (
+                        <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs">
+                            ⚠️ {submitError}
+                        </div>
+                    )}
+                    <div className="flex justify-between gap-2">
                     <button
                         onClick={onClose}
                         className={`px-4 py-2 text-sm rounded-lg transition-colors ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -467,6 +477,7 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                             {t('Tạo Squad', 'Create Squad', isVi)}
                         </button>
                     )}
+                    </div>
                 </div>
             </div>
         </div>
