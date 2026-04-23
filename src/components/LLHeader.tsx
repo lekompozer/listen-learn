@@ -15,8 +15,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen,
+    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const SquadNotificationsDropdown = dynamic(() => import('@/components/study-buddy/SquadNotificationsDropdown'), { ssr: false });
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
 import type { TabType } from './ListenLearnApp';
@@ -34,6 +37,7 @@ const TABS: { id: TabType; labelVi: string; labelEn: string; icon: React.Compone
     { id: 'conversations', labelVi: 'Hội Thoại', labelEn: 'Conversations', icon: MessageCircle },
     { id: 'podcast', labelVi: 'Podcast', labelEn: 'Podcast', icon: Radio },
     { id: 'videos', labelVi: 'Videos', labelEn: 'Videos', icon: Play },
+    { id: 'study-buddy', labelVi: 'Study Buddy', labelEn: 'Study Buddy', icon: Users },
 ];
 
 interface LLHeaderProps {
@@ -190,6 +194,9 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                         </button>
                     )
                 )}
+
+                {/* Squad Notifications Bell */}
+                <SquadNotificationsDropdown isDark={isDark} isVi={isVietnamese} />
 
                 {/* Theme toggle */}
                 <button
