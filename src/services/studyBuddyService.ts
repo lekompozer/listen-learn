@@ -12,22 +12,22 @@ export type MeetingType = 'online' | 'offline' | 'both';
 export type StudyLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
 
 export const COMMON_LANGUAGES: { id: string; labelVi: string; labelEn: string; flag: string }[] = [
-    { id: 'english',  labelVi: 'Tiếng Anh',          labelEn: 'English',  flag: '🇬🇧' },
-    { id: 'japanese', labelVi: 'Tiếng Nhật',          labelEn: 'Japanese', flag: '🇯🇵' },
-    { id: 'korean',   labelVi: 'Tiếng Hàn',           labelEn: 'Korean',   flag: '🇰🇷' },
-    { id: 'chinese',  labelVi: 'Tiếng Trung',         labelEn: 'Chinese',  flag: '🇨🇳' },
-    { id: 'french',   labelVi: 'Tiếng Pháp',          labelEn: 'French',   flag: '🇫🇷' },
-    { id: 'german',   labelVi: 'Tiếng Đức',           labelEn: 'German',   flag: '🇩🇪' },
-    { id: 'spanish',  labelVi: 'Tiếng Tây Ban Nha',   labelEn: 'Spanish',  flag: '🇪🇸' },
-    { id: 'vietnamese', labelVi: 'Tiếng Việt',        labelEn: 'Vietnamese', flag: '🇻🇳' },
-    { id: 'other',    labelVi: 'Khác',                labelEn: 'Other',    flag: '🌐' },
+    { id: 'english', labelVi: 'Tiếng Anh', labelEn: 'English', flag: '🇬🇧' },
+    { id: 'japanese', labelVi: 'Tiếng Nhật', labelEn: 'Japanese', flag: '🇯🇵' },
+    { id: 'korean', labelVi: 'Tiếng Hàn', labelEn: 'Korean', flag: '🇰🇷' },
+    { id: 'chinese', labelVi: 'Tiếng Trung', labelEn: 'Chinese', flag: '🇨🇳' },
+    { id: 'french', labelVi: 'Tiếng Pháp', labelEn: 'French', flag: '🇫🇷' },
+    { id: 'german', labelVi: 'Tiếng Đức', labelEn: 'German', flag: '🇩🇪' },
+    { id: 'spanish', labelVi: 'Tiếng Tây Ban Nha', labelEn: 'Spanish', flag: '🇪🇸' },
+    { id: 'vietnamese', labelVi: 'Tiếng Việt', labelEn: 'Vietnamese', flag: '🇻🇳' },
+    { id: 'other', labelVi: 'Khác', labelEn: 'Other', flag: '🌐' },
 ];
 
 export const STUDY_LEVELS: { id: StudyLevel; labelVi: string; labelEn: string }[] = [
-    { id: 'any',          labelVi: 'Mọi trình độ', labelEn: 'Any level' },
-    { id: 'beginner',     labelVi: 'Sơ cấp',       labelEn: 'Beginner' },
-    { id: 'intermediate', labelVi: 'Trung cấp',     labelEn: 'Intermediate' },
-    { id: 'advanced',     labelVi: 'Nâng cao',      labelEn: 'Advanced' },
+    { id: 'any', labelVi: 'Mọi trình độ', labelEn: 'Any level' },
+    { id: 'beginner', labelVi: 'Sơ cấp', labelEn: 'Beginner' },
+    { id: 'intermediate', labelVi: 'Trung cấp', labelEn: 'Intermediate' },
+    { id: 'advanced', labelVi: 'Nâng cao', labelEn: 'Advanced' },
 ];
 
 export const MEETING_TYPE_ICONS: Record<MeetingType, string> = {
