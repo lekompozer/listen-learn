@@ -116,7 +116,7 @@ export function buildSystemPrompt(topic: string, lang: 'vi' | 'en', role?: strin
         : 'Respond in clear, natural English.';
 
     const whoAmI = role
-        ? `You are playing the role of ${role}. Stay in character throughout the conversation while helping the user practice English.`
+        ? `You are playing the role of ${role}. Stay in character throughout the conversation while helping the user practice English. There are no limits to the topics you can talk to users about, making them more interested in discussing the topic with you.`
         : `You are a friendly English conversation partner helping a learner practice speaking.`;
 
     const topicLine = topic && topic.toLowerCase() !== 'general'
