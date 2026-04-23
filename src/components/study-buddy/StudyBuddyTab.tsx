@@ -22,19 +22,14 @@ import {
     getApplicants, acceptApplicant, rejectApplicant, removeMember,
     getMyHosted, getMyJoined,
     getMessages, sendMessage,
-    STUDY_CATEGORIES,
-    type StudySquad, type StudyMember, type SquadMessage, type StudyCategory,
+    COMMON_LANGUAGES, MEETING_TYPE_ICONS, STUDY_LEVELS,
+    type MeetingType, type StudyLevel,
+    type StudySquad, type StudyMember, type SquadMessage,
 } from '@/services/studyBuddyService';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function t(vi: string, en: string, isVi: boolean) { return isVi ? vi : en; }
-
-function categoryInfo(cat: StudyCategory, isVi: boolean) {
-    const found = STUDY_CATEGORIES.find(c => c.id === cat);
-    return found ? { label: isVi ? found.labelVi : found.labelEn, emoji: found.emoji }
-                 : { label: cat, emoji: '📚' };
-}
 
 function timeAgo(dateStr: string, isVi: boolean): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -57,9 +52,11 @@ interface SquadCardProps {
 }
 
 function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
-    const cat = categoryInfo(squad.category, isVi);
     const isFull = squad.spots_left <= 0;
     const tagList = squad.tags ? squad.tags.split(',').filter(Boolean) : [];
+    const mtIcon = MEETING_TYPE_ICONS[squad.meeting_type] ?? '📚';
+    const langInfo = COMMON_LANGUAGES.find(l => l.id === squad.language);
+    const levelInfo = STUDY_LEVELS.find(l => l.id === squad.level);
 
     return (
         <button
@@ -71,10 +68,10 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
             `}
         >
             <div className="flex items-start gap-3">
-                {/* Category emoji */}
+                {/* Meeting type icon */}
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0
                     ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
-                    {cat.emoji}
+                    {mtIcon}
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
@@ -93,15 +90,22 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
                     <p className={`text-xs mt-0.5 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         {squad.description || t('(không có mô tả)', '(no description)', isVi)}
                     </p>
-                    <div className="flex items-center gap-3 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className={`flex items-center gap-1 text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                             <Users className="w-3 h-3" />
                             {squad.member_count}/{squad.max_members}
                         </span>
-                        <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/8 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
-                            {cat.label}
-                        </span>
-                        {tagList.slice(0, 2).map(tag => (
+                        {langInfo && (
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/8 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
+                                {langInfo.flag} {isVi ? langInfo.labelVi : langInfo.labelEn}
+                            </span>
+                        )}
+                        {levelInfo && squad.level !== 'any' && (
+                            <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
+                                {isVi ? levelInfo.labelVi : levelInfo.labelEn}
+                            </span>
+                        )}
+                        {tagList.slice(0, 1).map(tag => (
                             <span key={tag} className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
                                 #{tag}
                             </span>
@@ -112,7 +116,7 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
                             ? <img src={squad.host_avatar_url} alt="" className="w-4 h-4 rounded-full" />
                             : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                 {squad.host_nickname[0]?.toUpperCase()}
-                              </div>
+                            </div>
                         }
                         <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                             {squad.host_nickname} · {timeAgo(squad.created_at, isVi)}
@@ -144,7 +148,11 @@ interface CreateSquadModalProps {
 function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, userPhotoURL }: CreateSquadModalProps) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
-    const [category, setCategory] = useState<StudyCategory>('general');
+    const [meetingType, setMeetingType] = useState<MeetingType>('online');
+    const [language, setLanguage] = useState('english');
+    const [level, setLevel] = useState<StudyLevel>('any');
+    const [city, setCity] = useState('');
+    const [country, setCountry] = useState('');
     const [maxMembers, setMaxMembers] = useState(6);
     const [tagsInput, setTagsInput] = useState('');
     const [joinConditions, setJoinConditions] = useState('');
@@ -159,7 +167,11 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
             const res = await createSquad({
                 title: title.trim(),
                 description: description.trim(),
-                category,
+                meeting_type: meetingType,
+                language,
+                level,
+                city: meetingType !== 'online' ? city.trim() : '',
+                country: meetingType !== 'online' ? country.trim() : '',
                 max_members: maxMembers,
                 tags,
                 join_conditions: joinConditions.trim(),
@@ -226,23 +238,46 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                         />
                     </div>
 
-                    {/* Category + Max members row */}
+                    {/* Meeting type */}
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {t('Hình thức học', 'Meeting type', isVi)}
+                        </label>
+                        <div className="flex gap-2">
+                            {(['online', 'offline', 'both'] as MeetingType[]).map(mt => (
+                                <button
+                                    key={mt}
+                                    type="button"
+                                    onClick={() => setMeetingType(mt)}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg border transition-colors
+                                        ${meetingType === mt
+                                            ? 'border-teal-500 bg-teal-500/20 text-teal-400'
+                                            : isDark ? 'border-white/10 bg-gray-700/60 text-gray-400 hover:border-white/20' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300'}`}
+                                >
+                                    {MEETING_TYPE_ICONS[mt]}
+                                    <span>{mt === 'online' ? t('Trực tuyến', 'Online', isVi) : mt === 'offline' ? t('Trực tiếp', 'Offline', isVi) : t('Cả hai', 'Both', isVi)}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Language + Level row */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {t('Chủ đề', 'Category', isVi)}
+                                {t('Ngôn ngữ học', 'Language', isVi)}
                             </label>
                             <div className="relative">
                                 <select
-                                    value={category}
-                                    onChange={e => setCategory(e.target.value as StudyCategory)}
+                                    value={language}
+                                    onChange={e => setLanguage(e.target.value)}
                                     className={`w-full appearance-none px-3 pr-8 py-2 text-sm rounded-lg border outline-none transition-colors
                                         ${isDark
                                             ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
                                             : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
                                 >
-                                    {STUDY_CATEGORIES.map(c => (
-                                        <option key={c.id} value={c.id}>{c.emoji} {isVi ? c.labelVi : c.labelEn}</option>
+                                    {COMMON_LANGUAGES.map(l => (
+                                        <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
                                     ))}
                                 </select>
                                 <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
@@ -250,20 +285,76 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                         </div>
                         <div>
                             <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {t('Số thành viên (2-24)', 'Max members (2-24)', isVi)}
+                                {t('Trình độ', 'Level', isVi)}
                             </label>
-                            <input
-                                type="number"
-                                min={2}
-                                max={24}
-                                value={maxMembers}
-                                onChange={e => setMaxMembers(Math.min(24, Math.max(2, Number(e.target.value))))}
-                                className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                    ${isDark
-                                        ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
-                                        : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
-                            />
+                            <div className="relative">
+                                <select
+                                    value={level}
+                                    onChange={e => setLevel(e.target.value as StudyLevel)}
+                                    className={`w-full appearance-none px-3 pr-8 py-2 text-sm rounded-lg border outline-none transition-colors
+                                        ${isDark
+                                            ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
+                                >
+                                    {STUDY_LEVELS.map(l => (
+                                        <option key={l.id} value={l.id}>{isVi ? l.labelVi : l.labelEn}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                            </div>
                         </div>
+                    </div>
+
+                    {/* City + Country (offline/both only) */}
+                    {meetingType !== 'online' && (
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Thành phố', 'City', isVi)}
+                                </label>
+                                <input
+                                    value={city}
+                                    onChange={e => setCity(e.target.value)}
+                                    placeholder={t('VD: Hà Nội', 'E.g.: Hanoi', isVi)}
+                                    className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
+                                        ${isDark
+                                            ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
+                                />
+                            </div>
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Quốc gia', 'Country', isVi)}
+                                </label>
+                                <input
+                                    value={country}
+                                    onChange={e => setCountry(e.target.value)}
+                                    placeholder={t('VD: Việt Nam', 'E.g.: Vietnam', isVi)}
+                                    className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
+                                        ${isDark
+                                            ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
+                                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Max members */}
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {t('Số thành viên (2-24)', 'Max members (2-24)', isVi)}
+                        </label>
+                        <input
+                            type="number"
+                            min={2}
+                            max={24}
+                            value={maxMembers}
+                            onChange={e => setMaxMembers(Math.min(24, Math.max(2, Number(e.target.value))))}
+                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
+                                ${isDark
+                                    ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
+                                    : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
+                        />
                     </div>
 
                     {/* Tags */}
@@ -726,7 +817,6 @@ function SquadDetailModal({
         }
     };
 
-    const cat = squad ? categoryInfo(squad.category, isVi) : null;
     const tagList = squad?.tags ? squad.tags.split(',').filter(Boolean) : [];
 
     const tabs: { id: DetailTab; labelVi: string; labelEn: string; badge?: number }[] = [
@@ -797,14 +887,22 @@ function SquadDetailModal({
                             {/* INFO TAB */}
                             {activeTab === 'info' && squad && (
                                 <div className="p-5 space-y-4">
-                                    {/* Category + spots */}
+                                    {/* Meeting type + language + level + location */}
                                     <div className="flex items-center gap-3">
-                                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
-                                            {cat?.emoji}
+                                        <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${isDark ? 'bg-white/8' : 'bg-gray-100'}`}>
+                                            {MEETING_TYPE_ICONS[squad.meeting_type] ?? '📚'}
                                         </span>
-                                        <div>
-                                            <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{cat?.label}</p>
-                                            <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {(() => { const l = COMMON_LANGUAGES.find(x => x.id === squad.language); return l ? <span className={`text-xs px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/8 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>{l.flag} {isVi ? l.labelVi : l.labelEn}</span> : null; })()}
+                                                {squad.level !== 'any' && (() => { const lv = STUDY_LEVELS.find(x => x.id === squad.level); return lv ? <span className={`text-xs px-1.5 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>{isVi ? lv.labelVi : lv.labelEn}</span> : null; })()}
+                                                {(squad.city || squad.country) && (
+                                                    <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                                        📍 {[squad.city, squad.country].filter(Boolean).join(', ')}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className={`text-sm font-medium mt-0.5 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                                 {squad.member_count}/{squad.max_members} {t('thành viên', 'members', isVi)}
                                                 {squad.spots_left > 0 && (
                                                     <span className={`ml-2 text-xs ${isDark ? 'text-teal-400' : 'text-teal-600'}`}>
@@ -898,7 +996,7 @@ function SquadDetailModal({
                                                         ? <img src={applicant.avatar_url} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
                                                         : <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                                             {applicant.nickname[0]?.toUpperCase()}
-                                                          </div>
+                                                        </div>
                                                     }
                                                     <div className="min-w-0">
                                                         <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{applicant.nickname}</p>
@@ -949,7 +1047,7 @@ function SquadDetailModal({
                                                     ? <img src={m.avatar_url} alt="" className="w-8 h-8 rounded-full" />
                                                     : <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                                         {m.nickname[0]?.toUpperCase()}
-                                                      </div>
+                                                    </div>
                                                 }
                                                 <div>
                                                     <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{m.nickname}</p>
@@ -1106,7 +1204,6 @@ function HistoryModal({ isDark, isVi, onClose, onOpenSquad }: HistoryModalProps)
                             {t('Không có gì', 'Nothing here', isVi)}
                         </p>
                     ) : items.map((item: any) => {
-                        const cat = categoryInfo(item.category, isVi);
                         return (
                             <button
                                 key={item.id}
@@ -1114,7 +1211,7 @@ function HistoryModal({ isDark, isVi, onClose, onOpenSquad }: HistoryModalProps)
                                 className={`w-full text-left flex items-center gap-3 p-3 rounded-xl border transition-colors
                                     ${isDark ? 'bg-gray-700/50 border-white/8 hover:bg-gray-700' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`}
                             >
-                                <span className="text-xl">{cat.emoji}</span>
+                                <span className="text-xl">{MEETING_TYPE_ICONS[item.meeting_type as MeetingType] ?? '📚'}</span>
                                 <div className="flex-1 min-w-0">
                                     <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.title}</p>
                                     <div className="flex items-center gap-2 mt-0.5">
@@ -1154,8 +1251,10 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [search, setSearch] = useState('');
-    const [sort, setSort] = useState<'latest' | 'deadline' | 'popular'>('latest');
-    const [selectedCategory, setSelectedCategory] = useState<StudyCategory | ''>('');
+    const [sort, setSort] = useState<'hot' | 'latest'>('hot');
+    const [meetingTypeFilter, setMeetingTypeFilter] = useState<'all' | MeetingType>('all');
+    const [languageFilter, setLanguageFilter] = useState('');
+    const [levelFilter, setLevelFilter] = useState<StudyLevel | ''>('');
     const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
@@ -1163,8 +1262,6 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
 
     const loadSquads = useCallback(async (opts: {
         search?: string;
-        category?: StudyCategory | '';
-        sort?: 'latest' | 'deadline' | 'popular';
         cursor?: string;
         append?: boolean;
     } = {}) => {
@@ -1174,8 +1271,10 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
         try {
             const res = await listSquads({
                 search: opts.search ?? search,
-                category: (opts.category ?? selectedCategory) || undefined,
-                sort: opts.sort ?? sort,
+                meeting_type: meetingTypeFilter !== 'all' ? meetingTypeFilter : undefined,
+                language: languageFilter || undefined,
+                level: (levelFilter || undefined) as any,
+                sort,
                 cursor: opts.cursor,
                 limit: 20,
             });
@@ -1188,9 +1287,9 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [search, selectedCategory, sort, isVi]);
+    }, [search, meetingTypeFilter, languageFilter, levelFilter, sort, isVi]);
 
-    useEffect(() => { loadSquads(); }, [sort, selectedCategory]);
+    useEffect(() => { loadSquads(); }, [sort, meetingTypeFilter, languageFilter, levelFilter]);
 
     const handleSearch = (val: string) => {
         setSearch(val);
@@ -1221,17 +1320,33 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     />
                 </div>
 
-                {/* Category filter */}
+                {/* Meeting type filter */}
                 <div className="relative">
                     <select
-                        value={selectedCategory}
-                        onChange={e => setSelectedCategory(e.target.value as StudyCategory | '')}
+                        value={meetingTypeFilter}
+                        onChange={e => setMeetingTypeFilter(e.target.value as 'all' | MeetingType)}
                         className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
                             ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
                     >
-                        <option value="">{t('Tất cả', 'All topics', isVi)}</option>
-                        {STUDY_CATEGORIES.map(c => (
-                            <option key={c.id} value={c.id}>{c.emoji} {isVi ? c.labelVi : c.labelEn}</option>
+                        <option value="all">{t('Tất cả', 'All', isVi)}</option>
+                        <option value="online">💻 {t('Trực tuyến', 'Online', isVi)}</option>
+                        <option value="offline">🏠 {t('Trực tiếp', 'Offline', isVi)}</option>
+                        <option value="both">🌐 {t('Cả hai', 'Both', isVi)}</option>
+                    </select>
+                    <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                </div>
+
+                {/* Language filter */}
+                <div className="relative">
+                    <select
+                        value={languageFilter}
+                        onChange={e => setLanguageFilter(e.target.value)}
+                        className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
+                            ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
+                    >
+                        <option value="">{t('Ngôn ngữ', 'Language', isVi)}</option>
+                        {COMMON_LANGUAGES.map(l => (
+                            <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
                         ))}
                     </select>
                     <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
@@ -1245,9 +1360,8 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                         className={`appearance-none text-xs pl-2 pr-6 py-1.5 rounded-xl border outline-none
                             ${isDark ? 'bg-gray-800/60 border-white/8 text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}
                     >
+                        <option value="hot">🔥 {t('Nóng', 'Hot', isVi)}</option>
                         <option value="latest">{t('Mới nhất', 'Latest', isVi)}</option>
-                        <option value="popular">{t('Phổ biến', 'Popular', isVi)}</option>
-                        <option value="deadline">{t('Sắp hết hạn', 'Deadline', isVi)}</option>
                     </select>
                     <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                 </div>

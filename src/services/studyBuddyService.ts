@@ -1,40 +1,54 @@
 /**
  * studyBuddyService.ts
  * Calls the Cloudflare Worker (db-wordai-community) directly — no Python FastAPI backend.
- * All squad categories are learning-focused: listening | speaking | reading | writing |
- * grammar | vocabulary | ielts | toeic | toefl | general
+ * Squads are distinguished by meeting_type (online/offline/both), language, and level.
  */
 
 import { wordaiAuth } from '@/lib/wordai-firebase';
 
 const WORKER = 'https://db-wordai-community.hoangnguyen358888.workers.dev';
 
-export type StudyCategory =
-    | 'listening' | 'speaking' | 'reading' | 'writing'
-    | 'grammar' | 'vocabulary' | 'ielts' | 'toeic' | 'toefl' | 'general';
+export type MeetingType = 'online' | 'offline' | 'both';
+export type StudyLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
 
-export const STUDY_CATEGORIES: { id: StudyCategory; labelVi: string; labelEn: string; emoji: string }[] = [
-    { id: 'general', labelVi: 'Tổng quát', labelEn: 'General', emoji: '📚' },
-    { id: 'speaking', labelVi: 'Nói', labelEn: 'Speaking', emoji: '🗣️' },
-    { id: 'listening', labelVi: 'Nghe', labelEn: 'Listening', emoji: '🎧' },
-    { id: 'reading', labelVi: 'Đọc', labelEn: 'Reading', emoji: '📖' },
-    { id: 'writing', labelVi: 'Viết', labelEn: 'Writing', emoji: '✍️' },
-    { id: 'grammar', labelVi: 'Ngữ pháp', labelEn: 'Grammar', emoji: '📝' },
-    { id: 'vocabulary', labelVi: 'Từ vựng', labelEn: 'Vocabulary', emoji: '🔤' },
-    { id: 'ielts', labelVi: 'IELTS', labelEn: 'IELTS', emoji: '🏅' },
-    { id: 'toeic', labelVi: 'TOEIC', labelEn: 'TOEIC', emoji: '🎯' },
-    { id: 'toefl', labelVi: 'TOEFL', labelEn: 'TOEFL', emoji: '🌐' },
+export const COMMON_LANGUAGES: { id: string; labelVi: string; labelEn: string; flag: string }[] = [
+    { id: 'english',  labelVi: 'Tiếng Anh',          labelEn: 'English',  flag: '🇬🇧' },
+    { id: 'japanese', labelVi: 'Tiếng Nhật',          labelEn: 'Japanese', flag: '🇯🇵' },
+    { id: 'korean',   labelVi: 'Tiếng Hàn',           labelEn: 'Korean',   flag: '🇰🇷' },
+    { id: 'chinese',  labelVi: 'Tiếng Trung',         labelEn: 'Chinese',  flag: '🇨🇳' },
+    { id: 'french',   labelVi: 'Tiếng Pháp',          labelEn: 'French',   flag: '🇫🇷' },
+    { id: 'german',   labelVi: 'Tiếng Đức',           labelEn: 'German',   flag: '🇩🇪' },
+    { id: 'spanish',  labelVi: 'Tiếng Tây Ban Nha',   labelEn: 'Spanish',  flag: '🇪🇸' },
+    { id: 'vietnamese', labelVi: 'Tiếng Việt',        labelEn: 'Vietnamese', flag: '🇻🇳' },
+    { id: 'other',    labelVi: 'Khác',                labelEn: 'Other',    flag: '🌐' },
 ];
+
+export const STUDY_LEVELS: { id: StudyLevel; labelVi: string; labelEn: string }[] = [
+    { id: 'any',          labelVi: 'Mọi trình độ', labelEn: 'Any level' },
+    { id: 'beginner',     labelVi: 'Sơ cấp',       labelEn: 'Beginner' },
+    { id: 'intermediate', labelVi: 'Trung cấp',     labelEn: 'Intermediate' },
+    { id: 'advanced',     labelVi: 'Nâng cao',      labelEn: 'Advanced' },
+];
+
+export const MEETING_TYPE_ICONS: Record<MeetingType, string> = {
+    online: '💻',
+    offline: '🏠',
+    both: '🌐',
+};
 
 export interface StudySquad {
     id: string;
     title: string;
     description: string;
-    category: StudyCategory;
+    meeting_type: MeetingType;
+    language: string;
+    level: StudyLevel;
     host_id: string;
     host_nickname: string;
     host_avatar_url: string | null;
     cover_url: string | null;
+    city: string;
+    country: string;
     max_members: number;
     member_count: number;
     pending_count: number;
@@ -43,7 +57,6 @@ export interface StudySquad {
     join_conditions: string;
     deadline: string | null;
     status: 'active' | 'cancelled' | 'completed';
-    is_online: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -107,14 +120,18 @@ async function authedFetch(path: string, init: RequestInit = {}): Promise<Respon
 // ─── Squads ───────────────────────────────────────────────────────────────────
 
 export async function listSquads(opts: {
-    category?: StudyCategory;
+    meeting_type?: MeetingType;
+    language?: string;
+    level?: StudyLevel;
     search?: string;
-    sort?: 'latest' | 'deadline' | 'popular';
+    sort?: 'latest' | 'hot';
     cursor?: string;
     limit?: number;
 }): Promise<SquadListResponse> {
     const params = new URLSearchParams();
-    if (opts.category) params.set('category', opts.category);
+    if (opts.meeting_type) params.set('meeting_type', opts.meeting_type);
+    if (opts.language) params.set('language', opts.language);
+    if (opts.level && opts.level !== 'any') params.set('level', opts.level);
     if (opts.search) params.set('search', opts.search);
     if (opts.sort) params.set('sort', opts.sort);
     if (opts.cursor) params.set('cursor', opts.cursor);
@@ -139,7 +156,11 @@ export async function getSquad(id: string): Promise<{
 export async function createSquad(body: {
     title: string;
     description?: string;
-    category: StudyCategory;
+    meeting_type?: MeetingType;
+    language?: string;
+    level?: StudyLevel;
+    city?: string;
+    country?: string;
     max_members?: number;
     tags?: string[];
     join_conditions?: string;
@@ -149,7 +170,7 @@ export async function createSquad(body: {
 }): Promise<{ squad: StudySquad }> {
     const res = await authedFetch('/api/squads', {
         method: 'POST',
-        body: JSON.stringify({ is_online: true, ...body }),
+        body: JSON.stringify({ meeting_type: 'online', level: 'any', language: '', ...body }),
     });
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));

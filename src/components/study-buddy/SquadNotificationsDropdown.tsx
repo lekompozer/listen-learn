@@ -88,13 +88,13 @@ export default function SquadNotificationsDropdown({ isDark, isVi }: Props) {
 
     const handleMarkOne = async (notif: SquadNotification) => {
         if (notif.is_read) return;
-        await markNotifRead(notif.id).catch(() => {});
+        await markNotifRead(notif.id).catch(() => { });
         setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
         setUnreadCount(prev => Math.max(0, prev - 1));
     };
 
     const handleMarkAll = async () => {
-        await markAllNotifsRead().catch(() => {});
+        await markAllNotifsRead().catch(() => { });
         setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
         setUnreadCount(0);
     };
