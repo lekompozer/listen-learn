@@ -42,7 +42,7 @@ async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
         .post(&url)
         .header("Authorization", format!("Bearer {}", api_key))
         .header("Content-Type", "application/json")
-        .json(&serde_json::json!({ "messages": filtered, "max_tokens": 800 }))
+        .json(&serde_json::json!({ "messages": filtered, "max_tokens": 4000 }))
         .send()
         .await
         .map_err(|e| { log::error!("[Gemma4] Request failed: {e}"); format!("Request failed: {e}") })?;

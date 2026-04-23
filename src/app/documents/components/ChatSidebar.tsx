@@ -19,7 +19,7 @@ const CF_ACCOUNT_ID = process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '';
 const CF_AI_TOKEN = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY || '';
 const GEMMA4_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 const GEMMA4_DAILY_KEY = 'll_gemma4_daily_chat';
-const GEMMA4_DAILY_LIMIT = 5;
+const GEMMA4_DAILY_LIMIT = 10;
 
 function getGemma4DailyUsage(): number {
     try {
@@ -51,7 +51,7 @@ async function callGemma4Direct(
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CF_AI_TOKEN}` },
-        body: JSON.stringify({ messages, max_tokens: 800 }),
+        body: JSON.stringify({ messages, max_tokens: 4000 }),
     });
     if (!res.ok) throw new Error(`Gemma4 API error: ${res.status}`);
     const data = await res.json();

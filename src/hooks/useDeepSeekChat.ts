@@ -9,7 +9,7 @@ const CF_ACCOUNT_ID = process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '';
 const CF_AI_TOKEN = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY || '';
 const GEMMA4_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 const GEMMA4_DAILY_KEY = 'll_gemma4_daily';
-const GEMMA4_DAILY_LIMIT = 5;
+const GEMMA4_DAILY_LIMIT = 10;
 
 export interface DeepSeekMessage {
     role: 'system' | 'user' | 'assistant';
