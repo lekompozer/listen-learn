@@ -54,6 +54,7 @@ async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
         return Err(format!("Gemma4 API error {code}: {body}"));
     }
     let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    log::info!("[Gemma4] Raw response: {}", data.to_string().chars().take(500).collect::<String>());
     let text = data["result"]["response"]
         .as_str()
         .or_else(|| data["choices"][0]["message"]["content"].as_str())

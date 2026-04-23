@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Listen & Learn",
-  "version": "0.1.66",
+  "version": "0.1.67",
   "identifier": "pro.wynai.listenlearn",
   "build": {
     "frontendDist": "../out",
