@@ -159,6 +159,7 @@ export async function createSquad(body: {
     meeting_type?: MeetingType;
     language?: string;
     level?: StudyLevel;
+    cover_url?: string | null;
     city?: string;
     country?: string;
     max_members?: number;

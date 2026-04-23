@@ -11,11 +11,12 @@ import { createPortal } from 'react-dom';
 import {
     Users, Search, Plus, ChevronDown, X, Send, Check, CheckCheck,
     Clock, Crown, MessageSquare, UserCheck, UserX, LogOut, Trash2,
-    RefreshCw, ChevronRight, ArrowLeft, Bell,
+    RefreshCw, ChevronRight, ArrowLeft, Bell, ImagePlus, ChevronLeft,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useTheme, useLanguage } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
+import { uploadImageToCF } from '@/services/communityService';
 import {
     listSquads, getSquad, createSquad, cancelSquad,
     applySquad, cancelApply, leaveSquad,
@@ -134,7 +135,7 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
     );
 }
 
-// ─── CreateSquadModal ─────────────────────────────────────────────────────────
+// ─── CreateSquadModal — 2-step wizard ────────────────────────────────────────
 
 interface CreateSquadModalProps {
     isDark: boolean;
@@ -146,8 +147,16 @@ interface CreateSquadModalProps {
 }
 
 function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, userPhotoURL }: CreateSquadModalProps) {
+    const [step, setStep] = useState<1 | 2>(1);
+
+    // Step 1 fields
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [coverFile, setCoverFile] = useState<File | null>(null);
+    const [coverPreview, setCoverPreview] = useState<string | null>(null);
+    const coverInputRef = useRef<HTMLInputElement>(null);
+
+    // Step 2 fields
     const [meetingType, setMeetingType] = useState<MeetingType>('online');
     const [language, setLanguage] = useState('english');
     const [level, setLevel] = useState<StudyLevel>('any');
@@ -157,12 +166,30 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
     const [tagsInput, setTagsInput] = useState('');
     const [joinConditions, setJoinConditions] = useState('');
     const [deadline, setDeadline] = useState('');
+
     const [loading, setLoading] = useState(false);
+
+    const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setCoverFile(file);
+        setCoverPreview(URL.createObjectURL(file));
+    };
 
     const handleSubmit = async () => {
         if (!title.trim()) return toast.error(t('Vui lòng nhập tiêu đề', 'Please enter a title', isVi));
         setLoading(true);
         try {
+            let cover_url: string | null = null;
+            if (coverFile) {
+                try {
+                    cover_url = await uploadImageToCF(coverFile);
+                } catch (err) {
+                    console.error('[CreateSquad] cover upload failed:', err);
+                    toast.error(t('Upload ảnh bìa thất bại, tạo squad không có ảnh', 'Cover upload failed, creating without cover', isVi));
+                }
+            }
+
             const tags = tagsInput.split(',').map(s => s.trim()).filter(Boolean);
             const res = await createSquad({
                 title: title.trim(),
@@ -170,6 +197,7 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                 meeting_type: meetingType,
                 language,
                 level,
+                cover_url,
                 city: meetingType !== 'online' ? city.trim() : '',
                 country: meetingType !== 'online' ? country.trim() : '',
                 max_members: maxMembers,
@@ -179,250 +207,266 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
                 nickname: userDisplayName,
                 avatar_url: userPhotoURL,
             });
-            toast.success(t('Tạo squad thành công!', 'Squad created!', isVi));
+            toast.success(t('Tạo squad thành công! 🎉', 'Squad created! 🎉', isVi));
             onCreated(res.squad);
         } catch (e: any) {
+            console.error('[CreateSquad] error:', e);
             toast.error(e.message || t('Lỗi tạo squad', 'Failed to create squad', isVi));
         } finally {
             setLoading(false);
         }
     };
 
+    const inputCls = `w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors ${isDark
+        ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
+        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`;
+    const selectCls = `${inputCls} appearance-none pr-8`;
+
     const card = (
-        <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm`}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className={`w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl shadow-2xl
                 ${isDark ? 'bg-gray-800 border border-white/8' : 'bg-white border border-gray-200'}`}>
-                {/* Header */}
+
+                {/* Header with step indicator */}
                 <div className={`flex-shrink-0 flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
-                    <h2 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {t('Tạo Study Squad', 'Create Study Squad', isVi)}
-                    </h2>
-                    <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
-                        <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {step === 2 && (
+                            <button onClick={() => setStep(1)} className={`p-1 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                        )}
+                        <div>
+                            <h2 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {t('Tạo Study Squad', 'Create Study Squad', isVi)}
+                            </h2>
+                            <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                {t(`Bước ${step}/2`, `Step ${step}/2`, isVi)} — {step === 1
+                                    ? t('Thông tin cơ bản', 'Basic info', isVi)
+                                    : t('Cài đặt chi tiết', 'Details & settings', isVi)}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {/* Step dots */}
+                        <div className="flex items-center gap-1.5">
+                            <div className={`w-2 h-2 rounded-full transition-colors ${step === 1 ? 'bg-teal-500' : (isDark ? 'bg-white/20' : 'bg-gray-300')}`} />
+                            <div className={`w-2 h-2 rounded-full transition-colors ${step === 2 ? 'bg-teal-500' : (isDark ? 'bg-white/20' : 'bg-gray-300')}`} />
+                        </div>
+                        <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                    {/* Title */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Tiêu đề *', 'Title *', isVi)}
-                        </label>
-                        <input
-                            value={title}
-                            onChange={e => setTitle(e.target.value)}
-                            placeholder={t('VD: Luyện IELTS Speaking 7.0', 'E.g.: IELTS Speaking 7.0 group', isVi)}
-                            maxLength={80}
-                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                ${isDark
-                                    ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
-                        />
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Mô tả', 'Description', isVi)}
-                        </label>
-                        <textarea
-                            value={description}
-                            onChange={e => setDescription(e.target.value)}
-                            rows={3}
-                            placeholder={t('Mục tiêu, lịch học, yêu cầu...', 'Goals, schedule, requirements...', isVi)}
-                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors resize-none
-                                ${isDark
-                                    ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
-                        />
-                    </div>
-
-                    {/* Meeting type */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Hình thức học', 'Meeting type', isVi)}
-                        </label>
-                        <div className="flex gap-2">
-                            {(['online', 'offline', 'both'] as MeetingType[]).map(mt => (
-                                <button
-                                    key={mt}
-                                    type="button"
-                                    onClick={() => setMeetingType(mt)}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg border transition-colors
-                                        ${meetingType === mt
-                                            ? 'border-teal-500 bg-teal-500/20 text-teal-400'
-                                            : isDark ? 'border-white/10 bg-gray-700/60 text-gray-400 hover:border-white/20' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300'}`}
-                                >
-                                    {MEETING_TYPE_ICONS[mt]}
-                                    <span>{mt === 'online' ? t('Trực tuyến', 'Online', isVi) : mt === 'offline' ? t('Trực tiếp', 'Offline', isVi) : t('Cả hai', 'Both', isVi)}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Language + Level row */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {t('Ngôn ngữ học', 'Language', isVi)}
-                            </label>
-                            <div className="relative">
-                                <select
-                                    value={language}
-                                    onChange={e => setLanguage(e.target.value)}
-                                    className={`w-full appearance-none px-3 pr-8 py-2 text-sm rounded-lg border outline-none transition-colors
-                                        ${isDark
-                                            ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
-                                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
-                                >
-                                    {COMMON_LANGUAGES.map(l => (
-                                        <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-                            </div>
-                        </div>
-                        <div>
-                            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {t('Trình độ', 'Level', isVi)}
-                            </label>
-                            <div className="relative">
-                                <select
-                                    value={level}
-                                    onChange={e => setLevel(e.target.value as StudyLevel)}
-                                    className={`w-full appearance-none px-3 pr-8 py-2 text-sm rounded-lg border outline-none transition-colors
-                                        ${isDark
-                                            ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
-                                            : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
-                                >
-                                    {STUDY_LEVELS.map(l => (
-                                        <option key={l.id} value={l.id}>{isVi ? l.labelVi : l.labelEn}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* City + Country (offline/both only) */}
-                    {meetingType !== 'online' && (
-                        <div className="grid grid-cols-2 gap-3">
+                    {step === 1 ? (
+                        <>
+                            {/* Cover image */}
                             <div>
                                 <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                    {t('Thành phố', 'City', isVi)}
+                                    {t('Ảnh bìa (tuỳ chọn)', 'Cover image (optional)', isVi)}
                                 </label>
-                                <input
-                                    value={city}
-                                    onChange={e => setCity(e.target.value)}
-                                    placeholder={t('VD: Hà Nội', 'E.g.: Hanoi', isVi)}
-                                    className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
+                                <div
+                                    onClick={() => coverInputRef.current?.click()}
+                                    className={`relative w-full h-32 rounded-xl border-2 border-dashed cursor-pointer overflow-hidden transition-colors flex items-center justify-center
                                         ${isDark
-                                            ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
-                                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
-                                />
+                                            ? 'border-white/15 hover:border-teal-500/60 bg-white/4'
+                                            : 'border-gray-200 hover:border-teal-400 bg-gray-50'}`}
+                                >
+                                    {coverPreview ? (
+                                        <>
+                                            <img src={coverPreview} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                                <span className="text-white text-xs font-medium">{t('Đổi ảnh', 'Change', isVi)}</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-1.5">
+                                            <ImagePlus className={`w-7 h-7 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+                                            <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                {t('Nhấn để chọn ảnh', 'Click to upload', isVi)}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverChange} />
                             </div>
+
+                            {/* Title */}
                             <div>
                                 <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                                    {t('Quốc gia', 'Country', isVi)}
+                                    {t('Tiêu đề *', 'Title *', isVi)}
                                 </label>
                                 <input
-                                    value={country}
-                                    onChange={e => setCountry(e.target.value)}
-                                    placeholder={t('VD: Việt Nam', 'E.g.: Vietnam', isVi)}
-                                    className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                        ${isDark
-                                            ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
-                                            : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
+                                    value={title}
+                                    onChange={e => setTitle(e.target.value)}
+                                    placeholder={t('VD: Luyện IELTS Speaking 7.0', 'E.g.: IELTS Speaking 7.0 group', isVi)}
+                                    maxLength={80}
+                                    className={inputCls}
+                                    autoFocus
                                 />
                             </div>
-                        </div>
+
+                            {/* Description */}
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Mô tả', 'Description', isVi)}
+                                </label>
+                                <textarea
+                                    value={description}
+                                    onChange={e => setDescription(e.target.value)}
+                                    rows={3}
+                                    placeholder={t('Mục tiêu, lịch học, yêu cầu...', 'Goals, schedule, requirements...', isVi)}
+                                    className={`${inputCls} resize-none`}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* Meeting type */}
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Hình thức học', 'Meeting type', isVi)}
+                                </label>
+                                <div className="flex gap-2">
+                                    {(['online', 'offline', 'both'] as MeetingType[]).map(mt => (
+                                        <button
+                                            key={mt}
+                                            type="button"
+                                            onClick={() => setMeetingType(mt)}
+                                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg border transition-colors
+                                                ${meetingType === mt
+                                                    ? 'border-teal-500 bg-teal-500/20 text-teal-400'
+                                                    : isDark ? 'border-white/10 bg-gray-700/60 text-gray-400 hover:border-white/20' : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300'}`}
+                                        >
+                                            {MEETING_TYPE_ICONS[mt]}
+                                            <span>{mt === 'online' ? t('Trực tuyến', 'Online', isVi) : mt === 'offline' ? t('Trực tiếp', 'Offline', isVi) : t('Cả hai', 'Both', isVi)}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Language + Level */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                        {t('Ngôn ngữ học', 'Language', isVi)}
+                                    </label>
+                                    <div className="relative">
+                                        <select value={language} onChange={e => setLanguage(e.target.value)} className={selectCls}>
+                                            {COMMON_LANGUAGES.map(l => (
+                                                <option key={l.id} value={l.id}>{l.flag} {isVi ? l.labelVi : l.labelEn}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                        {t('Trình độ', 'Level', isVi)}
+                                    </label>
+                                    <div className="relative">
+                                        <select value={level} onChange={e => setLevel(e.target.value as StudyLevel)} className={selectCls}>
+                                            {STUDY_LEVELS.map(l => (
+                                                <option key={l.id} value={l.id}>{isVi ? l.labelVi : l.labelEn}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className={`absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* City + Country (offline/both only) */}
+                            {meetingType !== 'online' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                            {t('Thành phố', 'City', isVi)}
+                                        </label>
+                                        <input value={city} onChange={e => setCity(e.target.value)} placeholder={t('VD: Hà Nội', 'E.g.: Hanoi', isVi)} className={inputCls} />
+                                    </div>
+                                    <div>
+                                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                            {t('Quốc gia', 'Country', isVi)}
+                                        </label>
+                                        <input value={country} onChange={e => setCountry(e.target.value)} placeholder={t('VD: Việt Nam', 'E.g.: Vietnam', isVi)} className={inputCls} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Max members */}
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Số thành viên tối đa (2-24)', 'Max members (2-24)', isVi)}
+                                    <span className={`ml-2 font-bold ${isDark ? 'text-teal-400' : 'text-teal-600'}`}>{maxMembers}</span>
+                                </label>
+                                <input
+                                    type="range" min={2} max={24} value={maxMembers}
+                                    onChange={e => setMaxMembers(Number(e.target.value))}
+                                    className="w-full accent-teal-500"
+                                />
+                                <div className={`flex justify-between text-[10px] mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                    <span>2</span><span>24</span>
+                                </div>
+                            </div>
+
+                            {/* Tags */}
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Tags (cách nhau bằng dấu phẩy)', 'Tags (comma-separated)', isVi)}
+                                </label>
+                                <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="IELTS, speaking, advanced" className={inputCls} />
+                            </div>
+
+                            {/* Join conditions */}
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Điều kiện tham gia (tuỳ chọn)', 'Join conditions (optional)', isVi)}
+                                </label>
+                                <input value={joinConditions} onChange={e => setJoinConditions(e.target.value)} placeholder={t('VD: Đã học ít nhất 3 tháng', 'E.g.: At least 3 months of study', isVi)} className={inputCls} />
+                            </div>
+
+                            {/* Deadline */}
+                            <div>
+                                <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {t('Hạn đăng ký (tuỳ chọn)', 'Registration deadline (optional)', isVi)}
+                                </label>
+                                <input type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} className={inputCls} />
+                            </div>
+                        </>
                     )}
-
-                    {/* Max members */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Số thành viên (2-24)', 'Max members (2-24)', isVi)}
-                        </label>
-                        <input
-                            type="number"
-                            min={2}
-                            max={24}
-                            value={maxMembers}
-                            onChange={e => setMaxMembers(Math.min(24, Math.max(2, Number(e.target.value))))}
-                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                ${isDark
-                                    ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
-                        />
-                    </div>
-
-                    {/* Tags */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Tags (cách nhau bằng dấu phẩy)', 'Tags (comma-separated)', isVi)}
-                        </label>
-                        <input
-                            value={tagsInput}
-                            onChange={e => setTagsInput(e.target.value)}
-                            placeholder="IELTS, speaking, advanced"
-                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                ${isDark
-                                    ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
-                        />
-                    </div>
-
-                    {/* Join conditions */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Điều kiện tham gia', 'Join conditions', isVi)}
-                        </label>
-                        <input
-                            value={joinConditions}
-                            onChange={e => setJoinConditions(e.target.value)}
-                            placeholder={t('VD: Đã học ít nhất 3 tháng', 'E.g.: At least 3 months of study', isVi)}
-                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                ${isDark
-                                    ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
-                        />
-                    </div>
-
-                    {/* Deadline */}
-                    <div>
-                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            {t('Hạn đăng ký (tuỳ chọn)', 'Registration deadline (optional)', isVi)}
-                        </label>
-                        <input
-                            type="datetime-local"
-                            value={deadline}
-                            onChange={e => setDeadline(e.target.value)}
-                            className={`w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors
-                                ${isDark
-                                    ? 'bg-gray-700/60 border-white/10 text-white focus:border-teal-500'
-                                    : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-teal-500'}`}
-                        />
-                    </div>
                 </div>
 
                 {/* Footer */}
-                <div className={`flex-shrink-0 flex justify-end gap-2 px-5 py-4 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                <div className={`flex-shrink-0 flex justify-between gap-2 px-5 py-4 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
                     <button
                         onClick={onClose}
-                        className={`px-4 py-2 text-sm rounded-lg transition-colors
-                            ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        className={`px-4 py-2 text-sm rounded-lg transition-colors ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                     >
                         {t('Huỷ', 'Cancel', isVi)}
                     </button>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={loading || !title.trim()}
-                        className="px-4 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-                    >
-                        {loading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                        {t('Tạo Squad', 'Create Squad', isVi)}
-                    </button>
+                    {step === 1 ? (
+                        <button
+                            onClick={() => {
+                                if (!title.trim()) return toast.error(t('Vui lòng nhập tiêu đề', 'Please enter a title', isVi));
+                                setStep(2);
+                            }}
+                            className="flex items-center gap-1.5 px-5 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 transition-colors font-medium"
+                        >
+                            {t('Tiếp theo', 'Next', isVi)}
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading}
+                            className="flex items-center gap-1.5 px-5 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            {t('Tạo Squad', 'Create Squad', isVi)}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -1365,6 +1409,11 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [showCreate, setShowCreate] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [leftWidth, setLeftWidth] = useState(320);
+    const isDragging = useRef(false);
+    const dragStartX = useRef(0);
+    const dragStartW = useRef(0);
+    const containerRef = useRef<HTMLDivElement>(null);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const loadSquads = useCallback(async (opts: {
@@ -1409,12 +1458,39 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const userDisplayName = user?.displayName ?? user?.email?.split('@')[0] ?? 'User';
     const userPhotoURL = user?.photoURL ?? null;
 
+    const onDragStart = (e: React.MouseEvent) => {
+        isDragging.current = true;
+        dragStartX.current = e.clientX;
+        dragStartW.current = leftWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    };
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!isDragging.current) return;
+            const delta = e.clientX - dragStartX.current;
+            const newW = Math.min(500, Math.max(240, dragStartW.current + delta));
+            setLeftWidth(newW);
+        };
+        const onUp = () => {
+            isDragging.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    }, []);
+
     return (
-        <div className={`flex h-full overflow-hidden ${isDark ? 'bg-gray-900' : 'bg-[#c6d4d4]/30'}`}>
+        <div ref={containerRef} className={`flex h-full overflow-hidden ${isDark ? 'bg-gray-900' : 'bg-[#c6d4d4]/30'}`}>
 
             {/* ── LEFT PANEL: search/filter + squad list ── */}
-            <div className={`flex flex-col flex-shrink-0 border-r overflow-hidden
-                ${selectedSquadId ? 'w-[320px]' : 'flex-1'}
+            <div
+                style={selectedSquadId ? { width: leftWidth, minWidth: 240, maxWidth: 500 } : undefined}
+                className={`flex flex-col flex-shrink-0 border-r overflow-hidden
+                ${selectedSquadId ? '' : 'flex-1'}
                 ${isDark ? 'border-white/8' : 'border-gray-200'}`}>
 
                 {/* Toolbar */}
@@ -1571,6 +1647,17 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     )}
                 </div>
             </div>
+
+            {/* ── DRAG HANDLE (only when right panel visible) ── */}
+            {selectedSquadId && (
+                <div
+                    onMouseDown={onDragStart}
+                    className="flex-shrink-0 w-1 cursor-col-resize group relative z-10"
+                    title={t('Kéo để thay đổi độ rộng', 'Drag to resize', isVi)}
+                >
+                    <div className={`absolute inset-y-0 left-0 w-1 transition-colors group-hover:bg-teal-500/50 ${isDark ? 'bg-white/5' : 'bg-gray-200'}`} />
+                </div>
+            )}
 
             {/* ── RIGHT PANEL: chat sidebar ── */}
             {selectedSquadId ? (
