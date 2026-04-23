@@ -109,12 +109,30 @@ async function getToken(): Promise<string | null> {
 
 async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
     const token = await getToken();
+    if (!token) {
+        console.warn('[StudyBuddy] authedFetch: no Firebase token — user not logged in?', path);
+    }
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(init.headers as Record<string, string> ?? {}),
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(`${WORKER}${path}`, { ...init, headers });
+    const url = `${WORKER}${path}`;
+    const res = await fetch(url, { ...init, headers });
+    if (!res.ok) {
+        const body = await res.clone().text().catch(() => '(unreadable)');
+        console.error(`[StudyBuddy] ${init.method ?? 'GET'} ${url} → ${res.status}`, body);
+    }
+    return res
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const url = `${WORKER}${path}`;
+    const res = await fetch(url, { ...init, headers });
+    if (!res.ok) {
+        const body = await res.clone().text().catch(() => '(unreadable)');
+        console.error(`[StudyBuddy] ${init.method ?? 'GET'} ${url} → ${res.status}`, body);
+    }
+    return res;
 }
 
 // ─── Squads ───────────────────────────────────────────────────────────────────
@@ -127,8 +145,13 @@ export async function listSquads(opts: {
     sort?: 'latest' | 'hot';
     cursor?: string;
     limit?: number;
-}): Promise<SquadListResponse> {
-    const params = new URLSearchParams();
+}): Promisurl = `${WORKER}/api/squads?${params}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+        const body = await res.clone().text().catch(() => '(unreadable)');
+        console.error(`[StudyBuddy] GET ${url} → ${res.status}`, body);
+        throw new Error(`Failed to fetch squads (${res.status}: ${body})`);
+    }
     if (opts.meeting_type) params.set('meeting_type', opts.meeting_type);
     if (opts.language) params.set('language', opts.language);
     if (opts.level && opts.level !== 'any') params.set('level', opts.level);
@@ -136,8 +159,13 @@ export async function listSquads(opts: {
     if (opts.sort) params.set('sort', opts.sort);
     if (opts.cursor) params.set('cursor', opts.cursor);
     if (opts.limit) params.set('limit', String(opts.limit));
-    const res = await fetch(`${WORKER}/api/squads?${params}`);
-    if (!res.ok) throw new Error('Failed to fetch squads');
+    const url = `${WORKER}/api/squads?${params}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+        const body = await res.clone().text().catch(() => '(unreadable)');
+        console.error(`[StudyBuddy] GET ${url} → ${res.status}`, body);
+        throw new Error(`Failed to fetch squads (${res.status}: ${body})`);
+    }
     return res.json();
 }
 
@@ -155,29 +183,41 @@ export async function getSquad(id: string): Promise<{
 
 export async function createSquad(body: {
     title: string;
-    description?: string;
-    meeting_type?: MeetingType;
-    language?: string;
-    level?: StudyLevel;
-    cover_url?: string | null;
-    city?: string;
-    country?: string;
-    max_members?: number;
-    tags?: string[];
-    join_conditions?: string;
-    deadline?: string | null;
-    nickname?: string;
-    avatar_url?: string | null;
-}): Promise<{ squad: StudySquad }> {
+    descole.log('[StudyBuddy] createSquad →', { ...body, cover_url: body.cover_url ? '(set)' : null });
     const res = await authedFetch('/api/squads', {
         method: 'POST',
         body: JSON.stringify({ meeting_type: 'online', level: 'any', language: '', ...body }),
     });
     if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error || 'Failed to create squad');
+        const text = await res.text().catch(() => '{}');
+        console.error('[StudyBuddy] createSquad failed:', res.status, text);
+        let err: any = {};
+        try { err = JSON.parse(text); } catch {}
+        throw new Error(err.error || `Failed to create squad (${res.status}): ${text}`);
     }
-    return res.json();
+    const result = await res.json();
+    console.log('[StudyBuddy] createSquad success:', result);
+    return result
+    join_conditions?: string;
+    deadline?: string | null;
+    nickname?: string;
+    avatar_url?: string | null;
+}): Promise<{ squad: StudySquad }> {
+    console.log('[StudyBuddy] createSquad →', { ...body, cover_url: body.cover_url ? '(set)' : null });
+    const res = await authedFetch('/api/squads', {
+        method: 'POST',
+        body: JSON.stringify({ meeting_type: 'online', level: 'any', language: '', ...body }),
+    });
+    if (!res.ok) {
+        const text = await res.text().catch(() => '{}');
+        console.error('[StudyBuddy] createSquad failed:', res.status, text);
+        let err: any = {};
+        try { err = JSON.parse(text); } catch {}
+        throw new Error(err.error || `Failed to create squad (${res.status}): ${text}`);
+    }
+    const result = await res.json();
+    console.log('[StudyBuddy] createSquad success:', result);
+    return result;
 }
 
 export async function updateSquad(id: string, body: Partial<{

@@ -1448,8 +1448,9 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
             setSquads(prev => append ? [...prev, ...res.items] : res.items);
             setNextCursor(res.nextCursor);
             setHasMore(res.hasMore);
-        } catch {
-            toast.error(t('Không thể tải squad', 'Failed to load squads', isVi));
+        } catch (e: any) {
+            console.error('[StudyBuddy] loadSquads failed:', e);
+            toast.error(t('Không thể tải squad', 'Failed to load squads', isVi) + ': ' + (e.message ?? ''));
         } finally {
             setLoading(false);
             setLoadingMore(false);
