@@ -1633,54 +1633,6 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     currentUserId={user?.uid ?? null}
                     userDisplayName={userDisplayName}
                     userPhotoURL={userPhotoURL}
-                    onClose={() => setShowDetailModal(false
-                    ) : (
-            <div className="flex-1 hidden md:flex flex-col items-center justify-center gap-3 px-8">
-                <Users className={`w-12 h-12 ${isDark ? 'text-gray-700' : 'text-gray-300'}`} />
-                <p className={`text-sm text-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    {t('Chọn một squad để xem chat nhóm', 'Select a squad to view the group chat', isVi)}
-                </p>
-                {user && (
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-teal-600 text-white hover:bg-teal-500 transition-colors"
-                    >
-                        <Plus className="w-4 h-4" />
-                        {t('Tạo Study Squad mới', 'Create a Study Squad', isVi)}
-                    </button>
-                )}
-            </div>
-            )}
-
-            {/* Modals */}
-            {showCreate && (
-                <CreateSquadModal
-                    isDark={isDark}
-                    isVi={isVi}
-                    onClose={() => setShowCreate(false)}
-                    onCreated={(squad) => { setShowCreate(false); setSquads(prev => [squad, ...prev]); setSelectedSquadId(squad.id); }}
-                    userDisplayName={userDisplayName}
-                    userPhotoURL={userPhotoURL}
-                />
-            )}
-
-            {showHistory && (
-                <HistoryModal
-                    isDark={isDark}
-                    isVi={isVi}
-                    onClose={() => setShowHistory(false)}
-                    onOpenSquad={(id) => { setSelectedSquadId(id); setShowHistory(false); }}
-                />
-            )}
-
-            {selectedSquadId && showDetailModal && (
-                <SquadDetailModal
-                    squadId={selectedSquadId}
-                    isDark={isDark}
-                    isVi={isVi}
-                    currentUserId={user?.uid ?? null}
-                    userDisplayName={userDisplayName}
-                    userPhotoURL={userPhotoURL}
                     onClose={() => setShowDetailModal(false)}
                     onRefreshList={() => loadSquads()}
                 />
