@@ -123,15 +123,6 @@ async function authedFetch(path: string, init: RequestInit = {}): Promise<Respon
         const body = await res.clone().text().catch(() => '(unreadable)');
         console.error(`[StudyBuddy] ${init.method ?? 'GET'} ${url} → ${res.status}`, body);
     }
-    return res
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const url = `${WORKER}${path}`;
-    const res = await fetch(url, { ...init, headers });
-    if (!res.ok) {
-        const body = await res.clone().text().catch(() => '(unreadable)');
-        console.error(`[StudyBuddy] ${init.method ?? 'GET'} ${url} → ${res.status}`, body);
-    }
     return res;
 }
 
