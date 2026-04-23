@@ -36,7 +36,7 @@ const CF_WHISPER_URL = CF_ACCOUNT_ID && CF_AI_TOKEN
 import { useTheme, useLanguage } from '@/contexts/AppContext';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 
-type AppState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+type AppState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error' | 'preview';
 
 const VOICES: { value: string; label: string }[] = [
     { value: 'en-US-JennyNeural', label: 'Jenny (US Female)' },
@@ -188,14 +188,7 @@ function NewConvoModal({ isOpen, onClose, onCreate, isDark, t }: NewConvoModalPr
                         )}
                     </div>
 
-                    {/* Language note */}
-                    <div className={`px-3 py-2.5 rounded-xl text-[11px] leading-relaxed
-                        ${isDark ? 'bg-amber-900/20 text-amber-300' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                        🔊 {t(
-                            'Chỉ hỗ trợ giọng tiếng Anh (Edge TTS / macOS Say). Bạn có thể nói tiếng Việt nhưng AI sẽ luôn trả lời bằng tiếng Anh.',
-                            'Only English voices supported (Edge TTS / macOS Say). You may speak in Vietnamese but AI will always reply in English.',
-                        )}
-                    </div>
+
                 </div>
 
                 {/* Footer */}
@@ -388,13 +381,14 @@ function MicButton({
 
 // ── Chat Bubble ───────────────────────────────────────────────────────────────
 function ChatBubble({
-    msg, isDark, onAnalyze, analyzeResult, isAnalyzing,
+    msg, isDark, onAnalyze, analyzeResult, isAnalyzing, convoAvatar,
 }: {
     msg: SpeakMessage;
     isDark: boolean;
     onAnalyze?: () => void;
     analyzeResult?: string;
     isAnalyzing?: boolean;
+    convoAvatar?: string | null;
 }) {
     const isUser = msg.role === 'user';
     // Replay audio from persisted base64 (survives page reload)
@@ -409,7 +403,9 @@ function ChatBubble({
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} items-end gap-2 mb-3`}>
             {!isUser && (
-                <img src="/icon-WynCodeAI-Header.png" alt="AI" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                convoAvatar
+                    ? <img src={convoAvatar} alt="AI" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                    : <img src="/icon-WynCodeAI-Header.png" alt="AI" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
             )}
             <div className={`max-w-[75%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
                 <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser
@@ -500,6 +496,8 @@ export default function SpeakWithAITab() {
     const [messages, setMessages] = useState<SpeakMessage[]>([]);
     const [appState, setAppState] = useState<AppState>('idle');
     const [interimText, setInterimText] = useState('');
+    const [flashPreviewText, setFlashPreviewText] = useState('');
+    const flashPendingBlobRef = useRef<Blob | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [topic, setTopic] = useState('');
     const [convoRole, setConvoRole] = useState('');
@@ -592,51 +590,16 @@ export default function SpeakWithAITab() {
         openConvo(convo);
     }, [openConvo]);
 
-    // Handle final transcript → send to DeepSeek
-    const handleSpeechEnd = useCallback(async (webSpeechTranscript: string) => {
+    // ── Core send logic (called after STT confirms transcript) ─────────────────
+    const doSendMessage = useCallback(async (
+        transcript: string,
+        audioBlob: Blob | null,
+        prefilledAnalysis?: string,
+    ) => {
         if (!activeConvoId) return;
-        if (!canSendMessage(isPremium)) return;
 
-        // Bump round counter — any previous async round that resolves late will see mismatched round
         const myRound = ++roundRef.current;
         const isCurrentRound = () => roundRef.current === myRound;
-
-        // Capture audio blob (used for STT + replay)
-        let audioBlob: Blob | null = null;
-        if (recordingBlobRef.current.length > 0) {
-            audioBlob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
-            recordingBlobRef.current = [];
-        }
-
-        // STT mode:
-        //   usePremiumMode=true  → Gemini (accurate, pronunciation analysis)
-        //   usePremiumMode=false → Cloudflare Whisper (free, fast) → Web Speech fallback
-        let transcript = webSpeechTranscript;
-        let prefilledAnalysis: string | undefined;
-
-        if (usePremiumMode && audioBlob && GEMINI_STT_URL) {
-            setAppState('processing');
-            setInterimText('');
-            try {
-                const result = await transcribeWithGemini(audioBlob);
-                if (result.text) transcript = result.text;
-                prefilledAnalysis = result.analysis;
-            } catch (e) {
-                logError('Gemini STT', (e as any)?.message);
-                console.warn('Gemini STT failed, using Web Speech fallback:', e);
-            }
-        } else if (!usePremiumMode && audioBlob && CF_WHISPER_URL) {
-            // Flash mode: Cloudflare Whisper STT
-            setAppState('processing');
-            setInterimText('');
-            try {
-                const cfText = await transcribeWithCloudflareWhisper(audioBlob);
-                if (cfText) transcript = cfText;
-            } catch (e) {
-                logError('CF Whisper STT', (e as any)?.message);
-                // Fall back to Web Speech transcript already in `transcript`
-            }
-        }
 
         if (!transcript.trim()) { setAppState('idle'); return; }
         setAppState('processing');
@@ -787,7 +750,72 @@ export default function SpeakWithAITab() {
                 ));
             }
         }
-    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, usePremiumMode, useMacosSay]);
+    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, useMacosSay, convoRole]);
+
+    // ── Handle final transcript: STT then preview or send ──────────────────────
+    const handleSpeechEnd = useCallback(async (webSpeechTranscript: string) => {
+        if (!activeConvoId) return;
+        if (!canSendMessage(isPremium)) return;
+
+        // Capture audio blob (used for STT + replay)
+        let audioBlob: Blob | null = null;
+        if (recordingBlobRef.current.length > 0) {
+            audioBlob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
+            recordingBlobRef.current = [];
+        }
+
+        let transcript = webSpeechTranscript;
+        let prefilledAnalysis: string | undefined;
+
+        if (usePremiumMode && audioBlob && GEMINI_STT_URL) {
+            // Premium: Gemini STT (accurate + pronunciation)
+            setAppState('processing');
+            setInterimText('');
+            try {
+                const result = await transcribeWithGemini(audioBlob);
+                if (result.text) transcript = result.text;
+                prefilledAnalysis = result.analysis;
+            } catch (e) {
+                logError('Gemini STT', (e as any)?.message);
+                console.warn('Gemini STT failed, using Web Speech fallback:', e);
+            }
+        } else if (!usePremiumMode && audioBlob && CF_WHISPER_URL) {
+            // Flash mode: Cloudflare Whisper STT → show preview for editing
+            setAppState('processing');
+            setInterimText('');
+            try {
+                const cfText = await transcribeWithCloudflareWhisper(audioBlob);
+                if (cfText) transcript = cfText;
+            } catch (e) {
+                logError('CF Whisper STT', (e as any)?.message);
+                // Fall back to Web Speech transcript already in `transcript`
+            }
+            // Flash mode: show editable preview instead of sending immediately
+            if (transcript.trim()) {
+                flashPendingBlobRef.current = audioBlob;
+                setFlashPreviewText(transcript);
+                setAppState('preview');
+                return;
+            }
+        }
+
+        await doSendMessage(transcript, audioBlob, prefilledAnalysis);
+    }, [activeConvoId, isPremium, usePremiumMode, doSendMessage]);
+
+    // Flash preview: user confirms (with optional edits) → send
+    const handleFlashConfirm = useCallback((editedText: string) => {
+        const blob = flashPendingBlobRef.current;
+        flashPendingBlobRef.current = null;
+        setFlashPreviewText('');
+        doSendMessage(editedText.trim() || editedText, blob);
+    }, [doSendMessage]);
+
+    // Flash preview: user cancels → back to idle
+    const handleFlashCancel = useCallback(() => {
+        flashPendingBlobRef.current = null;
+        setFlashPreviewText('');
+        setAppState('idle');
+    }, []);
 
     // Speech recognition
     const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
@@ -1139,6 +1167,7 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                                     onAnalyze={msg.role === 'user' ? () => handleAnalyzeAudio(msg) : undefined}
                                     analyzeResult={grammarResults[msg.id]}
                                     isAnalyzing={checkingGrammarFor === msg.id}
+                                    convoAvatar={convoAvatar}
                                 />
                             ))}
 
@@ -1169,8 +1198,42 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                     <div className={`flex-shrink-0 px-4 py-4 border-t flex flex-col items-center gap-3
                         ${isDark ? 'border-gray-700/60 bg-gray-900/60' : 'border-gray-200 bg-white/60'}`}>
 
-                        {/* Interim transcript — hidden in Premium mode (Gemini transcribes after) */}
-                        {interimText && !(isPremium && usePremiumMode) && (
+                        {/* Flash preview: editable transcript before sending */}
+                        {appState === 'preview' && (
+                            <div className="w-full max-w-md flex flex-col gap-2">
+                                <p className={`text-xs font-medium ${isDark ? 'text-teal-400' : 'text-teal-600'}`}>
+                                    {t('Kiểm tra & chỉnh sửa trước khi gửi:', 'Review & edit before sending:')}
+                                </p>
+                                <textarea
+                                    className={`w-full px-3 py-2.5 rounded-xl text-sm leading-relaxed resize-none outline-none border transition-colors
+                                        ${isDark ? 'bg-gray-800 border-gray-600 text-white focus:border-teal-500' : 'bg-white border-gray-300 text-gray-900 focus:border-teal-500'}`}
+                                    rows={3}
+                                    value={flashPreviewText}
+                                    onChange={e => setFlashPreviewText(e.target.value)}
+                                    autoFocus
+                                />
+                                <div className="flex gap-2 self-end">
+                                    <button
+                                        onClick={handleFlashCancel}
+                                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors
+                                            ${isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                    >
+                                        {t('Hủy', 'Cancel')}
+                                    </button>
+                                    <button
+                                        onClick={() => handleFlashConfirm(flashPreviewText)}
+                                        disabled={!flashPreviewText.trim()}
+                                        className="px-4 py-2 rounded-xl text-sm font-medium bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        {t('Gửi', 'Send')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Interim transcript — hidden in Premium mode or preview mode */}
+                        {interimText && !(isPremium && usePremiumMode) && appState !== 'preview' && (
                             <div className={`w-full max-w-md px-4 py-2.5 rounded-2xl text-sm text-center
                                 ${isDark ? 'bg-gray-800 text-gray-300' : 'bg-gray-100 text-gray-700'}`}>
                                 <span className="italic opacity-80">{interimText}</span>
@@ -1199,7 +1262,8 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                             {appState === 'error' && t('Có lỗi xảy ra', 'An error occurred')}
                         </p>
 
-                        {/* Mic + mode toggle row */}
+                        {/* Mic + mode toggle row — hidden during Flash preview */}
+                        {appState !== 'preview' && (
                         <div className="flex items-center gap-4">
                             <MicButton state={appState} onClick={handleMicClick} isDark={isDark} />
                             {/* Flash / Premium toggle — show whenever Gemini STT key is available */}
@@ -1225,6 +1289,7 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                                 </button>
                             )}
                         </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -1254,11 +1319,13 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                 }
             `}</style>
 
-            {/* ── Floating Prep Chat Widget ── */}
-            {widgetState === 'minimized' && (
+            {/* ── Floating Prep Chat Widget — rendered via portal to escape overflow:hidden ── */}
+            {typeof document !== 'undefined' && createPortal(
+                <>
+                {widgetState === 'minimized' && (
                 <button
                     onClick={() => setWidgetState('open')}
-                    className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110
+                    className={`fixed bottom-6 right-6 z-[9998] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110
                         bg-gradient-to-br from-teal-500 to-teal-700`}
                     title={t('Chuẩn bị câu nói', 'Prep phrases')}
                 >
@@ -1268,7 +1335,7 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
 
             {widgetState === 'open' && (
                 <div
-                    className="fixed bottom-6 right-6 z-50 flex flex-col rounded-xl overflow-hidden"
+                    className="fixed bottom-6 right-6 z-[9998] flex flex-col rounded-xl overflow-hidden"
                     style={{
                         width: 'min(400px, 85vw)',
                         height: 'min(520px, 65vh)',
@@ -1367,6 +1434,9 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                         </button>
                     </div>
                 </div>
+            )}
+                </>,
+                document.body,
             )}
         </div>
     );
