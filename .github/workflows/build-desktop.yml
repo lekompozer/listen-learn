@@ -285,8 +285,12 @@ jobs:
           EOF
           echo "📋 latest.json:"
           cat /tmp/latest.json
-          aws s3 cp /tmp/latest.json "s3://${R2_BUCKET_NAME}/desktop-ll/latest.json" \
-            --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            --content-type "application/json" \
-            --cache-control "public, max-age=300"
+          for attempt in 1 2 3; do
+            aws s3 cp /tmp/latest.json "s3://${R2_BUCKET_NAME}/desktop-ll/latest.json" \
+              --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+              --content-type "application/json" \
+              --cache-control "public, max-age=300" && break
+            echo "⚠️ Upload attempt $attempt failed, retrying in 5s..."
+            sleep 5
+          done
           echo "✅ latest.json uploaded to R2 at desktop-ll/latest.json"

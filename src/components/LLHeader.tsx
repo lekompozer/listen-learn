@@ -13,7 +13,7 @@
  * - Auto-update check & install
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play, Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
@@ -50,6 +50,8 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
     const { isVietnamese, toggleLanguage } = useLanguage();
     const { isDark, toggleTheme } = useTheme();
     const [signingIn, setSigningIn] = useState(false);
+    const [userMenuOpen, setUserMenuOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
 
     type UpdateStatus = 'checking' | 'available' | 'upToDate' | 'error';
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('checking');
@@ -72,6 +74,17 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 setUpdateStatus('upToDate');
             }
         })();
+    }, []);
+
+    // Close user menu on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+                setUserMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
     }, []);
 
     const handleInstallUpdate = async () => {
@@ -127,9 +140,9 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 <span className={`text-xs font-semibold hidden sm:block ${isDark ? 'text-white/70' : 'text-gray-700'}`}>Listen &amp; Learn by WynAI</span>
             </div>
 
-            {/* Center: tab buttons */}
+            {/* Center: tab buttons — shifted right 160px to clear sidebar toggle area */}
             <div
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 ml-[160px]"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
                 {TABS.map(tab => {
@@ -157,7 +170,7 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 className="flex items-center gap-2"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
-                {/* Premium badge OR Upgrade button — left of Up to date */}
+                {/* Premium badge OR Upgrade button */}
                 {user && (
                     isPremium ? (
                         <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-yellow-500 to-amber-400 text-gray-900 select-none">
@@ -176,33 +189,6 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                             <span>{isVietnamese ? 'Nâng cấp' : 'Upgrade'}</span>
                         </button>
                     )
-                )}
-
-                {/* Auto-update button */}
-                {updateStatus !== 'checking' && (
-                    <button
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={updateStatus === 'available' && !installing ? handleInstallUpdate : undefined}
-                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                        className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all select-none
-                            ${updateStatus === 'available' && !installing
-                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
-                                : installing
-                                    ? 'bg-emerald-600/60 text-white cursor-default'
-                                    : isDark ? 'bg-white/5 text-white/30 cursor-default' : 'bg-gray-100 text-gray-400 cursor-default'}`}
-                        title={
-                            updateStatus === 'available'
-                                ? `Click to upgrade to v${updateVersion}`
-                                : isVietnamese ? 'Đang dùng bản mới nhất' : 'Already up to date'
-                        }
-                    >
-                        {installing
-                            ? <><RefreshCw className="w-3 h-3 animate-spin" /><span>{isVietnamese ? 'Đang cài...' : 'Updating...'}</span></>
-                            : updateStatus === 'available'
-                                ? <><Download className="w-3 h-3" /><span>v{updateVersion}</span></>
-                                : <span>{isVietnamese ? 'Mới nhất' : 'Up to date'}</span>
-                        }
-                    </button>
                 )}
 
                 {/* Theme toggle */}
@@ -232,19 +218,70 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                 {isLoading ? (
                     <div className="w-6 h-6 rounded-full bg-white/10 animate-pulse" />
                 ) : user ? (
-                    <div className="flex items-center gap-2">
-                        <span className={`text-xs max-w-[100px] truncate hidden sm:block ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                            {user.displayName?.split(' ').slice(-1)[0] ?? user.email?.split('@')[0]}
-                        </span>
+                    /* User dropdown — contains Up to date + Logout */
+                    <div ref={userMenuRef} className="relative">
                         <button
                             onMouseDown={e => e.stopPropagation()}
-                            onClick={() => signOut()}
+                            onClick={() => setUserMenuOpen(o => !o)}
                             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                            className={`p-1.5 rounded transition-colors ${isDark ? 'text-gray-500 hover:text-red-400 hover:bg-white/10' : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'}`}
-                            title={t('Đăng xuất', 'Sign out', isVietnamese)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                         >
-                            <LogOut className="w-3.5 h-3.5" />
+                            {user.photoURL
+                                ? <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                                : <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
+                                    {(user.displayName?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
+                                </div>
+                            }
+                            <span className="max-w-[80px] truncate hidden sm:block">
+                                {user.displayName?.split(' ').slice(-1)[0] ?? user.email?.split('@')[0]}
+                            </span>
                         </button>
+
+                        {userMenuOpen && (
+                            <div
+                                className={`absolute right-0 top-full mt-1 w-52 rounded-xl shadow-xl border z-50 py-1 ${isDark ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-200'}`}
+                                onMouseDown={e => e.stopPropagation()}
+                            >
+                                {/* User info */}
+                                <div className={`px-3 py-2 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
+                                    <p className={`text-xs font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                        {user.displayName ?? user.email?.split('@')[0]}
+                                    </p>
+                                    <p className={`text-[11px] truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {user.email}
+                                    </p>
+                                </div>
+
+                                {/* Update status */}
+                                {updateStatus !== 'checking' && (
+                                    <button
+                                        onClick={updateStatus === 'available' && !installing ? handleInstallUpdate : undefined}
+                                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors
+                                            ${updateStatus === 'available' && !installing
+                                                ? 'text-emerald-400 hover:bg-emerald-600/20 cursor-pointer'
+                                                : installing
+                                                    ? 'text-emerald-400/60 cursor-default'
+                                                    : isDark ? 'text-gray-500 cursor-default' : 'text-gray-400 cursor-default'}`}
+                                    >
+                                        {installing
+                                            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>{isVietnamese ? 'Đang cài...' : 'Updating...'}</span></>
+                                            : updateStatus === 'available'
+                                                ? <><Download className="w-3.5 h-3.5" /><span>{isVietnamese ? `Cập nhật v${updateVersion}` : `Update to v${updateVersion}`}</span></>
+                                                : <><RefreshCw className="w-3.5 h-3.5" /><span>{isVietnamese ? 'Đang dùng bản mới nhất' : 'Up to date'}</span></>
+                                        }
+                                    </button>
+                                )}
+
+                                {/* Logout */}
+                                <button
+                                    onClick={() => { setUserMenuOpen(false); signOut(); }}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-red-400 hover:bg-white/5' : 'text-gray-600 hover:text-red-500 hover:bg-gray-50'}`}
+                                >
+                                    <LogOut className="w-3.5 h-3.5" />
+                                    <span>{t('Đăng xuất', 'Sign out', isVietnamese)}</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <button

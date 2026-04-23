@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
     Mic, MicOff, Plus, Trash2, MessageSquare, ChevronLeft,
-    Play, Loader2, AlertCircle, Volume2, CheckCircle2, ChevronDown,
+    Loader2, AlertCircle, Volume2, CheckCircle2, ChevronDown,
+    Minimize2, Send, X,
 } from 'lucide-react';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { callDeepSeek, buildSystemPrompt, callGemma4, canUseGemma4, incrementGemma4DailyUsage, getGemma4DailyUsage, type DeepSeekMessage } from '@/hooks/useDeepSeekChat';
@@ -332,6 +333,14 @@ export default function SpeakWithAITab() {
     const [grammarResults, setGrammarResults] = useState<Record<string, string>>({});
     const [checkingGrammarFor, setCheckingGrammarFor] = useState<string | null>(null);
     const [showSidebar, setShowSidebar] = useState(true);
+    // Prep Chat Widget
+    type WidgetState = 'hidden' | 'minimized' | 'open';
+    const [widgetState, setWidgetState] = useState<WidgetState>('minimized');
+    const [widgetInput, setWidgetInput] = useState('');
+    const [widgetLoading, setWidgetLoading] = useState(false);
+    const [widgetMessages, setWidgetMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+    const widgetBottomRef = useRef<HTMLDivElement>(null);
+    const widgetInputRef = useRef<HTMLInputElement>(null);
     // usePremiumMode: Premium users can toggle between Flash (Web STT) and Premium (Gemini STT)
     const [usePremiumMode, setUsePremiumMode] = useState<boolean>(() => {
         if (typeof window === 'undefined') return true;
@@ -711,6 +720,49 @@ export default function SpeakWithAITab() {
         }
     }, [activeConvoId]);
 
+    // Auto-scroll widget
+    useEffect(() => {
+        widgetBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [widgetMessages, widgetLoading]);
+
+    // Focus input when widget opens
+    useEffect(() => {
+        if (widgetState === 'open') setTimeout(() => widgetInputRef.current?.focus(), 100);
+    }, [widgetState]);
+
+    const handleWidgetSend = useCallback(async () => {
+        const text = widgetInput.trim();
+        if (!text || widgetLoading) return;
+        setWidgetInput('');
+        const userMsg = { role: 'user' as const, text };
+        setWidgetMessages(prev => [...prev, userMsg]);
+        setWidgetLoading(true);
+        const systemPrompt = `You are an English speaking coach. Help the user prepare natural English phrases and sentences to use in spoken conversation. 
+When user asks for phrases on a topic, give 3-5 short example sentences they can actually say out loud. 
+Keep responses concise and practical. If speaking about topic "${topic || 'general conversation'}", tailor your examples to that topic.`;
+        const msgs: DeepSeekMessage[] = [
+            { role: 'system', content: systemPrompt },
+            ...widgetMessages.map(m => ({ role: m.role, content: m.text })),
+            { role: 'user', content: text },
+        ];
+        try {
+            let reply = '';
+            if (canUseGemma4()) {
+                try {
+                    reply = await callGemma4(msgs);
+                    incrementGemma4DailyUsage();
+                    setGemma4Usage(getGemma4DailyUsage());
+                } catch { /* fall through */ }
+            }
+            if (!reply) reply = await callDeepSeek(msgs);
+            setWidgetMessages(prev => [...prev, { role: 'assistant', text: reply || t('Không có phản hồi', 'No response') }]);
+        } catch (e: any) {
+            setWidgetMessages(prev => [...prev, { role: 'assistant', text: `Error: ${e?.message ?? 'unknown'}` }]);
+        } finally {
+            setWidgetLoading(false);
+        }
+    }, [widgetInput, widgetLoading, widgetMessages, topic, isVietnamese, t]);
+
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className={`flex h-full overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
@@ -1013,6 +1065,121 @@ export default function SpeakWithAITab() {
                     75%, 100% { transform: scale(2); opacity: 0; }
                 }
             `}</style>
+
+            {/* ── Floating Prep Chat Widget ── */}
+            {widgetState === 'minimized' && (
+                <button
+                    onClick={() => setWidgetState('open')}
+                    className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110
+                        bg-gradient-to-br from-teal-500 to-teal-700`}
+                    title={t('Chuẩn bị câu nói', 'Prep phrases')}
+                >
+                    <MessageSquare className="w-6 h-6 text-white" />
+                </button>
+            )}
+
+            {widgetState === 'open' && (
+                <div
+                    className="fixed bottom-6 right-6 z-50 flex flex-col rounded-xl overflow-hidden"
+                    style={{
+                        width: 'min(400px, 85vw)',
+                        height: 'min(520px, 65vh)',
+                        backgroundColor: isDark ? 'rgba(31,41,55,0.92)' : 'rgba(255,255,255,0.95)',
+                        backdropFilter: 'blur(20px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                        border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)',
+                        boxShadow: '0 8px 32px 0 rgba(0,0,0,0.35)',
+                    }}
+                >
+                    {/* Header */}
+                    <div className={`flex items-center gap-2 px-4 py-3 border-b flex-shrink-0
+                        ${isDark ? 'border-white/10 bg-teal-900/30' : 'border-gray-200 bg-teal-50'}`}>
+                        <img src="/icon-WynCodeAI-Header.png" alt="AI" className="w-6 h-6 rounded-full object-cover" />
+                        <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {t('Chuẩn bị câu nói', 'Phrase Prep')}
+                            </p>
+                            <p className={`text-[10px] truncate ${isDark ? 'text-teal-400' : 'text-teal-600'}`}>
+                                {topic ? `${t('Chủ đề', 'Topic')}: ${topic}` : t('Hỏi AI cách nói gì đó', 'Ask AI how to say something')}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setWidgetState('minimized')}
+                            className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
+                            title={t('Thu nhỏ', 'Minimize')}
+                        >
+                            <Minimize2 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setWidgetState('hidden')}
+                            className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-400 hover:text-red-400 hover:bg-white/10' : 'text-gray-500 hover:text-red-500 hover:bg-gray-100'}`}
+                            title={t('Đóng', 'Close')}
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+                        {widgetMessages.length === 0 && (
+                            <div className={`text-xs text-center py-6 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                <p className="mb-2">{t('Hỏi AI cách diễn đạt câu gì đó bằng tiếng Anh', 'Ask AI how to express something in English')}</p>
+                                <p className={`italic ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>
+                                    {t('VD: "Làm sao nói xin lỗi lịch sự?"', 'e.g. "How do I apologize politely?"')}
+                                </p>
+                            </div>
+                        )}
+                        {widgetMessages.map((m, i) => (
+                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                                {m.role === 'assistant' && (
+                                    <img src="/icon-WynCodeAI-Header.png" alt="AI" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                )}
+                                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed whitespace-pre-wrap
+                                    ${m.role === 'user'
+                                        ? isDark ? 'bg-teal-700/80 text-white' : 'bg-teal-600 text-white'
+                                        : isDark ? 'bg-gray-700 text-gray-100' : 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                                    }`}>
+                                    {m.text}
+                                </div>
+                            </div>
+                        ))}
+                        {widgetLoading && (
+                            <div className="flex justify-start items-end gap-2">
+                                <img src="/icon-WynCodeAI-Header.png" alt="AI" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                <div className={`px-3 py-2 rounded-xl flex items-center gap-1 ${isDark ? 'bg-gray-700' : 'bg-white border border-gray-200 shadow-sm'}`}>
+                                    {[0, 150, 300].map(d => (
+                                        <span key={d} className="w-1.5 h-1.5 rounded-full bg-gray-400"
+                                            style={{ animation: `bounce 1.2s ease-in-out ${d}ms infinite` }} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div ref={widgetBottomRef} />
+                    </div>
+
+                    {/* Input */}
+                    <div className={`flex-shrink-0 px-3 py-3 border-t flex gap-2
+                        ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+                        <input
+                            ref={widgetInputRef}
+                            value={widgetInput}
+                            onChange={e => setWidgetInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleWidgetSend(); } }}
+                            disabled={widgetLoading}
+                            placeholder={t('Hỏi AI cách nói gì đó...', 'Ask AI how to say something...')}
+                            className={`flex-1 text-xs px-3 py-2 rounded-lg border outline-none transition-colors
+                                ${isDark ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-teal-500' : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
+                        />
+                        <button
+                            onClick={handleWidgetSend}
+                            disabled={!widgetInput.trim() || widgetLoading}
+                            className="px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white transition-colors"
+                        >
+                            {widgetLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
