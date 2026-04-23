@@ -355,58 +355,35 @@ export async function fetchPostStats(
 
 // ─── Image upload ─────────────────────────────────────────────────────────────
 
-export async function getImageUploadUrl(): Promise<{
-    uploadUrl: string;
-    imageId: string;
-    error?: string;
-}> {
-    const token = await getToken();
-    if (!token) {
-        console.error('[Upload] getImageUploadUrl: no auth token — user not logged in');
-        return { uploadUrl: '', imageId: '', error: 'Not authenticated' };
-    }
-    console.log('[Upload] getImageUploadUrl → POST', `${WORKER_URL}/api/upload/image-token`);
-    const res = await fetch(`${WORKER_URL}/api/upload/image-token`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-        console.error('[Upload] getImageUploadUrl failed:', res.status, data);
-    } else {
-        console.log('[Upload] getImageUploadUrl OK — imageId:', data.imageId, 'uploadUrl:', data.uploadUrl?.slice(0, 60) + '...');
-    }
-    return data;
-}
+const BACKEND_API = process.env.NEXT_PUBLIC_API_URL ?? 'https://ai.wordai.pro';
 
 /**
- * Upload a File to Cloudflare Images using a one-time upload URL.
- * Returns the public delivery URL.
+ * Upload an image file to the backend API.
+ * POST /api/v1/upload/image (multipart/form-data, field "file")
+ * Returns the public URL.
+ * Supports: image/jpeg, image/png, image/webp, image/gif (max 10 MB)
  */
-export async function uploadImageToCF(file: File): Promise<string> {
-    const CF_ACCOUNT_HASH = 'Pw2WK7nSZVnnzk4LKnBfXQ';
-    console.log('[Upload] uploadImageToCF start — file:', file.name, file.size, 'bytes', file.type);
-
-    const { uploadUrl, imageId, error } = await getImageUploadUrl();
-    if (error || !uploadUrl) {
-        console.error('[Upload] uploadImageToCF: no uploadUrl —', error);
-        throw new Error(error ?? 'Failed to get upload URL');
+export async function uploadImageToBackend(file: File): Promise<string> {
+    console.log('[Upload] uploadImageToBackend — file:', file.name, file.size, 'bytes', file.type);
+    const token = await getToken();
+    if (!token) {
+        throw new Error('Not authenticated');
     }
-
-    console.log('[Upload] Uploading to CF Images — imageId:', imageId);
     const form = new FormData();
     form.append('file', file);
-    const uploadRes = await fetch(uploadUrl, { method: 'POST', body: form });
-    const uploadBody = await uploadRes.text().catch(() => '(unreadable)');
-    if (!uploadRes.ok) {
-        console.error('[Upload] CF Images upload failed:', uploadRes.status, uploadBody);
-        throw new Error(`Image upload failed (${uploadRes.status}): ${uploadBody}`);
+    const res = await fetch(`${BACKEND_API}/api/v1/upload/image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+    });
+    const body = await res.text().catch(() => '(unreadable)');
+    if (!res.ok) {
+        console.error('[Upload] uploadImageToBackend failed:', res.status, body);
+        throw new Error(`Image upload failed (${res.status}): ${body}`);
     }
-    console.log('[Upload] CF Images upload OK:', uploadRes.status, uploadBody.slice(0, 120));
-
-    const publicUrl = `https://imagedelivery.net/${CF_ACCOUNT_HASH}/${imageId}/public`;
-    console.log('[Upload] Final URL:', publicUrl);
-    return publicUrl;
+    const data = JSON.parse(body);
+    console.log('[Upload] uploadImageToBackend OK — url:', data.url);
+    return data.url as string;
 }
 
 // ─── Trending / Top / Hot Channels / Random ───────────────────────────────────

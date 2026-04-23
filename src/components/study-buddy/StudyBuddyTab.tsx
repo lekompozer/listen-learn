@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * StudyBuddyTab — Study group matching for Listen & Learn app.
+ * StudyBuddyTab — Study Group matching for Listen & Learn app.
  * Uses Cloudflare Worker (db-wordai-community) directly.
  * All squads are learning-focused — no category filter needed on the card.
  */
@@ -17,7 +17,7 @@ import {
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useTheme, useLanguage } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
-import { uploadImageToCF } from '@/services/communityService';
+import { uploadImageToBackend } from '@/services/communityService';
 import {
     listSquads, getSquad, createSquad, cancelSquad,
     applySquad, cancelApply, leaveSquad,
@@ -195,7 +195,7 @@ function CreateSquadModal({ isDark, isVi, onClose, onCreated, userDisplayName, u
             let cover_url: string | null = null;
             if (coverFile) {
                 try {
-                    cover_url = await uploadImageToCF(coverFile);
+                    cover_url = await uploadImageToBackend(coverFile);
                 } catch (err) {
                     console.error('[CreateSquad] cover upload failed:', err);
                     toast.error(t('Upload ảnh bìa thất bại, tạo squad không có ảnh', 'Cover upload failed, creating without cover', isVi));

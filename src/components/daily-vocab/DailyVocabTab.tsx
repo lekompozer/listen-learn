@@ -154,7 +154,7 @@ const QUICK_ACTIONS: { id: VocabSection; label: string; icon: React.ElementType 
 ];
 const PRACTICE_ITEMS: { label: string; icon: React.ElementType; id: VocabSection | null }[] = [
     { label: 'Speak with AI', icon: Volume2, id: 'speak' },
-    { label: 'Study Buddy', icon: Users, id: 'study-buddy' },
+    { label: 'Study Group', icon: Users, id: 'study-buddy' },
     { label: 'FreeTalk', icon: Mic, id: null },
 ];
 const DISCOVER_ITEMS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
