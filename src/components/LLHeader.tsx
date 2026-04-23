@@ -32,42 +32,42 @@ const TABS: {
     tooltipEn: string;
     icon: React.ComponentType<{ className?: string }>;
 }[] = [
-    {
-        id: 'daily-vocab',
-        labelVi: 'Từ Vựng', labelEn: 'Vocab',
-        tooltipVi: 'Flashcard từ vựng hàng ngày — vuốt dọc để đổi từ, vuốt ngang để lưu',
-        tooltipEn: 'Daily vocabulary flashcards — swipe to browse, swipe right to save',
-        icon: BookOpen,
-    },
-    {
-        id: 'songs',
-        labelVi: 'Bài Hát', labelEn: 'Songs',
-        tooltipVi: 'Học tiếng Anh qua lời bài hát — tap từ để tra nghĩa',
-        tooltipEn: 'Learn English through song lyrics — tap words to look up meanings',
-        icon: Music,
-    },
-    {
-        id: 'conversations',
-        labelVi: 'Hội Thoại', labelEn: 'Conversations',
-        tooltipVi: '⭐ Lộ trình học chính — luyện hội thoại AI theo bài học có cấu trúc, dùng Points. Đây là tính năng cốt lõi của app!',
-        tooltipEn: '⭐ Core learning path — AI conversation practice with structured lessons, uses Points. This is the heart of the app!',
-        icon: MessageCircle,
-    },
-    {
-        id: 'podcast',
-        labelVi: 'Podcast', labelEn: 'Podcast',
-        tooltipVi: 'Luyện nghe với Podcast tiếng Anh thực tế từ nhiều chủ đề',
-        tooltipEn: 'Improve listening with real English podcasts across various topics',
-        icon: Radio,
-    },
-    {
-        id: 'videos',
-        labelVi: 'Videos', labelEn: 'Videos',
-        tooltipVi: 'Học qua video ngắn — TikTok, YouTube, clip giáo dục',
-        tooltipEn: 'Learn through short videos — TikTok, YouTube, educational clips',
-        icon: Play,
-    },
-];
+        {
+            id: 'daily-vocab',
+            labelVi: 'Từ Vựng', labelEn: 'Vocab',
+            tooltipVi: 'Flashcard từ vựng hàng ngày — vuốt dọc để đổi từ, vuốt ngang để lưu',
+            tooltipEn: 'Daily vocabulary flashcards — swipe to browse, swipe right to save',
+            icon: BookOpen,
+        },
+        {
+            id: 'songs',
+            labelVi: 'Bài Hát', labelEn: 'Songs',
+            tooltipVi: 'Học tiếng Anh qua lời bài hát — tap từ để tra nghĩa',
+            tooltipEn: 'Learn English through song lyrics — tap words to look up meanings',
+            icon: Music,
+        },
+        {
+            id: 'conversations',
+            labelVi: 'Hội Thoại', labelEn: 'Conversations',
+            tooltipVi: '⭐ Lộ trình học chính — luyện hội thoại AI theo bài học có cấu trúc, dùng Points. Đây là tính năng cốt lõi của app!',
+            tooltipEn: '⭐ Core learning path — AI conversation practice with structured lessons, uses Points. This is the heart of the app!',
+            icon: MessageCircle,
+        },
+        {
+            id: 'podcast',
+            labelVi: 'Podcast', labelEn: 'Podcast',
+            tooltipVi: 'Luyện nghe với Podcast tiếng Anh thực tế từ nhiều chủ đề',
+            tooltipEn: 'Improve listening with real English podcasts across various topics',
+            icon: Radio,
+        },
+        {
+            id: 'videos',
+            labelVi: 'Videos', labelEn: 'Videos',
+            tooltipVi: 'Học qua video ngắn — TikTok, YouTube, clip giáo dục',
+            tooltipEn: 'Learn through short videos — TikTok, YouTube, educational clips',
+            icon: Play,
+        },
+    ];
 
 // ─── Simple tooltip wrapper ───────────────────────────────────────────────────
 function TabTooltip({ text, isDark, children }: { text: string; isDark: boolean; children: React.ReactNode }) {
@@ -379,4 +379,3 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
         </header>
     );
 }
-
