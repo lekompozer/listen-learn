@@ -524,6 +524,13 @@ export default function SpeakWithAITab() {
         const saved = localStorage.getItem('ll_speak_use_premium');
         return saved === null ? true : saved === '1';
     });
+    // AI model selector: 'auto' | 'gemma4' | 'deepseek'
+    const [selectedModel, setSelectedModel] = useState<'auto' | 'gemma4' | 'deepseek'>(() => {
+        if (typeof window === 'undefined') return 'auto';
+        const saved = localStorage.getItem('ll_speak_ai_model');
+        return (saved === 'gemma4' || saved === 'deepseek') ? saved : 'auto';
+    });
+
     // TTS engine: false = Edge TTS (WebSocket, natural voices), true = macOS say (offline, macOS only)
     const [useMacosSay, setUseMacosSay] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
@@ -642,15 +649,15 @@ export default function SpeakWithAITab() {
             abortRef.current = new AbortController();
             const signal = abortRef.current.signal;
 
-            // 1. Get AI reply:
-            //    Attempt 1 — Gemma 4 26B (Cloudflare, free 5×/day)
-            //    Fallback   — DeepSeek (retry 2×)
+            // 1. Get AI reply — respects selectedModel choice
             let replyText = '';
             {
                 let lastErr: any;
+                const useGemma4 = selectedModel === 'auto' ? canUseGemma4() : selectedModel === 'gemma4';
+                const useDeepSeek = selectedModel === 'auto' ? true : selectedModel === 'deepseek';
 
-                // Try Gemma 4 first if daily quota available
-                if (canUseGemma4()) {
+                // Try Gemma 4 if allowed
+                if (useGemma4) {
                     try {
                         replyText = await callGemma4(deepseekMessages, signal);
                         incrementGemma4DailyUsage();
@@ -662,8 +669,8 @@ export default function SpeakWithAITab() {
                     }
                 }
 
-                // Fallback: DeepSeek (retry up to 2 times with 3s delay)
-                if (!replyText) {
+                // Fallback / forced DeepSeek
+                if (!replyText && useDeepSeek) {
                     for (let attempt = 0; attempt <= 2; attempt++) {
                         try {
                             replyText = await callDeepSeek(deepseekMessages, signal);
@@ -757,7 +764,7 @@ export default function SpeakWithAITab() {
                 ));
             }
         }
-    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, useMacosSay, convoRole]);
+    }, [activeConvoId, topic, selectedVoice, isVietnamese, t, isPremium, useMacosSay, convoRole, selectedModel]);
 
     // ── Handle final transcript: STT then preview or send ──────────────────────
     const handleSpeechEnd = useCallback(async (webSpeechTranscript: string) => {
@@ -1124,6 +1131,25 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                                 {ttsEngineUsed === 'edge' ? 'Edge✓' : ttsEngineUsed === 'macos-say' ? 'Say✓' : 'Synth✓'}
                             </span>
                         )}
+                        {/* AI model selector */}
+                        <div className="relative">
+                            <select
+                                value={selectedModel}
+                                onChange={e => {
+                                    const v = e.target.value as 'auto' | 'gemma4' | 'deepseek';
+                                    setSelectedModel(v);
+                                    localStorage.setItem('ll_speak_ai_model', v);
+                                }}
+                                title={t('Chọn model AI', 'Select AI model')}
+                                className={`text-[11px] pl-2 pr-6 py-1 rounded-lg border appearance-none outline-none transition-colors
+                                    ${isDark ? 'bg-gray-800 border-gray-700 text-gray-300 focus:border-teal-500' : 'bg-white border-gray-300 text-gray-700 focus:border-teal-500'}`}
+                            >
+                                <option value="auto">🤖 Auto</option>
+                                <option value="gemma4">✨ Gemma4 (free)</option>
+                                <option value="deepseek">🧠 DeepSeek</option>
+                            </select>
+                            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-60" />
+                        </div>
                         {/* Voice selector */}
                         <div className="relative">
                             <select
