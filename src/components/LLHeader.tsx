@@ -302,12 +302,12 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                                     ? 'text-blue-400 bg-blue-500/10 animate-pulse hover:animate-none hover:bg-blue-500/20'
                                     : isDark ? 'text-gray-300 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                         >
-                    {user.photoURL && !avatarError
-                        ? <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" onError={() => setAvatarError(true)} />
-                        : <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
-                            {(user.displayName?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
-                        </div>
-                    }
+                            {user.photoURL && !avatarError
+                                ? <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" onError={() => setAvatarError(true)} />
+                                : <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
+                                    {(user.displayName?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
+                                </div>
+                            }
                             <span className="max-w-[80px] truncate hidden sm:block">
                                 {user.displayName?.split(' ').slice(-1)[0] ?? user.email?.split('@')[0]}
                             </span>
