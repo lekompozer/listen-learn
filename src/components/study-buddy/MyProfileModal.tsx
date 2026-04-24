@@ -101,28 +101,35 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
     const coverInputRef = useRef<HTMLInputElement>(null);
     const photoInputRef = useRef<HTMLInputElement>(null);
 
+    const editingRef = useRef(editing);
+    useEffect(() => { editingRef.current = editing; }, [editing]);
+
     const loadProfile = useCallback(async () => {
         if (!userId) { setLoading(false); return; }
         setLoading(true);
         try {
             const p = isOwnProfile ? await getMyProfile() : await getUserProfile(userId);
             setProfile(p);
-            if (p) {
-                setDisplayName(p.display_name);
-                setTagline(p.tagline);
-                setLevel(p.level);
-                setIntroduction(p.introduction);
-                setAvatarUrl(p.avatar_url);
-                setCoverUrl(p.cover_url);
-                setCoverY(p.cover_position_y ?? 50);
-                setLinks(parseLinks(p.links));
-                setEmailContact(p.email_contact ?? '');
-                setPhone(p.phone ?? '');
-                setPhotos(parsePhotos(p.photos));
-            } else if (isOwnProfile && user) {
-                // Pre-fill with Firebase auth info
-                setDisplayName(user.displayName ?? '');
-                setAvatarUrl(user.photoURL ?? null);
+            // Only reset form state if NOT currently editing — prevents Firebase auth
+            // token refresh from wiping out in-progress edits via useCallback recreation
+            if (!editingRef.current) {
+                if (p) {
+                    setDisplayName(p.display_name);
+                    setTagline(p.tagline);
+                    setLevel(p.level);
+                    setIntroduction(p.introduction);
+                    setAvatarUrl(p.avatar_url);
+                    setCoverUrl(p.cover_url);
+                    setCoverY(p.cover_position_y ?? 50);
+                    setLinks(parseLinks(p.links));
+                    setEmailContact(p.email_contact ?? '');
+                    setPhone(p.phone ?? '');
+                    setPhotos(parsePhotos(p.photos));
+                } else if (isOwnProfile && user) {
+                    // Pre-fill with Firebase auth info
+                    setDisplayName(user.displayName ?? '');
+                    setAvatarUrl(user.photoURL ?? null);
+                }
             }
         } catch { /* ignore */ }
         finally { setLoading(false); }
