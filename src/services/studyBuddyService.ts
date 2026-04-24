@@ -380,6 +380,7 @@ export interface UserProfile {
     introduction: string;
     avatar_url: string | null;
     cover_url: string | null;
+    cover_position_y: number | null;
     links: string;          // JSON string: [{label, url}]
     email_contact: string | null;
     phone: string | null;
@@ -409,6 +410,7 @@ export async function saveMyProfile(body: {
     introduction: string;
     avatar_url: string | null;
     cover_url: string | null;
+    cover_position_y?: number;
     links: { label: string; url: string }[];
     email_contact: string | null;
     phone: string | null;

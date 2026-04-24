@@ -12,7 +12,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
     X, Edit3, Save, Camera, Link, Mail, Phone, Plus, Trash2,
-    RefreshCw, User, ChevronDown, ImagePlus,
+    RefreshCw, User, ChevronDown, ImagePlus, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import toast from 'react-hot-toast';
@@ -20,6 +20,20 @@ import { getMyProfile, getUserProfile, saveMyProfile, type UserProfile } from '@
 import { uploadImageToBackend } from '@/services/communityService';
 
 function t(vi: string, en: string, isVi: boolean) { return isVi ? vi : en; }
+
+// ─── Allowed social link platforms ───────────────────────────────────────────
+const ALLOWED_LINK_PLATFORMS = [
+    { pattern: /facebook\.com|fb\.com/i, label: 'Facebook', color: '#1877F2' },
+    { pattern: /linkedin\.com/i, label: 'LinkedIn', color: '#0A66C2' },
+    { pattern: /linktr\.ee/i, label: 'Linktree', color: '#39E09B' },
+    { pattern: /instagram\.com/i, label: 'Instagram', color: '#E1306C' },
+    { pattern: /zalo\.me/i, label: 'Zalo', color: '#0068FF' },
+    { pattern: /\bx\.com\b|twitter\.com/i, label: 'X', color: '#111827' },
+];
+function detectPlatform(url: string) {
+    try { const h = new URL(url).hostname.toLowerCase(); return ALLOWED_LINK_PLATFORMS.find(p => p.pattern.test(h)) ?? null; } catch { return null; }
+}
+function isAllowedLinkUrl(url: string) { return !url.trim() || detectPlatform(url) !== null; }
 
 const LEVEL_OPTIONS = [
     { value: '', labelVi: '— Chọn trình độ —', labelEn: '— Select level —' },
@@ -70,6 +84,9 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
     const [coverUploading, setCoverUploading] = useState(false);
     const [photoUploading, setPhotoUploading] = useState(false);
     const [avatarPreviewErr, setAvatarPreviewErr] = useState(false);
+    const [coverY, setCoverY] = useState(50); // 0–100, cover background-position-y %
+    const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+    const coverDragRef = useRef<{ startY: number; startCoverY: number } | null>(null);
 
     const avatarInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +105,7 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                 setIntroduction(p.introduction);
                 setAvatarUrl(p.avatar_url);
                 setCoverUrl(p.cover_url);
+                setCoverY(p.cover_position_y ?? 50);
                 setLinks(parseLinks(p.links));
                 setEmailContact(p.email_contact ?? '');
                 setPhone(p.phone ?? '');
@@ -103,6 +121,20 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
 
     useEffect(() => { loadProfile(); }, [loadProfile]);
 
+    // Cover position drag handler (edit mode)
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!coverDragRef.current) return;
+            const dy = e.clientY - coverDragRef.current.startY;
+            const delta = (dy / 212) * 100;
+            setCoverY(Math.max(0, Math.min(100, coverDragRef.current.startCoverY + delta)));
+        };
+        const onUp = () => { coverDragRef.current = null; };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Start editing: pre-fill from current profile or Firebase defaults
     const startEdit = () => {
         if (profile) {
@@ -112,6 +144,7 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
             setIntroduction(profile.introduction);
             setAvatarUrl(profile.avatar_url);
             setCoverUrl(profile.cover_url);
+            setCoverY(profile.cover_position_y ?? 50);
             setLinks(parseLinks(profile.links));
             setEmailContact(profile.email_contact ?? '');
             setPhone(profile.phone ?? '');
@@ -125,6 +158,15 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
             toast.error(t('Vui lòng nhập tên hiển thị', 'Please enter a display name', isVi));
             return;
         }
+        const invalidLinks = links.filter(l => l.url.trim() && !isAllowedLinkUrl(l.url));
+        if (invalidLinks.length > 0) {
+            toast.error(t(
+                'Link không hợp lệ. Chỉ hỗ trợ: Facebook, LinkedIn, Linktree, Instagram, Zalo, X',
+                'Invalid link. Only supported: Facebook, LinkedIn, Linktree, Instagram, Zalo, X',
+                isVi
+            ));
+            return;
+        }
         setSaving(true);
         try {
             const saved = await saveMyProfile({
@@ -134,6 +176,7 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                 introduction: introduction.trim(),
                 avatar_url: avatarUrl,
                 cover_url: coverUrl,
+                cover_position_y: Math.round(coverY),
                 links: links.filter(l => l.url.trim()),
                 email_contact: emailContact.trim() || null,
                 phone: phone.trim() || null,
@@ -346,18 +389,36 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    {links.map((lnk, i) => (
+                                    {links.map((lnk, i) => {
+                                        const platform = lnk.url.trim() ? detectPlatform(lnk.url) : null;
+                                        const invalid = !!lnk.url.trim() && !platform;
+                                        return (
                                         <div key={i} className="flex gap-2">
                                             <input value={lnk.label} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))}
-                                                placeholder={t('Nhãn (VD: Facebook)', 'Label (e.g. Facebook)', isVi)}
-                                                className={`${inputCls} w-32 flex-shrink-0`} />
-                                            <input value={lnk.url} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))}
-                                                placeholder="https://..." className={`${inputCls} flex-1`} />
+                                                placeholder={t('Nhãn', 'Label', isVi)}
+                                                className={`${inputCls} w-24 flex-shrink-0`} />
+                                            <div className="relative flex-1">
+                                                <input value={lnk.url} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))}
+                                                    placeholder="https://..." className={`${inputCls} w-full pr-20 ${invalid ? '!border-red-500/70' : ''}`} />
+                                                {platform && (
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+                                                        style={{ color: platform.color, background: platform.color + '22' }}>
+                                                        {platform.label}
+                                                    </span>
+                                                )}
+                                                {invalid && (
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-red-400">✗</span>
+                                                )}
+                                            </div>
                                             <button onClick={() => removeLink(i)} className={`p-2 rounded-xl flex-shrink-0 ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'}`}>
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
+                                    <p className={`text-[11px] mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                        {t('Chỉ hỗ trợ: Facebook · LinkedIn · Linktree · Instagram · Zalo · X', 'Supported: Facebook · LinkedIn · Linktree · Instagram · Zalo · X', isVi)}
+                                    </p>
                                 </div>
                             </div>
 
@@ -412,8 +473,8 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                         <div>
                             {/* Cover + Avatar hero */}
                             <div className="relative">
-                                <div className={`h-32 w-full ${viewCover ? '' : isDark ? 'bg-gradient-to-r from-teal-800/50 to-purple-800/50' : 'bg-gradient-to-r from-teal-100 to-purple-100'}`}
-                                    style={viewCover ? { backgroundImage: `url(${viewCover})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}>
+                                <div className={`h-[228px] w-full ${viewCover ? '' : isDark ? 'bg-gradient-to-r from-teal-800/50 to-purple-800/50' : 'bg-gradient-to-r from-teal-100 to-purple-100'}`}
+                                    style={viewCover ? { backgroundImage: `url(${viewCover})`, backgroundSize: 'cover', backgroundPositionX: 'center', backgroundPositionY: `${profile?.cover_position_y ?? 50}%` } : {}}>
                                 </div>
                                 <div className="absolute -bottom-8 left-5">
                                     {viewAvatar
@@ -452,8 +513,13 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                 <>
                                     {/* Introduction */}
                                     {viewIntro && (
-                                        <div className={`mx-5 mb-4 p-4 rounded-xl ${isDark ? 'bg-white/5' : 'bg-gray-50'}`}>
-                                            <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{viewIntro}</p>
+                                        <div className="px-5 mb-4">
+                                            <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                {t('Giới thiệu', 'Introduction', isVi)}
+                                            </p>
+                                            <div className={`p-4 rounded-xl ${isDark ? 'bg-white/5' : 'bg-gray-50'}`}>
+                                                <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{viewIntro}</p>
+                                            </div>
                                         </div>
                                     )}
 
@@ -475,13 +541,23 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                                     {viewPhone}
                                                 </a>
                                             )}
-                                            {viewLinks.map((lnk, i) => lnk.url && (
-                                                <a key={i} href={lnk.url} target="_blank" rel="noopener noreferrer"
-                                                    className={`flex items-center gap-2 text-sm ${isDark ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-500'}`}>
-                                                    <Link className="w-3.5 h-3.5 flex-shrink-0" />
-                                                    {lnk.label || lnk.url}
-                                                </a>
-                                            ))}
+                                            {viewLinks.map((lnk, i) => {
+                                                if (!lnk.url) return null;
+                                                const platform = detectPlatform(lnk.url);
+                                                return (
+                                                    <a key={i} href={lnk.url} target="_blank" rel="noopener noreferrer"
+                                                        className={`flex items-center gap-2 text-sm ${isDark ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-500'}`}>
+                                                        {platform
+                                                            ? <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                                                                style={{ backgroundColor: platform.color }}>
+                                                                {platform.label[0]}
+                                                              </span>
+                                                            : <Link className="w-3.5 h-3.5 flex-shrink-0" />
+                                                        }
+                                                        <span>{lnk.label || (platform?.label ?? lnk.url)}</span>
+                                                    </a>
+                                                );
+                                            })}
                                         </div>
                                     )}
 
@@ -493,7 +569,8 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                             </p>
                                             <div className="grid grid-cols-3 gap-2">
                                                 {viewPhotos.map((url, i) => (
-                                                    <div key={i} className="aspect-square rounded-xl overflow-hidden">
+                                                    <div key={i} className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                                                        onClick={() => setLightboxIdx(i)}>
                                                         <img src={url} alt="" className="w-full h-full object-cover" />
                                                     </div>
                                                 ))}
@@ -528,6 +605,43 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                     </div>
                 )}
             </div>
+
+        {/* Photo Lightbox */}
+        {lightboxIdx !== null && (
+            <div className="absolute inset-0 bg-black/95 flex items-center justify-center" onClick={() => setLightboxIdx(null)}>
+                <img
+                    src={viewPhotos[lightboxIdx]}
+                    alt=""
+                    className="max-w-[90%] max-h-[85vh] object-contain rounded-xl shadow-2xl"
+                    onClick={e => e.stopPropagation()}
+                />
+                {lightboxIdx > 0 && (
+                    <button
+                        onClick={e => { e.stopPropagation(); setLightboxIdx(i => i! - 1); }}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
+                    >
+                        <ChevronLeft className="w-6 h-6" />
+                    </button>
+                )}
+                {lightboxIdx < viewPhotos.length - 1 && (
+                    <button
+                        onClick={e => { e.stopPropagation(); setLightboxIdx(i => i! + 1); }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
+                    >
+                        <ChevronRight className="w-6 h-6" />
+                    </button>
+                )}
+                <button
+                    onClick={() => setLightboxIdx(null)}
+                    className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/50 text-sm">
+                    {lightboxIdx + 1} / {viewPhotos.length}
+                </div>
+            </div>
+        )}
         </div>
     );
 
