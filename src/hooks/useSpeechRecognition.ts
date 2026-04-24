@@ -63,6 +63,17 @@ export function useSpeechRecognition({
         // fireEnd will be called from recognition.onend
     }, [clearSilenceTimer]);
 
+    // Force-fires onEnd immediately regardless of whether Web Speech is running.
+    // Used on Windows/WebView2 where SpeechRecognition is unavailable — MediaRecorder
+    // collects audio but there is no recognition.onend to trigger fireEnd naturally.
+    const forceStop = useCallback(() => {
+        isRunningRef.current = false;
+        clearSilenceTimer();
+        try { recognitionRef.current?.abort(); } catch { /* ignore */ }
+        recognitionRef.current = null;
+        fireEnd();
+    }, [clearSilenceTimer, fireEnd]);
+
     const start = useCallback(() => {
         const SpeechRecognitionCtor =
             (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -167,6 +178,7 @@ export function useSpeechRecognition({
     return {
         start,
         stop,
+        forceStop,
         isSupported: typeof window !== 'undefined' && !!(
             (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         ),

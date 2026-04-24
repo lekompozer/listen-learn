@@ -590,6 +590,10 @@ export default function SpeakWithAITab() {
     const abortRef = useRef<AbortController | null>(null);
     const recordingBlobRef = useRef<Blob[]>([]);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const mediaRecorderMimeRef = useRef('audio/webm'); // tracks actual MIME type used
+    // Windows/WebView2: no SpeechRecognition API — MediaRecorder-only recording mode
+    const isMicOnlyModeRef = useRef(false);
+    const micAutoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const speakingAudioRef = useRef<HTMLAudioElement | null>(null);
     // abort fn for current TTS playback — called when user interrupts AI speech
     const playAbortRef = useRef<(() => void) | null>(null);
@@ -857,7 +861,7 @@ export default function SpeakWithAITab() {
         // Capture audio blob (used for STT + replay)
         let audioBlob: Blob | null = null;
         if (recordingBlobRef.current.length > 0) {
-            audioBlob = new Blob(recordingBlobRef.current, { type: 'audio/webm' });
+            audioBlob = new Blob(recordingBlobRef.current, { type: mediaRecorderMimeRef.current });
             recordingBlobRef.current = [];
         }
 
@@ -915,24 +919,34 @@ export default function SpeakWithAITab() {
     }, []);
 
     // Speech recognition
-    const { start: startRecognition, stop: stopRecognition } = useSpeechRecognition({
+    const { start: startRecognition, stop: stopRecognition, forceStop: forceStopRecognition, isSupported: isSttSupported } = useSpeechRecognition({
         onInterim: (transcript) => {
             // In Premium mode, don't show Web Speech interim text (Gemini will transcribe accurately)
             if (!(isPremium && usePremiumMode)) setInterimText(transcript);
         },
         onEnd: (finalTranscript) => {
+            // Clear Windows mic-only mode flags
+            isMicOnlyModeRef.current = false;
+            if (micAutoStopTimerRef.current) { clearTimeout(micAutoStopTimerRef.current); micAutoStopTimerRef.current = null; }
             setInterimText('');
             // Always stop MediaRecorder when speech ends (silence auto-fire or manual stop)
             stopMediaRecorder();
-            // Premium mode: send audio to Gemini even if Web Speech returned empty transcript
-            const hasPremiumAudio = isPremium && usePremiumMode && recordingBlobRef.current.length > 0;
-            if (finalTranscript || hasPremiumAudio) {
+            // If we have an audio blob, we ALWAYS send it! (Even on Flash mode, if Web Speech fails)
+            const hasAudio = recordingBlobRef.current.length > 0;
+            if (finalTranscript || hasAudio) {
                 handleSpeechEnd(finalTranscript);
             } else {
                 setAppState('idle');
             }
         },
         onError: (err) => {
+            if (err === 'not-supported') {
+                // Windows/WebView2: SpeechRecognition not available.
+                // Continue in MediaRecorder-only mode — audio will be sent to Whisper/Gemini STT.
+                isMicOnlyModeRef.current = true;
+                return;
+            }
+
             setAppState('error');
             if (err === 'not-allowed') {
                 setErrorMsg(t(
@@ -951,13 +965,44 @@ export default function SpeakWithAITab() {
     const startMediaRecorder = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mr = new MediaRecorder(stream);
+            // Pick best MIME type: Windows WebView2 needs explicit 'audio/webm;codecs=opus'
+            const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', '']
+                .find(t => !t || MediaRecorder.isTypeSupported(t)) ?? '';
+            const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            mediaRecorderMimeRef.current = mimeType || 'audio/webm';
             recordingBlobRef.current = [];
             mr.ondataavailable = (e) => { if (e.data.size > 0) recordingBlobRef.current.push(e.data); };
             mr.start(250);
             mediaRecorderRef.current = mr;
-        } catch { /* mic permission denied — silent fail */ }
-    }, []);
+            // Windows/WebView2 mic-only mode: no silence detection from Web Speech,
+            // so auto-stop after 30 s so the user isn't stuck in listening forever.
+            if (isMicOnlyModeRef.current) {
+                micAutoStopTimerRef.current = setTimeout(() => {
+                    micAutoStopTimerRef.current = null;
+                    if (isMicOnlyModeRef.current) {
+                        isMicOnlyModeRef.current = false;
+                        forceStopRecognition(); // → fireEnd() → onEnd('') → stopMediaRecorder() → handleSpeechEnd
+                    }
+                }, 30_000);
+            }
+        } catch (err: any) {
+            // Surface actual failure so users see a meaningful error.
+            console.error('[STT] MediaRecorder failure:', err);
+            isMicOnlyModeRef.current = false;
+            setAppState('error');
+            const e = err.name?.toLowerCase() || '';
+            if (e.includes('notallowed')) {
+                setErrorMsg(t(
+                    'Chưa cấp quyền micro. Vào System Settings → Privacy → Microphone → bật cho app này.',
+                    'Microphone access denied. Go to System Settings → Privacy → Microphone and enable it for this app.'
+                ));
+            } else if (e.includes('notreadable') || e.includes('notfound')) {
+                setErrorMsg(t('Không tìm thấy micro nào trên thiết bị.', 'No microphone found.'));
+            } else {
+                setErrorMsg(`Microphone error: ${err.message || 'unknown'}`);
+            }
+        }
+    }, [t, forceStopRecognition]);
 
     const stopMediaRecorder = useCallback(() => {
         if (mediaRecorderRef.current?.state !== 'inactive') {
@@ -969,9 +1014,17 @@ export default function SpeakWithAITab() {
 
     const handleMicClick = useCallback(() => {
         if (appState === 'listening') {
-            stopRecognition();
-            stopMediaRecorder();
-            // onEnd callback will fire with final text
+            if (isMicOnlyModeRef.current) {
+                // Windows/WebView2: Web Speech unavailable — manually trigger end
+                if (micAutoStopTimerRef.current) { clearTimeout(micAutoStopTimerRef.current); micAutoStopTimerRef.current = null; }
+                isMicOnlyModeRef.current = false;
+                // forceStopRecognition fires onEnd('') → stopMediaRecorder() → handleSpeechEnd(audio)
+                forceStopRecognition();
+            } else {
+                stopRecognition();
+                stopMediaRecorder();
+                // onEnd callback will fire with final text
+            }
         } else if (appState === 'speaking') {
             // Interrupt AI speech → start recording immediately
             // Abort TTS playback promise immediately (no stale state override later)
@@ -982,15 +1035,15 @@ export default function SpeakWithAITab() {
             }
             window.speechSynthesis?.cancel();
             setAppState('listening');
-            startRecognition();
+            startRecognition(); // sets isMicOnlyModeRef on Windows
             startMediaRecorder();
         } else if (appState === 'idle' || appState === 'error') {
             setErrorMsg('');
             setAppState('listening');
-            startRecognition();
+            startRecognition(); // sets isMicOnlyModeRef on Windows
             startMediaRecorder();
         }
-    }, [appState, startRecognition, stopRecognition, startMediaRecorder, stopMediaRecorder]);
+    }, [appState, startRecognition, stopRecognition, forceStopRecognition, startMediaRecorder, stopMediaRecorder]);
 
     const handleAnalyzeAudio = useCallback(async (msg: SpeakMessage) => {
         // Premium: result already pre-filled by Gemini during recording — nothing to do

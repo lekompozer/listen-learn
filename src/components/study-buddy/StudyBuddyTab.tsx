@@ -583,13 +583,14 @@ function ApplyModal({ squad, isDark, isVi, onClose, onApplied, userDisplayName, 
 interface ChatPanelProps {
     squadId: string;
     isHost: boolean;
+    canChat: boolean;
     members: StudyMember[];
     isDark: boolean;
     isVi: boolean;
     currentUserId: string;
 }
 
-function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: ChatPanelProps) {
+function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUserId }: ChatPanelProps) {
     const [messages, setMessages] = useState<SquadMessage[]>([]);
     const [text, setText] = useState('');
     const [recipientId, setRecipientId] = useState<string | null>(null);
@@ -649,6 +650,7 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
     }, [messages]);
 
     const handleSend = async () => {
+        if (!canChat) return;
         if (!text.trim()) return;
         setSending(true);
         try {
@@ -663,6 +665,7 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
     };
 
     const acceptedMembers = members.filter(m => m.status === 'accepted');
+    const canSendMessages = canChat;
 
     return (
         <div className="flex flex-col h-full relative">
@@ -701,11 +704,15 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
                     <div className="flex justify-center pt-8">
                         <RefreshCw className={`w-5 h-5 animate-spin ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
                     </div>
+                ) : !canChat ? (
+                    <div className={`text-center py-12 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {t('Chỉ host và thành viên trong squad mới xem được chat này.', 'Only the host and accepted squad members can view this chat.', isVi)}
+                    </div>
                 ) : messages.length === 0 ? (
                     <div className={`text-center py-12 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                         {isHost
                             ? t('Chưa có tin nhắn. Gửi thông báo đến thành viên!', 'No messages yet. Send one to your members!', isVi)
-                            : t('Chưa có tin nhắn từ host.', 'No messages from host yet.', isVi)}
+                            : t('Chưa có tin nhắn nào trong nhóm.', 'No group messages yet.', isVi)}
                     </div>
                 ) : (
                     messages.map(msg => {
@@ -748,7 +755,7 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
             )}
 
             {/* Input — host only can send */}
-            {isHost && (
+            {canSendMessages && (
                 <div className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
                     <input
                         value={text}
@@ -756,7 +763,7 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                         placeholder={recipientId
                             ? t('Tin nhắn riêng...', 'Private message...', isVi)
-                            : t('Tin nhắn đến tất cả...', 'Message to everyone...', isVi)}
+                            : t('Nhắn vào group chat...', 'Message the group chat...', isVi)}
                         className={`flex-1 text-sm px-3 py-1.5 rounded-lg border outline-none transition-colors
                             ${isDark
                                 ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
@@ -772,9 +779,9 @@ function ChatPanel({ squadId, isHost, members, isDark, isVi, currentUserId }: Ch
                 </div>
             )}
 
-            {!isHost && (
+            {!canSendMessages && (
                 <div className={`flex-shrink-0 px-3 py-2 border-t text-center ${isDark ? 'border-white/8 text-gray-500' : 'border-gray-100 text-gray-400'}`}>
-                    <p className="text-xs">{t('Chỉ host mới có thể gửi tin nhắn', 'Only the host can send messages', isVi)}</p>
+                    <p className="text-xs">{t('Chỉ host và thành viên đã được duyệt mới có thể xem hoặc gửi tin nhắn.', 'Only the host and accepted members can view or send messages.', isVi)}</p>
                 </div>
             )}
         </div>
@@ -1397,6 +1404,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
     const [squad, setSquad] = useState<StudySquad | null>(null);
     const [members, setMembers] = useState<StudyMember[]>([]);
     const [isHost, setIsHost] = useState(false);
+    const [myStatus, setMyStatus] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [mySquads, setMySquads] = useState<StudySquad[]>([]);
 
@@ -1406,6 +1414,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
             setSquad(res.squad);
             setMembers(res.members);
             setIsHost(res.is_host);
+            setMyStatus(res.my_status);
         }).catch(() => { /* ignore */ }).finally(() => setLoading(false));
     }, [squadId]);
 
@@ -1438,6 +1447,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
 
     const langInfo = COMMON_LANGUAGES.find(l => l.id === squad.language);
     const mtIcon = MEETING_TYPE_ICONS[squad.meeting_type] ?? '📚';
+    const canChat = isHost || myStatus === 'accepted';
 
     return (
         <div className="flex flex-col h-full">
@@ -1497,6 +1507,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
                     <ChatPanel
                         squadId={squadId}
                         isHost={isHost}
+                        canChat={canChat}
                         members={members}
                         isDark={isDark}
                         isVi={isVi}
