@@ -43,12 +43,16 @@ const LEVEL_OPTIONS = [
     { value: 'native', labelVi: 'Bản ngữ (Native)', labelEn: 'Native' },
 ];
 
-// Parse JSON safely
-function parseLinks(raw: string): { label: string; url: string }[] {
-    try { return JSON.parse(raw) || []; } catch { return []; }
+// Parse JSON safely — handles both JSON strings and already-parsed arrays
+function parseLinks(raw: unknown): { label: string; url: string }[] {
+    if (Array.isArray(raw)) return raw as { label: string; url: string }[];
+    if (!raw || typeof raw !== 'string') return [];
+    try { const r = JSON.parse(raw); return Array.isArray(r) ? r : []; } catch { return []; }
 }
-function parsePhotos(raw: string): string[] {
-    try { return JSON.parse(raw) || []; } catch { return []; }
+function parsePhotos(raw: unknown): string[] {
+    if (Array.isArray(raw)) return raw as string[];
+    if (!raw || typeof raw !== 'string') return [];
+    try { const r = JSON.parse(raw); return Array.isArray(r) ? r : []; } catch { return []; }
 }
 
 interface MyProfileModalProps {
@@ -393,27 +397,27 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                         const platform = lnk.url.trim() ? detectPlatform(lnk.url) : null;
                                         const invalid = !!lnk.url.trim() && !platform;
                                         return (
-                                        <div key={i} className="flex gap-2">
-                                            <input value={lnk.label} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))}
-                                                placeholder={t('Nhãn', 'Label', isVi)}
-                                                className={`${inputCls} w-24 flex-shrink-0`} />
-                                            <div className="relative flex-1">
-                                                <input value={lnk.url} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))}
-                                                    placeholder="https://..." className={`${inputCls} w-full pr-20 ${invalid ? '!border-red-500/70' : ''}`} />
-                                                {platform && (
-                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
-                                                        style={{ color: platform.color, background: platform.color + '22' }}>
-                                                        {platform.label}
-                                                    </span>
-                                                )}
-                                                {invalid && (
-                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-red-400">✗</span>
-                                                )}
+                                            <div key={i} className="flex gap-2">
+                                                <input value={lnk.label} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))}
+                                                    placeholder={t('Nhãn', 'Label', isVi)}
+                                                    className={`${inputCls} w-24 flex-shrink-0`} />
+                                                <div className="relative flex-1">
+                                                    <input value={lnk.url} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))}
+                                                        placeholder="https://..." className={`${inputCls} w-full pr-20 ${invalid ? '!border-red-500/70' : ''}`} />
+                                                    {platform && (
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
+                                                            style={{ color: platform.color, background: platform.color + '22' }}>
+                                                            {platform.label}
+                                                        </span>
+                                                    )}
+                                                    {invalid && (
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-red-400">✗</span>
+                                                    )}
+                                                </div>
+                                                <button onClick={() => removeLink(i)} className={`p-2 rounded-xl flex-shrink-0 ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'}`}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
                                             </div>
-                                            <button onClick={() => removeLink(i)} className={`p-2 rounded-xl flex-shrink-0 ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'}`}>
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
                                         );
                                     })}
                                     <p className={`text-[11px] mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -551,7 +555,7 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                                             ? <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
                                                                 style={{ backgroundColor: platform.color }}>
                                                                 {platform.label[0]}
-                                                              </span>
+                                                            </span>
                                                             : <Link className="w-3.5 h-3.5 flex-shrink-0" />
                                                         }
                                                         <span>{lnk.label || (platform?.label ?? lnk.url)}</span>
@@ -606,42 +610,42 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                 )}
             </div>
 
-        {/* Photo Lightbox */}
-        {lightboxIdx !== null && (
-            <div className="absolute inset-0 bg-black/95 flex items-center justify-center" onClick={() => setLightboxIdx(null)}>
-                <img
-                    src={viewPhotos[lightboxIdx]}
-                    alt=""
-                    className="max-w-[90%] max-h-[85vh] object-contain rounded-xl shadow-2xl"
-                    onClick={e => e.stopPropagation()}
-                />
-                {lightboxIdx > 0 && (
+            {/* Photo Lightbox */}
+            {lightboxIdx !== null && (
+                <div className="absolute inset-0 bg-black/95 flex items-center justify-center" onClick={() => setLightboxIdx(null)}>
+                    <img
+                        src={viewPhotos[lightboxIdx]}
+                        alt=""
+                        className="max-w-[90%] max-h-[85vh] object-contain rounded-xl shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    />
+                    {lightboxIdx > 0 && (
+                        <button
+                            onClick={e => { e.stopPropagation(); setLightboxIdx(i => i! - 1); }}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
+                        >
+                            <ChevronLeft className="w-6 h-6" />
+                        </button>
+                    )}
+                    {lightboxIdx < viewPhotos.length - 1 && (
+                        <button
+                            onClick={e => { e.stopPropagation(); setLightboxIdx(i => i! + 1); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
+                        >
+                            <ChevronRight className="w-6 h-6" />
+                        </button>
+                    )}
                     <button
-                        onClick={e => { e.stopPropagation(); setLightboxIdx(i => i! - 1); }}
-                        className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
+                        onClick={() => setLightboxIdx(null)}
+                        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
                     >
-                        <ChevronLeft className="w-6 h-6" />
+                        <X className="w-5 h-5" />
                     </button>
-                )}
-                {lightboxIdx < viewPhotos.length - 1 && (
-                    <button
-                        onClick={e => { e.stopPropagation(); setLightboxIdx(i => i! + 1); }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
-                    >
-                        <ChevronRight className="w-6 h-6" />
-                    </button>
-                )}
-                <button
-                    onClick={() => setLightboxIdx(null)}
-                    className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors"
-                >
-                    <X className="w-5 h-5" />
-                </button>
-                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/50 text-sm">
-                    {lightboxIdx + 1} / {viewPhotos.length}
+                    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/50 text-sm">
+                        {lightboxIdx + 1} / {viewPhotos.length}
+                    </div>
                 </div>
-            </div>
-        )}
+            )}
         </div>
     );
 

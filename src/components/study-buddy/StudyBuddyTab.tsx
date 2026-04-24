@@ -742,7 +742,7 @@ function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, c
                                         }
                                     </div>
                                 )}
-                                <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                                <div className={`flex flex-col max-w-[65%] ${isMine ? 'items-end' : 'items-start'}`}>
                                     {isDM && (
                                         <span className={`text-[10px] mb-0.5 px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-600/20 text-purple-300' : 'bg-purple-50 text-purple-600'}`}>
                                             {isMine
@@ -750,7 +750,7 @@ function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, c
                                                 : t('DM riêng', 'Private DM', isVi)}
                                         </span>
                                     )}
-                                    <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm
+                                    <div className={`max-w-full px-3 py-2 rounded-xl text-sm
                                         ${isMine
                                             ? 'bg-teal-600 text-white rounded-br-none'
                                             : isDark ? 'bg-white/10 text-white rounded-bl-none' : 'bg-gray-100 text-gray-900 rounded-bl-none'}`}
