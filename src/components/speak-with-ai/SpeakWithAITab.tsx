@@ -782,8 +782,27 @@ export default function SpeakWithAITab() {
             // 1. Get AI reply — pre-computed (voice-chat), backend API, or direct AI fallback
             let replyText = precomputedReply ?? '';
 
-            if (!replyText && user) {
-                // Authenticated: use POST /api/v1/speak/chat — handles Points, system prompt, correction
+            // Desktop + Gemma4: call Rust directly — skip backend (CF AI has Gemma4, not DeepSeek)
+            // Desktop + DeepSeek: must go through backend
+            // Web: always go through backend
+            const isDesktopGemma4 = isTauriDesktop() && selectedModel !== 'deepseek';
+
+            if (!replyText && isDesktopGemma4) {
+                // Desktop Gemma4: Rust call — credentials baked in binary, no Points deducted
+                try {
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    replyText = await invoke<string>('call_gemma4', { messages: deepseekMessages });
+                    incrementGemma4DailyUsage();
+                    setGemma4Usage(getGemma4DailyUsage());
+                } catch (e: any) {
+                    if (e?.name === 'AbortError') throw e;
+                    logError('Rust Gemma4', e?.message);
+                    // Fall through to backend fallback below
+                }
+            }
+
+            if (!replyText && user && !isDesktopGemma4) {
+                // Web (any model) or Desktop + DeepSeek: use backend /api/v1/speak/chat
                 const token = await user.getIdToken();
                 const apiModel: 'gemma4' | 'deepseek' = selectedModel === 'deepseek' ? 'deepseek' : 'gemma4';
                 try {
@@ -811,7 +830,7 @@ export default function SpeakWithAITab() {
                 }
             }
 
-            // Fallback: unauthenticated or API error — call AI providers directly
+            // Fallback: unauthenticated, API error, or Rust Gemma4 failed — call AI directly
             if (!replyText) {
                 let lastErr: any;
                 const useGemma4 = selectedModel === 'auto' ? canUseGemma4() : selectedModel === 'gemma4';
@@ -819,7 +838,13 @@ export default function SpeakWithAITab() {
 
                 if (useGemma4) {
                     try {
-                        replyText = await callGemma4(deepseekMessages, signal);
+                        if (isTauriDesktop()) {
+                            // Desktop: use Rust call_gemma4 — credentials baked in, no token exposed to browser
+                            const { invoke } = await import('@tauri-apps/api/core');
+                            replyText = await invoke<string>('call_gemma4', { messages: deepseekMessages });
+                        } else {
+                            replyText = await callGemma4(deepseekMessages, signal);
+                        }
                         incrementGemma4DailyUsage();
                         setGemma4Usage(getGemma4DailyUsage());
                     } catch (e: any) {
@@ -1258,6 +1283,37 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
     }, [widgetInput, widgetLoading, widgetMessages, topic, isVietnamese, t]);
 
     // ── Render ────────────────────────────────────────────────────────────────
+
+    // Login gate — must be signed in to use Speak with AI
+    if (!user) {
+        return (
+            <div className={`flex h-full items-center justify-center ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+                <div className="flex flex-col items-center gap-5 text-center px-8 max-w-sm">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${isDark ? 'bg-teal-900/40' : 'bg-teal-50'}`}>
+                        <Mic className="w-8 h-8 text-teal-500" />
+                    </div>
+                    <div>
+                        <h2 className={`text-lg font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            {t('Đăng nhập để luyện nói', 'Sign in to practise speaking')}
+                        </h2>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {t(
+                                'Tính năng Speak with AI yêu cầu đăng nhập để sử dụng.',
+                                'Speak with AI requires an account to get started.',
+                            )}
+                        </p>
+                    </div>
+                    <a
+                        href="/login"
+                        className="px-6 py-3 bg-teal-600 text-white rounded-xl font-medium hover:bg-teal-500 active:scale-95 transition-all"
+                    >
+                        {t('Đăng nhập', 'Sign in')}
+                    </a>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={`flex h-full overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
             {/* Sidebar */}
@@ -1425,7 +1481,7 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                                     ${isDark ? 'bg-gray-800 border-gray-700 text-gray-300 focus:border-teal-500' : 'bg-white border-gray-300 text-gray-700 focus:border-teal-500'}`}
                             >
                                 <option value="auto">🤖 Auto</option>
-                                <option value="gemma4">✨ Gemma4 (free)</option>
+                                <option value="gemma4">✨ Gemma4</option>
                                 <option value="deepseek">🧠 DeepSeek</option>
                             </select>
                             <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-60" />

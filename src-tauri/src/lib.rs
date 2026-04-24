@@ -81,30 +81,28 @@ async fn transcribe_audio(audio_base64: String, language: Option<String>) -> Res
         account_id
     );
     let lang = language.unwrap_or_else(|| "en".to_string());
-    use base64::{engine::general_purpose::STANDARD, Engine};
-    let audio_bytes = STANDARD.decode(&audio_base64).map_err(|e| format!("base64 decode: {e}"))?;
 
+    // CF REST API expects JSON body: { "audio": "<base64>", "language": "en" }
+    // audio_base64 is already base64 — pass it directly, no decode needed.
     let client = reqwest::Client::new();
-    let part = reqwest::multipart::Part::bytes(audio_bytes)
-        .file_name("audio.webm")
-        .mime_str("audio/webm").map_err(|e| e.to_string())?;
-    let form = reqwest::multipart::Form::new()
-        .part("audio", part)
-        .text("language", lang);
+    let body = serde_json::json!({
+        "audio": audio_base64,
+        "language": lang,
+    });
 
     let res = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", api_key))
-        .multipart(form)
+        .json(&body)
         .send()
         .await
         .map_err(|e| format!("Request failed: {e}"))?;
 
     if !res.status().is_success() {
         let code = res.status().as_u16();
-        let body = res.text().await.unwrap_or_default();
-        log::error!("[Whisper] API error {code}: {body}");
-        return Err(format!("Whisper API error {code}: {body}"));
+        let body_text = res.text().await.unwrap_or_default();
+        log::error!("[Whisper] API error {code}: {body_text}");
+        return Err(format!("Whisper API error {code}: {body_text}"));
     }
     let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
     if !data["success"].as_bool().unwrap_or(false) {
