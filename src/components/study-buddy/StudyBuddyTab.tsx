@@ -590,9 +590,10 @@ interface ChatPanelProps {
     isDark: boolean;
     isVi: boolean;
     currentUserId: string;
+    onViewProfile: (userId: string) => void;
 }
 
-function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, currentUserId }: ChatPanelProps) {
+function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, currentUserId, onViewProfile }: ChatPanelProps) {
     const [messages, setMessages] = useState<SquadMessage[]>([]);
     const [text, setText] = useState('');
     const [recipientId, setRecipientId] = useState<string | null>(null);
@@ -733,14 +734,14 @@ function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, c
                             <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} gap-1.5`}>
                                 {/* Avatar on left for others */}
                                 {!isMine && (
-                                    <div className="flex-shrink-0 mt-0.5">
+                                    <button className="flex-shrink-0 mt-0.5 cursor-pointer" onClick={() => onViewProfile(msg.sender_id)}>
                                         {senderAvatar
-                                            ? <img src={senderAvatar} alt="" className="w-6 h-6 rounded-full" />
+                                            ? <img src={senderAvatar} alt="" className="w-6 h-6 rounded-full hover:opacity-80 transition-opacity" />
                                             : <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                                 {senderName[0]?.toUpperCase()}
                                             </div>
                                         }
-                                    </div>
+                                    </button>
                                 )}
                                 <div className={`flex flex-col max-w-[65%] ${isMine ? 'items-end' : 'items-start'}`}>
                                     {isDM && (
@@ -758,7 +759,7 @@ function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, c
                                         {msg.content}
                                     </div>
                                     {!isMine && senderName && (
-                                        <span className={`text-[10px] mt-0.5 font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{senderName}</span>
+                                        <button className={`text-[10px] mt-0.5 font-medium text-left hover:underline ${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`} onClick={() => onViewProfile(msg.sender_id)}>{senderName}</button>
                                     )}
                                     <span className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                                         {timeAgo(msg.created_at, isVi)}
@@ -934,6 +935,7 @@ interface SquadDetailModalProps {
     userPhotoURL: string | null;
     onClose: () => void;
     onRefreshList: () => void;
+    onViewProfile: (userId: string) => void;
 }
 
 type DetailTab = 'info' | 'applicants' | 'members';
@@ -941,7 +943,7 @@ type DetailTab = 'info' | 'applicants' | 'members';
 function SquadDetailModal({
     squadId, isDark, isVi, currentUserId,
     userDisplayName, userPhotoURL,
-    onClose, onRefreshList,
+    onClose, onRefreshList, onViewProfile,
 }: SquadDetailModalProps) {
     const [squad, setSquad] = useState<StudySquad | null>(null);
     const [members, setMembers] = useState<StudyMember[]>([]);
@@ -1292,18 +1294,18 @@ function SquadDetailModal({
                                         <p className={`text-sm text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                             {t('Chưa có thành viên', 'No members yet', isVi)}
                                         </p>
-                                    ) : members.map(m => (
+                                                    ) : members.map(m => (
                                         <div key={m.id} className={`flex items-center justify-between gap-2 p-2.5 rounded-xl
                                             ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
-                                            <div className="flex items-center gap-2.5">
+                                            <button className="flex items-center gap-2.5 text-left" onClick={() => onViewProfile(m.user_id)}>
                                                 {m.avatar_url
-                                                    ? <img src={m.avatar_url} alt="" className="w-8 h-8 rounded-full" />
+                                                    ? <img src={m.avatar_url} alt="" className="w-8 h-8 rounded-full hover:opacity-80 transition-opacity" />
                                                     : <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                                         {m.nickname[0]?.toUpperCase()}
                                                     </div>
                                                 }
                                                 <div>
-                                                    <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{m.nickname}</p>
+                                                    <p className={`text-sm font-medium ${isDark ? 'text-white hover:text-teal-300' : 'text-gray-900 hover:text-teal-600'} transition-colors`}>{m.nickname}</p>
                                                     <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                                         {m.status === 'host'
                                                             ? t('Host', 'Host', isVi)
@@ -1312,7 +1314,7 @@ function SquadDetailModal({
                                                                 : ''}
                                                     </p>
                                                 </div>
-                                            </div>
+                                            </button>
                                             {m.status === 'host' && <Crown className="w-4 h-4 text-amber-500" />}
                                             {isHost && m.status === 'accepted' && (
                                                 <button
@@ -1554,9 +1556,10 @@ interface SquadChatPanelProps {
     onOpenDetail: () => void;
     onClose: () => void;
     onSelectSquad: (id: string) => void;
+    onViewProfile: (userId: string) => void;
 }
 
-function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, onClose, onSelectSquad }: SquadChatPanelProps) {
+function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, onClose, onSelectSquad, onViewProfile }: SquadChatPanelProps) {
     const [squad, setSquad] = useState<StudySquad | null>(null);
     const [members, setMembers] = useState<StudyMember[]>([]);
     const [isHost, setIsHost] = useState(false);
@@ -1673,6 +1676,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
                         isDark={isDark}
                         isVi={isVi}
                         currentUserId={currentUserId}
+                        onViewProfile={onViewProfile}
                     />
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
@@ -1715,6 +1719,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [mySquadIds, setMySquadIds] = useState<Set<string>>(new Set());
     const [showMyProfile, setShowMyProfile] = useState(false);
+    const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
     const [chatWidth, setChatWidth] = useState(400);
     const isDragging = useRef(false);
     const dragStartX = useRef(0);
@@ -2067,6 +2072,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                         onOpenDetail={() => setShowDetailModal(true)}
                         onClose={() => setSelectedSquadId(null)}
                         onSelectSquad={(id) => setSelectedSquadId(id)}
+                        onViewProfile={setViewingProfileId}
                     />
                 </div>
             ) : (
@@ -2123,6 +2129,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     userPhotoURL={userPhotoURL}
                     onClose={() => setShowDetailModal(false)}
                     onRefreshList={() => loadSquads()}
+                    onViewProfile={setViewingProfileId}
                 />
             )}
 
@@ -2131,6 +2138,15 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     isDark={isDark}
                     isVi={isVi}
                     onClose={() => setShowMyProfile(false)}
+                />
+            )}
+
+            {viewingProfileId && (
+                <MyProfileModal
+                    targetUserId={viewingProfileId}
+                    isDark={isDark}
+                    isVi={isVi}
+                    onClose={() => setViewingProfileId(null)}
                 />
             )}
         </div>
