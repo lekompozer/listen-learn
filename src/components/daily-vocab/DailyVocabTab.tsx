@@ -207,6 +207,9 @@ function VocabNavRail({ isDark, section, onSelect }: {
                             <button key={label} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
                                 <Icon className="w-4 h-4 flex-shrink-0" />
                                 <span className="truncate">{label}</span>
+                                {label === 'Study Group' && (
+                                    <span className={`ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-teal-600/30 text-teal-400' : 'bg-teal-100 text-teal-600'}`}>beta</span>
+                                )}
                             </button>
                         ) : (
                             <div key={label} className={`${base} cursor-default opacity-50`}>

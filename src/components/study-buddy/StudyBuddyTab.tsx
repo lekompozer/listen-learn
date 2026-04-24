@@ -12,14 +12,14 @@ import {
     Users, Search, Plus, ChevronDown, X, Send, Check, CheckCheck,
     Clock, Crown, MessageSquare, UserCheck, UserX, LogOut, Trash2,
     RefreshCw, ChevronRight, ArrowLeft, Bell, ImagePlus, ChevronLeft,
-    BookMarked, MapPin, AlertTriangle, UserCircle,
+    BookMarked, MapPin, AlertTriangle, UserCircle, Pencil,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useTheme, useLanguage } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
 import { uploadImageToBackend } from '@/services/communityService';
 import {
-    listSquads, getSquad, createSquad, cancelSquad,
+    listSquads, getSquad, createSquad, cancelSquad, updateSquad,
     applySquad, cancelApply, leaveSquad,
     getApplicants, acceptApplicant, rejectApplicant, removeMember,
     getMyHosted, getMyJoined,
@@ -72,7 +72,7 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]
+            className={`w-full max-w-[400px] text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98] flex flex-col
                 ${isDark
                     ? 'bg-gray-800/70 border-white/8 hover:border-white/20'
                     : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'}
@@ -103,41 +103,41 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
 
             {/* Card body */}
             <div className="p-2">
-                <p className={`font-semibold text-xs leading-snug line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                <p className={`font-semibold text-sm leading-snug line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {squad.title}
                 </p>
                 {squad.description && (
-                    <p className={`text-[10px] mt-0.5 line-clamp-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         {squad.description}
                     </p>
                 )}
-                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    <span className={`flex items-center gap-0.5 text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        <Users className="w-2.5 h-2.5" />
+                <div className="flex items-center gap-1 mt-2 flex-wrap">
+                    <span className={`flex items-center gap-0.5 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <Users className="w-3 h-3" />
                         {squad.member_count}/{squad.max_members}
                     </span>
                     {langInfo && (
-                        <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{langInfo.flag}</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{langInfo.flag}</span>
                     )}
                     {levelInfo && squad.level !== 'any' && (
-                        <span className={`text-[10px] px-1 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
                             {isVi ? levelInfo.labelVi : levelInfo.labelEn}
                         </span>
                     )}
                     {tagList.slice(0, 1).map(tag => (
-                        <span key={tag} className={`text-[10px] px-1 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                        <span key={tag} className={`text-xs px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
                             #{tag}
                         </span>
                     ))}
                 </div>
-                <div className="flex items-center gap-1 mt-1.5">
+                <div className="flex items-center gap-1.5 mt-2">
                     {squad.host_avatar_url
-                        ? <img src={squad.host_avatar_url} alt="" className="w-3.5 h-3.5 rounded-full flex-shrink-0" />
-                        : <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
+                        ? <img src={squad.host_avatar_url} alt="" className="w-4 h-4 rounded-full flex-shrink-0" />
+                        : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                             {squad.host_nickname[0]?.toUpperCase()}
                         </div>
                     }
-                    <span className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <span className={`text-xs truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                         {squad.host_nickname} · {timeAgo(squad.created_at, isVi)}
                     </span>
                 </div>
@@ -585,13 +585,14 @@ interface ChatPanelProps {
     squadId: string;
     isHost: boolean;
     canChat: boolean;
+    canSend: boolean;
     members: StudyMember[];
     isDark: boolean;
     isVi: boolean;
     currentUserId: string;
 }
 
-function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUserId }: ChatPanelProps) {
+function ChatPanel({ squadId, isHost, canChat, canSend, members, isDark, isVi, currentUserId }: ChatPanelProps) {
     const [messages, setMessages] = useState<SquadMessage[]>([]);
     const [text, setText] = useState('');
     const [recipientId, setRecipientId] = useState<string | null>(null);
@@ -672,7 +673,7 @@ function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUse
     };
 
     const acceptedMembers = members.filter(m => m.status === 'accepted');
-    const canSendMessages = canChat;
+    const canSendMessages = canSend;
 
     return (
         <div className="flex flex-col h-full relative">
@@ -725,40 +726,44 @@ function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUse
                     messages.map(msg => {
                         const isMine = msg.sender_id === currentUserId;
                         const isDM = msg.recipient_id !== null;
-                        // Look up sender info from members list (fallback to backend-provided sender_nickname)
                         const senderMember = members.find(m => m.user_id === msg.sender_id);
                         const senderName = senderMember?.nickname ?? msg.sender_nickname ?? '';
                         const senderAvatar = senderMember?.avatar_url ?? msg.sender_avatar_url ?? null;
                         return (
-                            <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                                {/* Sender name for other people's messages */}
-                                {!isMine && senderName && (
-                                    <div className="flex items-center gap-1.5 mb-0.5 ml-1">
+                            <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'} gap-1.5`}>
+                                {/* Avatar on left for others */}
+                                {!isMine && (
+                                    <div className="flex-shrink-0 mt-0.5">
                                         {senderAvatar
-                                            ? <img src={senderAvatar} alt="" className="w-5 h-5 rounded-full flex-shrink-0" />
-                                            : <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
+                                            ? <img src={senderAvatar} alt="" className="w-6 h-6 rounded-full" />
+                                            : <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                                 {senderName[0]?.toUpperCase()}
                                             </div>
                                         }
-                                        <span className={`text-[10px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{senderName}</span>
                                     </div>
                                 )}
-                                {isDM && (
-                                    <span className={`text-[10px] mb-0.5 px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-600/20 text-purple-300' : 'bg-purple-50 text-purple-600'}`}>
-                                        {isMine
-                                            ? t('DM → ', 'DM → ', isVi) + (acceptedMembers.find(m => m.user_id === msg.recipient_id)?.nickname ?? 'member')
-                                            : t('DM riêng', 'Private DM', isVi)}
+                                <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                                    {isDM && (
+                                        <span className={`text-[10px] mb-0.5 px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-600/20 text-purple-300' : 'bg-purple-50 text-purple-600'}`}>
+                                            {isMine
+                                                ? t('DM → ', 'DM → ', isVi) + (acceptedMembers.find(m => m.user_id === msg.recipient_id)?.nickname ?? 'member')
+                                                : t('DM riêng', 'Private DM', isVi)}
+                                        </span>
+                                    )}
+                                    <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm
+                                        ${isMine
+                                            ? 'bg-teal-600 text-white rounded-br-none'
+                                            : isDark ? 'bg-white/10 text-white rounded-bl-none' : 'bg-gray-100 text-gray-900 rounded-bl-none'}`}
+                                        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                        {msg.content}
+                                    </div>
+                                    {!isMine && senderName && (
+                                        <span className={`text-[10px] mt-0.5 font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{senderName}</span>
+                                    )}
+                                    <span className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                        {timeAgo(msg.created_at, isVi)}
                                     </span>
-                                )}
-                                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm
-                                    ${isMine
-                                        ? 'bg-teal-600 text-white rounded-br-none'
-                                        : isDark ? 'bg-white/10 text-white rounded-bl-none' : 'bg-gray-100 text-gray-900 rounded-bl-none'}`}>
-                                    {msg.content}
                                 </div>
-                                <span className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                                    {timeAgo(msg.created_at, isVi)}
-                                </span>
                             </div>
                         );
                     })
@@ -777,17 +782,19 @@ function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUse
                 </button>
             )}
 
-            {/* Input — host only can send */}
-            {canSendMessages && (
-                <div className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
-                    <input
+            {/* Input */}
+            {canSendMessages ? (
+                <div className={`flex-shrink-0 flex items-end gap-2 px-3 py-2 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                    <textarea
                         value={text}
                         onChange={e => setText(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                         placeholder={recipientId
                             ? t('Tin nhắn riêng...', 'Private message...', isVi)
                             : t('Nhắn vào group chat...', 'Message the group chat...', isVi)}
-                        className={`flex-1 text-sm px-3 py-1.5 rounded-lg border outline-none transition-colors
+                        rows={1}
+                        style={{ maxHeight: '4.5rem', minHeight: '2rem' }}
+                        className={`flex-1 text-sm px-3 py-1.5 rounded-lg border outline-none transition-colors resize-none overflow-y-auto
                             ${isDark
                                 ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
                                 : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`}
@@ -795,20 +802,125 @@ function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUse
                     <button
                         onClick={handleSend}
                         disabled={sending || !text.trim()}
-                        className="p-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 transition-colors"
+                        className="flex-shrink-0 p-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 transition-colors"
                     >
                         <Send className="w-3.5 h-3.5" />
                     </button>
                 </div>
-            )}
-
-            {!canSendMessages && (
+            ) : canChat ? (
+                <div className={`flex-shrink-0 px-3 py-2 border-t text-center ${isDark ? 'border-white/8 text-gray-500' : 'border-gray-100 text-gray-400'}`}>
+                    <p className="text-xs">{t('Squad đã bị huỷ — không thể gửi tin nhắn mới.', 'Squad cancelled — sending disabled.', isVi)}</p>
+                </div>
+            ) : (
                 <div className={`flex-shrink-0 px-3 py-2 border-t text-center ${isDark ? 'border-white/8 text-gray-500' : 'border-gray-100 text-gray-400'}`}>
                     <p className="text-xs">{t('Chỉ host và thành viên đã được duyệt mới có thể xem hoặc gửi tin nhắn.', 'Only the host and accepted members can view or send messages.', isVi)}</p>
                 </div>
             )}
         </div>
     );
+}
+
+// ─── EditSquadModal ───────────────────────────────────────────────────────────
+
+interface EditSquadModalProps {
+    squad: StudySquad;
+    isDark: boolean;
+    isVi: boolean;
+    onClose: () => void;
+    onSaved: (updated: StudySquad) => void;
+}
+
+function EditSquadModal({ squad, isDark, isVi, onClose, onSaved }: EditSquadModalProps) {
+    const [title, setTitle] = useState(squad.title);
+    const [description, setDescription] = useState(squad.description ?? '');
+    const [maxMembers, setMaxMembers] = useState(squad.max_members);
+    const [tagsInput, setTagsInput] = useState(squad.tags ?? '');
+    const [joinConditions, setJoinConditions] = useState(squad.join_conditions ?? '');
+    const [deadline, setDeadline] = useState(
+        squad.deadline ? new Date(squad.deadline).toISOString().slice(0, 16) : ''
+    );
+    const [loading, setLoading] = useState(false);
+
+    const inputCls = `w-full px-3 py-2 text-sm rounded-lg border outline-none transition-colors ${isDark
+        ? 'bg-gray-700/60 border-white/10 text-white placeholder-gray-500 focus:border-teal-500'
+        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-teal-500'}`;
+
+    const handleSave = async () => {
+        if (!title.trim()) return toast.error(t('Vui lòng nhập tiêu đề', 'Please enter a title', isVi));
+        setLoading(true);
+        try {
+            const tags = tagsInput.split(',').map(s => s.trim()).filter(Boolean);
+            const res = await updateSquad(squad.id, {
+                title: title.trim(),
+                description: description.trim(),
+                max_members: maxMembers,
+                tags,
+                join_conditions: joinConditions.trim(),
+                deadline: deadline || null,
+            });
+            toast.success(t('Đã cập nhật!', 'Updated!', isVi));
+            onSaved(res.squad);
+        } catch (e: any) {
+            toast.error(e.message || t('Lỗi cập nhật', 'Update failed', isVi));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const card = (
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className={`w-full max-w-md max-h-[90vh] flex flex-col rounded-2xl shadow-2xl
+                ${isDark ? 'bg-gray-800 border border-white/8' : 'bg-white border border-gray-200'}`}>
+                <div className={`flex-shrink-0 flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                    <h2 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {t('Chỉnh sửa Squad', 'Edit Squad', isVi)}
+                    </h2>
+                    <button onClick={onClose} className={`p-1.5 rounded-lg ${isDark ? 'text-gray-400 hover:bg-white/10' : 'text-gray-400 hover:bg-gray-100'}`}>
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{t('Tiêu đề *', 'Title *', isVi)}</label>
+                        <input value={title} onChange={e => setTitle(e.target.value)} maxLength={80} className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{t('Mô tả', 'Description', isVi)}</label>
+                        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className={`${inputCls} resize-none`} />
+                    </div>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {t('Số thành viên tối đa', 'Max members', isVi)}
+                            <span className={`ml-2 font-bold ${isDark ? 'text-teal-400' : 'text-teal-600'}`}>{maxMembers}</span>
+                        </label>
+                        <input type="range" min={squad.member_count} max={24} value={maxMembers} onChange={e => setMaxMembers(Number(e.target.value))} className="w-full accent-teal-500" />
+                    </div>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{t('Tags', 'Tags', isVi)}</label>
+                        <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="IELTS, speaking, advanced" className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{t('Điều kiện tham gia', 'Join conditions', isVi)}</label>
+                        <input value={joinConditions} onChange={e => setJoinConditions(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                        <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{t('Hạn đăng ký', 'Deadline', isVi)}</label>
+                        <input type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} className={inputCls} />
+                    </div>
+                </div>
+                <div className={`flex-shrink-0 flex justify-end gap-2 px-5 py-4 border-t ${isDark ? 'border-white/8' : 'border-gray-100'}`}>
+                    <button onClick={onClose} className={`px-4 py-2 text-sm rounded-lg ${isDark ? 'bg-white/8 text-gray-300 hover:bg-white/12' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {t('Huỷ', 'Cancel', isVi)}
+                    </button>
+                    <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                        {loading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                        {t('Lưu', 'Save', isVi)}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+    return createPortal(card, document.body);
 }
 
 // ─── SquadDetailModal ─────────────────────────────────────────────────────────
@@ -842,6 +954,7 @@ function SquadDetailModal({
     const [showApply, setShowApply] = useState(false);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+    const [showEdit, setShowEdit] = useState(false);
 
     const loadDetail = useCallback(async () => {
         try {
@@ -986,16 +1099,27 @@ function SquadDetailModal({
                             <p className={`font-semibold text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{squad?.title}</p>
                         )}
                     </div>
-                    {isHost && squad?.status === 'active' && (
-                        <button
-                            onClick={handleCancelSquad}
-                            disabled={actionLoading === 'cancel'}
-                            className={`ml-2 p-1.5 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'}`}
-                            title={t('Huỷ squad', 'Cancel squad', isVi)}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isHost && squad?.status === 'active' && (
+                            <button
+                                onClick={() => setShowEdit(true)}
+                                className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-teal-400 hover:bg-teal-500/10' : 'text-teal-600 hover:bg-teal-50'}`}
+                                title={t('Chỉnh sửa squad', 'Edit squad', isVi)}
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                        )}
+                        {isHost && squad?.status === 'active' && (
+                            <button
+                                onClick={handleCancelSquad}
+                                disabled={actionLoading === 'cancel'}
+                                className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-50'}`}
+                                title={t('Huỷ squad', 'Cancel squad', isVi)}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Tabs */}
@@ -1308,6 +1432,15 @@ function SquadDetailModal({
         <>
             {createPortal(card, document.body)}
             {showConfirmCancel && createPortal(confirmCancelModal!, document.body)}
+            {showEdit && squad && (
+                <EditSquadModal
+                    squad={squad}
+                    isDark={isDark}
+                    isVi={isVi}
+                    onClose={() => setShowEdit(false)}
+                    onSaved={(updated) => { setSquad(updated); setShowEdit(false); onRefreshList(); }}
+                />
+            )}
         </>
     );
 }
@@ -1441,11 +1574,14 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
         }).catch(() => { /* ignore */ }).finally(() => setLoading(false));
     }, [squadId]);
 
-    // Load user's squads for the switcher
+    // Load user's squads for the switcher (exclude cancelled)
     useEffect(() => {
         if (!currentUserId) return;
         Promise.all([getMyHosted(), getMyJoined()]).then(([h, j]) => {
-            const all = [...h.items, ...j.items.filter((i: any) => i.my_status === 'accepted')];
+            const all = [
+                ...h.items.filter((s: any) => s.status !== 'cancelled'),
+                ...j.items.filter((i: any) => i.my_status === 'accepted' && i.status !== 'cancelled'),
+            ];
             // deduplicate by id
             const seen = new Set<string>();
             setMySquads(all.filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true; }));
@@ -1471,19 +1607,14 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
     const langInfo = COMMON_LANGUAGES.find(l => l.id === squad.language);
     const mtIcon = MEETING_TYPE_ICONS[squad.meeting_type] ?? '📚';
     const canChat = isHost || myStatus === 'accepted';
+    const canSend = canChat && squad.status !== 'cancelled';
 
     return (
         <div className="flex flex-col h-full">
             {/* Panel header */}
-            <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b
+            <div className={`flex-shrink-0 flex items-center gap-2 px-3 py-2.5 border-b
                 ${isDark ? 'border-white/8 bg-gray-800/40' : 'border-gray-200/60 bg-white/60'}`}>
-                <button
-                    onClick={onClose}
-                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}
-                >
-                    <X className="w-4 h-4" />
-                </button>
-                <span className="text-base">{mtIcon}</span>
+                <span className="text-base flex-shrink-0">{mtIcon}</span>
                 <div className="flex-1 min-w-0">
                     {/* Squad title — or dropdown switcher if user has multiple squads */}
                     {mySquads.length > 1 ? (
@@ -1517,10 +1648,16 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
                 </div>
                 <button
                     onClick={onOpenDetail}
-                    className={`flex-shrink-0 text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors
-                        ${isDark ? 'border-white/10 text-gray-300 hover:bg-white/10 hover:text-white' : 'border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+                    className={`flex-shrink-0 text-xs font-medium px-2.5 py-1.5 rounded-lg border-2 transition-colors
+                        ${isDark ? 'border-teal-600/60 text-teal-300 hover:bg-teal-600/20 hover:border-teal-500' : 'border-teal-400 text-teal-600 hover:bg-teal-50'}`}
                 >
                     {t('Chi tiết', 'Details', isVi)}
+                </button>
+                <button
+                    onClick={onClose}
+                    className={`flex-shrink-0 p-1.5 rounded-lg transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}
+                >
+                    <X className="w-4 h-4" />
                 </button>
             </div>
 
@@ -1531,6 +1668,7 @@ function SquadChatPanel({ squadId, isDark, isVi, currentUserId, onOpenDetail, on
                         squadId={squadId}
                         isHost={isHost}
                         canChat={canChat}
+                        canSend={canSend}
                         members={members}
                         isDark={isDark}
                         isVi={isVi}
@@ -1633,7 +1771,9 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 const all = [...hostedRes.items, ...joinedRes.items];
                 const unique = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
                 setMySquadIds(new Set(unique.map(s => s.id)));
-                if (unique.length > 0) setSelectedSquadId(unique[0].id);
+                // Auto-open first non-cancelled squad
+                const firstActive = unique.find(s => s.status !== 'cancelled');
+                if (firstActive) setSelectedSquadId(firstActive.id);
             } catch { /* ignore */ }
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1865,8 +2005,8 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                         </div>
                     ) : (
                         <>
-                            {/* 2-column grid */}
-                            <div className="grid grid-cols-2 gap-1.5">
+                            {/* 2-column grid (3 on wide screens) */}
+                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
                                 {squads.map(squad => (
                                     <SquadCard
                                         key={squad.id}
