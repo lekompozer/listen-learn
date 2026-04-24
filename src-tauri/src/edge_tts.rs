@@ -29,13 +29,20 @@ async fn get_tts_impl(text: String, voice: String, use_macos_say: bool) -> Resul
     if use_macos_say {
         return macos_say_tts(&text, &voice).await;
     }
-    match edge_tts_websocket(&text, &voice).await {
-        Ok(b64) => Ok(format!("mp3:{b64}")),
-        Err(e) => {
-            log::warn!("[TTS] Edge WS failed ({e}), falling back to macOS say");
-            macos_say_tts(&text, &voice).await
+    // Try Edge TTS up to 2 times before falling back to macOS say
+    for attempt in 1u8..=2 {
+        match edge_tts_websocket(&text, &voice).await {
+            Ok(b64) => return Ok(format!("mp3:{b64}")),
+            Err(e) => {
+                log::warn!("[TTS] Edge WS attempt {attempt} failed: {e}");
+                if attempt < 2 {
+                    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+                }
+            }
         }
     }
+    log::warn!("[TTS] Edge WS failed after 2 attempts, falling back to macOS say");
+    macos_say_tts(&text, &voice).await
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -105,13 +112,13 @@ async fn edge_tts_websocket(text: &str, voice: &str) -> Result<String, String> {
 
     // 3. Collect audio until turn.end
     let mut audio_data: Vec<u8> = Vec::new();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
 
     loop {
         if tokio::time::Instant::now() > deadline {
             return Err("WS audio timeout".to_string());
         }
-        match tokio::time::timeout(std::time::Duration::from_secs(8), ws.next()).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(15), ws.next()).await {
             Ok(Some(Ok(Message::Binary(data)))) => {
                 if let Some(start) = find_header_end(&data) {
                     audio_data.extend_from_slice(&data[start..]);

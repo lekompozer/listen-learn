@@ -649,7 +649,7 @@ export default function SpeakWithAITab() {
     useEffect(() => {
         if (isTauriDesktop()) {
             import('@tauri-apps/api/core').then(({ invoke }) =>
-                invoke<string>('get_platform').then(p => setTauriPlatform(p)).catch(() => {})
+                invoke<string>('get_platform').then(p => setTauriPlatform(p)).catch(() => { })
             );
         }
     }, []);
@@ -1382,23 +1382,23 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                     <div className="ml-auto flex items-center gap-2">
                         {/* TTS engine toggle: Edge TTS vs macOS say — macOS desktop only */}
                         {isTauriDesktop() && tauriPlatform === 'macos' && (
-                        <button
-                            onClick={() => {
-                                const next = !useMacosSay;
-                                setUseMacosSay(next);
-                                localStorage.setItem('ll_tts_macos_say', next ? '1' : '0');
-                            }}
-                            title={useMacosSay
-                                ? t('Đang dùng giọng macOS (offline). Nhấn để chuyển sang Edge TTS', 'Using macOS voice (offline). Click to switch to Edge TTS')
-                                : t('Đang dùng Edge TTS (tự nhiên hơn). Nhấn để chuyển sang macOS', 'Using Edge TTS (more natural). Click to switch to macOS voice')}
-                            className={`text-[11px] px-2 py-1 rounded-lg border font-medium transition-colors select-none
+                            <button
+                                onClick={() => {
+                                    const next = !useMacosSay;
+                                    setUseMacosSay(next);
+                                    localStorage.setItem('ll_tts_macos_say', next ? '1' : '0');
+                                }}
+                                title={useMacosSay
+                                    ? t('Đang dùng giọng macOS (offline). Nhấn để chuyển sang Edge TTS', 'Using macOS voice (offline). Click to switch to Edge TTS')
+                                    : t('Đang dùng Edge TTS (tự nhiên hơn). Nhấn để chuyển sang macOS', 'Using Edge TTS (more natural). Click to switch to macOS voice')}
+                                className={`text-[11px] px-2 py-1 rounded-lg border font-medium transition-colors select-none
                                 ${useMacosSay
-                                    ? (isDark ? 'bg-orange-900/40 border-orange-700 text-orange-300 hover:bg-orange-900/60' : 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100')
-                                    : (isDark ? 'bg-teal-900/40 border-teal-700 text-teal-300 hover:bg-teal-900/60' : 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100')
-                                }`}
-                        >
-                            {useMacosSay ? '🍎 macOS' : '🔊 Edge'}
-                        </button>
+                                        ? (isDark ? 'bg-orange-900/40 border-orange-700 text-orange-300 hover:bg-orange-900/60' : 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100')
+                                        : (isDark ? 'bg-teal-900/40 border-teal-700 text-teal-300 hover:bg-teal-900/60' : 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100')
+                                    }`}
+                            >
+                                {useMacosSay ? '🍎 macOS' : '🔊 Edge'}
+                            </button>
                         )}
                         {/* Last used TTS engine indicator */}
                         {ttsEngineUsed && (

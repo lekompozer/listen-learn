@@ -103,13 +103,13 @@ export function playBase64Audio(
             // Fallback 2: duration-based timeout after we know how long the track is
             audio.addEventListener('canplaythrough', () => {
                 const durationMs = isFinite(audio.duration) && audio.duration > 0
-                    ? audio.duration * 1000 + 1500  // +1.5s buffer
-                    : 12_000;                        // unknown duration → 12s fallback
+                    ? audio.duration * 1000 + 3000  // +3s buffer
+                    : 90_000;                        // unknown duration → 90s fallback
                 setTimeout(done, durationMs);
             });
 
-            // Fallback 3: hard cap in case canplaythrough never fires (15s max)
-            setTimeout(done, 15_000);
+            // Fallback 3: hard cap in case canplaythrough never fires (120s max)
+            setTimeout(done, 120_000);
 
             const playResult = audio.play();
             // play() may return undefined in old WebKit — check before .catch()
