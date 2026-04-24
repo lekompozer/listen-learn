@@ -71,7 +71,7 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98] break-inside-avoid mb-2
+            className={`w-full text-left rounded-xl border overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]
                 ${isDark
                     ? 'bg-gray-800/70 border-white/8 hover:border-white/20'
                     : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'}
@@ -83,12 +83,12 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
                     <img
                         src={squad.cover_url}
                         alt={squad.title}
-                        className="w-full h-28 object-cover"
+                        className="w-full h-20 object-cover"
                         loading="lazy"
                     />
                 ) : (
-                    <div className={`w-full h-16 bg-gradient-to-br ${grad} flex items-center justify-center`}>
-                        <span className="text-3xl opacity-50">{mtIcon}</span>
+                    <div className={`w-full h-10 bg-gradient-to-br ${grad} flex items-center justify-center`}>
+                        <span className="text-xl opacity-50">{mtIcon}</span>
                     </div>
                 )}
                 {/* Spots badge */}
@@ -101,42 +101,42 @@ function SquadCard({ squad, isDark, isVi, onClick }: SquadCardProps) {
             </div>
 
             {/* Card body */}
-            <div className="p-3">
-                <p className={`font-semibold text-sm leading-snug line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            <div className="p-2">
+                <p className={`font-semibold text-xs leading-snug line-clamp-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {squad.title}
                 </p>
                 {squad.description && (
-                    <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p className={`text-[10px] mt-0.5 line-clamp-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         {squad.description}
                     </p>
                 )}
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                    <span className={`flex items-center gap-1 text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                        <Users className="w-3 h-3" />
+                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    <span className={`flex items-center gap-0.5 text-[10px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <Users className="w-2.5 h-2.5" />
                         {squad.member_count}/{squad.max_members}
                     </span>
                     {langInfo && (
-                        <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{langInfo.flag}</span>
+                        <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{langInfo.flag}</span>
                     )}
                     {levelInfo && squad.level !== 'any' && (
-                        <span className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
+                        <span className={`text-[10px] px-1 py-0.5 rounded-md ${isDark ? 'bg-teal-500/20 text-teal-300' : 'bg-teal-50 text-teal-700'}`}>
                             {isVi ? levelInfo.labelVi : levelInfo.labelEn}
                         </span>
                     )}
                     {tagList.slice(0, 1).map(tag => (
-                        <span key={tag} className={`text-[11px] px-1.5 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
+                        <span key={tag} className={`text-[10px] px-1 py-0.5 rounded-md ${isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
                             #{tag}
                         </span>
                     ))}
                 </div>
-                <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex items-center gap-1 mt-1.5">
                     {squad.host_avatar_url
-                        ? <img src={squad.host_avatar_url} alt="" className="w-4 h-4 rounded-full flex-shrink-0" />
-                        : <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
+                        ? <img src={squad.host_avatar_url} alt="" className="w-3.5 h-3.5 rounded-full flex-shrink-0" />
+                        : <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                             {squad.host_nickname[0]?.toUpperCase()}
                         </div>
                     }
-                    <span className={`text-[11px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <span className={`text-[10px] truncate ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                         {squad.host_nickname} · {timeAgo(squad.created_at, isVi)}
                     </span>
                 </div>
@@ -1828,8 +1828,8 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                         </div>
                     ) : (
                         <>
-                            {/* 2-column staggered masonry grid */}
-                            <div className="columns-2 gap-2">
+                            {/* 2-column grid */}
+                            <div className="grid grid-cols-2 gap-1.5">
                                 {squads.map(squad => (
                                     <SquadCard
                                         key={squad.id}
