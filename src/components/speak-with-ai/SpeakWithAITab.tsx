@@ -341,6 +341,68 @@ async function callSpeakChatAPI(params: {
     return resp.json();
 }
 
+// ── Backend STT — /api/v1/speak/transcribe (Flash mode on web, auth required) ──────────
+async function callSpeakTranscribeAPI(audioBlob: Blob, token: string): Promise<string> {
+    const form = new FormData();
+    form.append('file', audioBlob, 'audio.webm');
+    form.append('language', 'en');
+    const resp = await fetch(`${API_BASE_URL}/api/v1/speak/transcribe`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form,
+    });
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.detail?.message || `transcribe ${resp.status}`);
+    }
+    const data = await resp.json();
+    return (data.transcript ?? '').trim();
+}
+
+interface SpeakVoiceChatAPIResponse {
+    transcript: string;
+    reply: string;
+    model: string;
+    points_deducted: number;
+    points_remaining: number;
+}
+
+// ── Backend Voice Chat — /api/v1/speak/voice-chat (Premium web: STT + AI reply in one call) ──
+async function callSpeakVoiceChatAPI(params: {
+    audioBlob: Blob;
+    topic: string;
+    lang: 'vi' | 'en';
+    role: string | null;
+    model: 'gemma4' | 'deepseek';
+    history: Array<{ role: 'user' | 'assistant'; content: string }>;
+    token: string;
+    signal?: AbortSignal;
+}): Promise<SpeakVoiceChatAPIResponse> {
+    const form = new FormData();
+    form.append('file', params.audioBlob, 'audio.webm');
+    form.append('topic', params.topic || 'general');
+    form.append('lang', params.lang);
+    if (params.role) form.append('role', params.role);
+    form.append('model', params.model);
+    form.append('history_json', JSON.stringify(params.history));
+    const resp = await fetch(`${API_BASE_URL}/api/v1/speak/voice-chat`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${params.token}` },
+        signal: params.signal,
+        body: form,
+    });
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        if (resp.status === 403 && errBody.detail?.error === 'insufficient_points') {
+            const e = new Error('insufficient_points');
+            (e as any).detail = errBody.detail;
+            throw e;
+        }
+        throw new Error(errBody.detail?.message || `voice-chat ${resp.status}`);
+    }
+    return resp.json();
+}
+
 // ── Gemini Premium STT — transcribe + pronunciation analysis in one call ──────
 interface GeminiSTTResult {
     text: string;       // accurate transcript (sent to DeepSeek)
@@ -582,6 +644,15 @@ export default function SpeakWithAITab() {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('ll_tts_macos_say') === '1';
     });
+    // Tauri platform detection — 'macos' | 'windows' | 'linux' | '' (web)
+    const [tauriPlatform, setTauriPlatform] = useState<string>('');
+    useEffect(() => {
+        if (isTauriDesktop()) {
+            import('@tauri-apps/api/core').then(({ invoke }) =>
+                invoke<string>('get_platform').then(p => setTauriPlatform(p)).catch(() => {})
+            );
+        }
+    }, []);
     // Points tracking from backend API response
     const [pointsRemaining, setPointsRemaining] = useState<number | null>(null);
     const [showInsufficientPoints, setShowInsufficientPoints] = useState(false);
@@ -656,6 +727,7 @@ export default function SpeakWithAITab() {
         transcript: string,
         audioBlob: Blob | null,
         prefilledAnalysis?: string,
+        precomputedReply?: string,  // skip AI call when reply already fetched (e.g. voice-chat)
     ) => {
         if (!activeConvoId) return;
 
@@ -707,10 +779,10 @@ export default function SpeakWithAITab() {
             abortRef.current = new AbortController();
             const signal = abortRef.current.signal;
 
-            // 1. Get AI reply — backend API (logged in) or direct AI calls (anonymous)
-            let replyText = '';
+            // 1. Get AI reply — pre-computed (voice-chat), backend API, or direct AI fallback
+            let replyText = precomputedReply ?? '';
 
-            if (user) {
+            if (!replyText && user) {
                 // Authenticated: use POST /api/v1/speak/chat — handles Points, system prompt, correction
                 const token = await user.getIdToken();
                 const apiModel: 'gemma4' | 'deepseek' = selectedModel === 'deepseek' ? 'deepseek' : 'gemma4';
@@ -868,8 +940,88 @@ export default function SpeakWithAITab() {
         let transcript = webSpeechTranscript;
         let prefilledAnalysis: string | undefined;
 
-        if (usePremiumMode && audioBlob && GEMINI_STT_URL) {
-            // Premium: Gemini STT (accurate + pronunciation)
+        if (isTauriDesktop() && audioBlob) {
+            // ── Desktop: Rust CF Whisper STT (credentials baked into binary, no browser key exposure)
+            setAppState('processing');
+            setInterimText('');
+            try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                const dataUrl = await blobToBase64(audioBlob);
+                const rawBase64 = dataUrl.split(',')[1] ?? '';
+                const text = await invoke<string>('transcribe_audio', { audioBase64: rawBase64, language: 'en' });
+                if (text) transcript = text;
+            } catch (e) {
+                logError('Tauri Whisper STT', (e as any)?.message);
+                // Fall back to Web Speech transcript
+            }
+            // Flash mode on Desktop: show editable preview
+            if (!usePremiumMode && transcript.trim()) {
+                flashPendingBlobRef.current = audioBlob;
+                setFlashPreviewText(transcript);
+                setAppState('preview');
+                return;
+            }
+            // Premium mode on Desktop: send directly with Rust-transcribed text
+        } else if (usePremiumMode && audioBlob && user) {
+            // ── Web Premium (logged in): /speak/voice-chat — STT + AI reply in one backend call
+            setAppState('processing');
+            setInterimText('');
+            try {
+                const token = await user.getIdToken();
+                const apiModel: 'gemma4' | 'deepseek' = selectedModel === 'deepseek' ? 'deepseek' : 'gemma4';
+                const currentConvo = getConversation(activeConvoId);
+                const historyForVoice = (currentConvo?.messages ?? []).map(m => ({
+                    role: m.role as 'user' | 'assistant', content: m.text,
+                })).slice(-6);
+                const data = await callSpeakVoiceChatAPI({
+                    audioBlob, topic: topic || 'general',
+                    lang: isVietnamese ? 'vi' : 'en',
+                    role: convoRole || null, model: apiModel,
+                    history: historyForVoice, token,
+                });
+                if (data.transcript) transcript = data.transcript;
+                if (data.points_remaining !== undefined) setPointsRemaining(data.points_remaining);
+                await doSendMessage(transcript, audioBlob, undefined, data.reply || undefined);
+                return;
+            } catch (e: any) {
+                if (e?.name === 'AbortError' || e?.message === 'AbortError') { setAppState('idle'); return; }
+                if (e?.message === 'insufficient_points') { setShowInsufficientPoints(true); setAppState('idle'); return; }
+                logError('voice-chat API', e?.message);
+                // Fallback: Gemini STT then regular text chat
+                if (audioBlob && GEMINI_STT_URL) {
+                    try {
+                        const result = await transcribeWithGemini(audioBlob);
+                        if (result.text) transcript = result.text;
+                        prefilledAnalysis = result.analysis;
+                    } catch (e2) { logError('Gemini STT fallback', (e2 as any)?.message); }
+                }
+            }
+        } else if (!usePremiumMode && audioBlob) {
+            // ── Web Flash: backend /speak/transcribe (auth) or legacy CF Whisper (anon) → editable preview
+            setAppState('processing');
+            setInterimText('');
+            try {
+                if (user) {
+                    const token = await user.getIdToken();
+                    const text = await callSpeakTranscribeAPI(audioBlob, token);
+                    if (text) transcript = text;
+                } else if (CF_WHISPER_URL) {
+                    const text = await transcribeWithCloudflareWhisper(audioBlob);
+                    if (text) transcript = text;
+                }
+            } catch (e) {
+                logError('Flash STT', (e as any)?.message);
+                // Fall back to Web Speech transcript
+            }
+            // Flash mode: show editable preview
+            if (transcript.trim()) {
+                flashPendingBlobRef.current = audioBlob;
+                setFlashPreviewText(transcript);
+                setAppState('preview');
+                return;
+            }
+        } else if (usePremiumMode && audioBlob && GEMINI_STT_URL) {
+            // ── Web Premium (not logged in): Gemini STT for pronunciation analysis
             setAppState('processing');
             setInterimText('');
             try {
@@ -878,30 +1030,11 @@ export default function SpeakWithAITab() {
                 prefilledAnalysis = result.analysis;
             } catch (e) {
                 logError('Gemini STT', (e as any)?.message);
-                console.warn('Gemini STT failed, using Web Speech fallback:', e);
-            }
-        } else if (!usePremiumMode && audioBlob && CF_WHISPER_URL) {
-            // Flash mode: Cloudflare Whisper STT → show preview for editing
-            setAppState('processing');
-            setInterimText('');
-            try {
-                const cfText = await transcribeWithCloudflareWhisper(audioBlob);
-                if (cfText) transcript = cfText;
-            } catch (e) {
-                logError('CF Whisper STT', (e as any)?.message);
-                // Fall back to Web Speech transcript already in `transcript`
-            }
-            // Flash mode: show editable preview instead of sending immediately
-            if (transcript.trim()) {
-                flashPendingBlobRef.current = audioBlob;
-                setFlashPreviewText(transcript);
-                setAppState('preview');
-                return;
             }
         }
 
         await doSendMessage(transcript, audioBlob, prefilledAnalysis);
-    }, [activeConvoId, isPremium, usePremiumMode, doSendMessage]);
+    }, [activeConvoId, isPremium, usePremiumMode, doSendMessage, user, topic, isVietnamese, convoRole, selectedModel]);
 
     // Flash preview: user confirms (with optional edits) → send
     const handleFlashConfirm = useCallback((editedText: string) => {
@@ -1247,7 +1380,8 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                         </span>
                     )}
                     <div className="ml-auto flex items-center gap-2">
-                        {/* TTS engine toggle: Edge TTS (natural) vs macOS say (offline) */}
+                        {/* TTS engine toggle: Edge TTS vs macOS say — macOS desktop only */}
+                        {isTauriDesktop() && tauriPlatform === 'macos' && (
                         <button
                             onClick={() => {
                                 const next = !useMacosSay;
@@ -1265,6 +1399,7 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                         >
                             {useMacosSay ? '🍎 macOS' : '🔊 Edge'}
                         </button>
+                        )}
                         {/* Last used TTS engine indicator */}
                         {ttsEngineUsed && (
                             <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium select-none opacity-70
@@ -1467,8 +1602,8 @@ Keep responses concise and practical. If speaking about topic "${topic || 'gener
                         {appState !== 'preview' && (
                             <div className="flex items-center gap-4">
                                 <MicButton state={appState} onClick={handleMicClick} isDark={isDark} />
-                                {/* Flash / Premium toggle — show whenever Gemini STT key is available */}
-                                {GEMINI_STT_URL && (
+                                {/* Flash / Premium toggle — show on Desktop (Rust STT), or when user is logged in (backend APIs), or when Gemini key available */}
+                                {(isTauriDesktop() || !!user || !!GEMINI_STT_URL) && (
                                     <button
                                         onClick={() => setUsePremiumMode(v => {
                                             const next = !v;

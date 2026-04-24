@@ -66,6 +66,63 @@ async fn call_gemma4(messages: serde_json::Value) -> Result<String, String> {
     Ok(text)
 }
 
+/// Transcribe audio via Cloudflare Whisper from Rust (no browser CORS, credentials baked in).
+/// `audio_base64` is a raw base64-encoded audio file (no data URL prefix).
+/// Returns the transcript string.
+#[tauri::command]
+async fn transcribe_audio(audio_base64: String, language: Option<String>) -> Result<String, String> {
+    let account_id = env!("CF_ACCOUNT_ID");
+    let api_key = env!("CF_AI_TOKEN");
+    if account_id.is_empty() || api_key.is_empty() {
+        return Err("CF credentials not baked in — rebuild with CF env vars in .env.local".to_string());
+    }
+    let url = format!(
+        "https://api.cloudflare.com/client/v4/accounts/{}/ai/run/@cf/openai/whisper-large-v3-turbo",
+        account_id
+    );
+    let lang = language.unwrap_or_else(|| "en".to_string());
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let audio_bytes = STANDARD.decode(&audio_base64).map_err(|e| format!("base64 decode: {e}"))?;
+
+    let client = reqwest::Client::new();
+    let part = reqwest::multipart::Part::bytes(audio_bytes)
+        .file_name("audio.webm")
+        .mime_str("audio/webm").map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new()
+        .part("audio", part)
+        .text("language", lang);
+
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {e}"))?;
+
+    if !res.status().is_success() {
+        let code = res.status().as_u16();
+        let body = res.text().await.unwrap_or_default();
+        log::error!("[Whisper] API error {code}: {body}");
+        return Err(format!("Whisper API error {code}: {body}"));
+    }
+    let data: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    if !data["success"].as_bool().unwrap_or(false) {
+        return Err(format!("Whisper error: {:?}", data["errors"]));
+    }
+    let text = data["result"]["text"].as_str().unwrap_or("").trim().to_string();
+    log::info!("[Whisper] Transcript: {} chars", text.len());
+    Ok(text)
+}
+
+/// Return the current OS platform string so the frontend can hide platform-specific UI.
+#[tauri::command]
+fn get_platform() -> &'static str {
+    if cfg!(target_os = "macos") { "macos" }
+    else if cfg!(target_os = "windows") { "windows" }
+    else { "linux" }
+}
+
 use tauri::{WebviewWindowBuilder, WebviewUrl};
 
 /// Open a URL in the system default browser (for SePay payment, OAuth, etc.)
@@ -354,6 +411,8 @@ pub fn run() {
             copy_files_to_playlist_dir,
             edge_tts::get_edge_tts_audio,
             call_gemma4,
+            transcribe_audio,
+            get_platform,
             js_log,
         ])
         .run(tauri::generate_context!())
