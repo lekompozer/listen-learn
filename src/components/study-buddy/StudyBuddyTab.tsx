@@ -1220,8 +1220,10 @@ function SquadDetailModal({
                                     <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                                         <Crown className="w-3.5 h-3.5 text-amber-500" />
                                         {t('Host: ', 'Host: ', isVi)}
-                                        {squad.host_avatar_url && <img src={squad.host_avatar_url} alt="" className="w-5 h-5 rounded-full" />}
-                                        <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>{squad.host_nickname}</span>
+                                        <button onClick={() => onViewProfile(squad.host_id)} className="flex items-center gap-1.5 hover:opacity-80 transition-opacity">
+                                            {squad.host_avatar_url && <img src={squad.host_avatar_url} alt="" className="w-5 h-5 rounded-full" />}
+                                            <span className={`${isDark ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-500'} transition-colors`}>{squad.host_nickname}</span>
+                                        </button>
                                     </div>
 
                                     {/* Status badge */}
@@ -1246,18 +1248,18 @@ function SquadDetailModal({
                                     ) : applicants.map(applicant => (
                                         <div key={applicant.id} className={`p-3 rounded-xl border ${isDark ? 'bg-gray-700/50 border-white/8' : 'bg-gray-50 border-gray-200'}`}>
                                             <div className="flex items-start justify-between gap-2">
-                                                <div className="flex items-center gap-2 min-w-0">
+                                                <button className="flex items-center gap-2 min-w-0 text-left" onClick={() => onViewProfile(applicant.user_id)}>
                                                     {applicant.avatar_url
-                                                        ? <img src={applicant.avatar_url} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
+                                                        ? <img src={applicant.avatar_url} alt="" className="w-8 h-8 rounded-full flex-shrink-0 hover:opacity-80 transition-opacity" />
                                                         : <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
                                                             {applicant.nickname[0]?.toUpperCase()}
                                                         </div>
                                                     }
                                                     <div className="min-w-0">
-                                                        <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{applicant.nickname}</p>
+                                                        <p className={`text-sm font-medium truncate ${isDark ? 'text-white hover:text-teal-300' : 'text-gray-900 hover:text-teal-600'} transition-colors`}>{applicant.nickname}</p>
                                                         <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{timeAgo(applicant.applied_at, isVi)}</p>
                                                     </div>
-                                                </div>
+                                                </button>
                                                 <div className="flex gap-1.5 flex-shrink-0">
                                                     <button
                                                         onClick={() => handleAccept(applicant.id)}
