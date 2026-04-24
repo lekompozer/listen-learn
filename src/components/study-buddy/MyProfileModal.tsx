@@ -12,8 +12,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
     X, Edit3, Save, Camera, Link, Mail, Phone, Plus, Trash2,
-    RefreshCw, User, ChevronDown, ImagePlus, ChevronLeft, ChevronRight,
+    RefreshCw, User, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, ExternalLink,
 } from 'lucide-react';
+import type { IconType } from 'react-icons';
+import { FaFacebookF, FaInstagram, FaLinkedinIn, FaXTwitter } from 'react-icons/fa6';
+import { SiLinktree, SiZalo } from 'react-icons/si';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import toast from 'react-hot-toast';
 import { getMyProfile, getUserProfile, saveMyProfile, type UserProfile } from '@/services/studyBuddyService';
@@ -23,12 +26,12 @@ function t(vi: string, en: string, isVi: boolean) { return isVi ? vi : en; }
 
 // ─── Allowed social link platforms ───────────────────────────────────────────
 const ALLOWED_LINK_PLATFORMS = [
-    { pattern: /facebook\.com|fb\.com/i, label: 'Facebook', color: '#1877F2' },
-    { pattern: /linkedin\.com/i, label: 'LinkedIn', color: '#0A66C2' },
-    { pattern: /linktr\.ee/i, label: 'Linktree', color: '#39E09B' },
-    { pattern: /instagram\.com/i, label: 'Instagram', color: '#E1306C' },
-    { pattern: /zalo\.me/i, label: 'Zalo', color: '#0068FF' },
-    { pattern: /\bx\.com\b|twitter\.com/i, label: 'X', color: '#111827' },
+    { pattern: /facebook\.com|fb\.com/i, label: 'Facebook', color: '#1877F2', icon: FaFacebookF },
+    { pattern: /linkedin\.com/i, label: 'LinkedIn', color: '#0A66C2', icon: FaLinkedinIn },
+    { pattern: /linktr\.ee/i, label: 'Linktree', color: '#39E09B', icon: SiLinktree },
+    { pattern: /instagram\.com/i, label: 'Instagram', color: '#E1306C', icon: FaInstagram },
+    { pattern: /zalo\.me/i, label: 'Zalo', color: '#0068FF', icon: SiZalo },
+    { pattern: /\bx\.com\b|twitter\.com/i, label: 'X', color: '#111827', icon: FaXTwitter },
 ];
 function normalizeUrl(url: string): string {
     const u = url.trim();
@@ -274,6 +277,10 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
     const viewEmail = profile?.email_contact ?? '';
     const viewPhone = profile?.phone ?? '';
     const viewPhotos = parsePhotos(profile?.photos ?? '[]');
+    const visibleLinks = viewLinks.filter((linkItem) => !!linkItem.url?.trim());
+    const contactCardCls = `rounded-2xl border p-3.5 transition-colors ${isDark
+        ? 'border-white/10 bg-white/5 hover:bg-white/8'
+        : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`;
 
     const levelLabel = (val: string) => LEVEL_OPTIONS.find(o => o.value === val);
 
@@ -547,40 +554,77 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                                     )}
 
                                     {/* Contact */}
-                                    {(viewLinks.length > 0 || viewEmail || viewPhone) && (
-                                        <div className="px-5 mb-4 space-y-2">
+                                    {(visibleLinks.length > 0 || viewEmail || viewPhone) && (
+                                        <div className="px-5 mb-4 space-y-3">
                                             <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                                 {t('Liên hệ', 'Contact', isVi)}
                                             </p>
-                                            {viewEmail && (
-                                                <a href={`mailto:${viewEmail}`} className={`flex items-center gap-2 text-sm ${isDark ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-500'}`}>
-                                                    <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-                                                    {viewEmail}
-                                                </a>
-                                            )}
-                                            {viewPhone && (
-                                                <a href={`tel:${viewPhone}`} className={`flex items-center gap-2 text-sm ${isDark ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-500'}`}>
-                                                    <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                                                    {viewPhone}
-                                                </a>
-                                            )}
-                                            {viewLinks.map((lnk, i) => {
-                                                if (!lnk.url) return null;
-                                                const platform = detectPlatform(lnk.url);
-                                                return (
-                                                    <a key={i} href={lnk.url} target="_blank" rel="noopener noreferrer"
-                                                        className={`flex items-center gap-2 text-sm ${isDark ? 'text-teal-400 hover:text-teal-300' : 'text-teal-600 hover:text-teal-500'}`}>
-                                                        {platform
-                                                            ? <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                                                                style={{ backgroundColor: platform.color }}>
-                                                                {platform.label[0]}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {viewEmail && (
+                                                    <a href={`mailto:${viewEmail}`} className={`group flex items-start gap-3 ${contactCardCls}`}>
+                                                        <span className={`mt-0.5 w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-teal-500/15 text-teal-300' : 'bg-teal-100 text-teal-700'}`}>
+                                                            <Mail className="w-4.5 h-4.5" />
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className={`block text-[11px] font-semibold uppercase tracking-wide ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                                {t('Email', 'Email', isVi)}
                                                             </span>
-                                                            : <Link className="w-3.5 h-3.5 flex-shrink-0" />
-                                                        }
-                                                        <span>{lnk.label || (platform?.label ?? lnk.url)}</span>
+                                                            <span className={`block mt-1 text-sm font-medium break-all ${isDark ? 'text-white group-hover:text-teal-300' : 'text-gray-900 group-hover:text-teal-700'}`}>
+                                                                {viewEmail}
+                                                            </span>
+                                                        </span>
                                                     </a>
-                                                );
-                                            })}
+                                                )}
+                                                {viewPhone && (
+                                                    <a href={`tel:${viewPhone}`} className={`group flex items-start gap-3 ${contactCardCls}`}>
+                                                        <span className={`mt-0.5 w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                            <Phone className="w-4.5 h-4.5" />
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className={`block text-[11px] font-semibold uppercase tracking-wide ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                                {t('Điện thoại', 'Phone', isVi)}
+                                                            </span>
+                                                            <span className={`block mt-1 text-sm font-medium break-all ${isDark ? 'text-white group-hover:text-emerald-300' : 'text-gray-900 group-hover:text-emerald-700'}`}>
+                                                                {viewPhone}
+                                                            </span>
+                                                        </span>
+                                                    </a>
+                                                )}
+                                                {visibleLinks.map((lnk, i) => {
+                                                    const normalizedHref = normalizeUrl(lnk.url);
+                                                    const platform = detectPlatform(normalizedHref);
+                                                    const title = lnk.label?.trim() || platform?.label || t('Liên kết', 'Link', isVi);
+                                                    const PlatformIcon = platform?.icon as IconType | undefined;
+                                                    return (
+                                                        <a
+                                                            key={i}
+                                                            href={normalizedHref}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className={`group flex items-start gap-3 ${contactCardCls}`}
+                                                        >
+                                                            <span
+                                                                className="mt-0.5 w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-white"
+                                                                style={{ backgroundColor: platform?.color ?? '#14B8A6' }}
+                                                            >
+                                                                {PlatformIcon ? <PlatformIcon className="w-4.5 h-4.5" /> : <Link className="w-4.5 h-4.5" />}
+                                                            </span>
+                                                            <span className="min-w-0 flex-1">
+                                                                <span className={`block text-[11px] font-semibold uppercase tracking-wide ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                                    {platform?.label || t('Liên kết', 'Link', isVi)}
+                                                                </span>
+                                                                <span className={`block mt-1 text-sm font-semibold ${isDark ? 'text-white group-hover:text-teal-300' : 'text-gray-900 group-hover:text-teal-700'}`}>
+                                                                    {title}
+                                                                </span>
+                                                                <span className={`block mt-1 text-xs break-all ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                                                    {normalizedHref}
+                                                                </span>
+                                                            </span>
+                                                            <ExternalLink className={`w-4 h-4 mt-1 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                                        </a>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     )}
 
