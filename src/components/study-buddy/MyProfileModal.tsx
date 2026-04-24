@@ -30,8 +30,13 @@ const ALLOWED_LINK_PLATFORMS = [
     { pattern: /zalo\.me/i, label: 'Zalo', color: '#0068FF' },
     { pattern: /\bx\.com\b|twitter\.com/i, label: 'X', color: '#111827' },
 ];
+function normalizeUrl(url: string): string {
+    const u = url.trim();
+    if (!u) return u;
+    return (u.startsWith('http://') || u.startsWith('https://')) ? u : 'https://' + u;
+}
 function detectPlatform(url: string) {
-    try { const h = new URL(url).hostname.toLowerCase(); return ALLOWED_LINK_PLATFORMS.find(p => p.pattern.test(h)) ?? null; } catch { return null; }
+    try { const h = new URL(normalizeUrl(url)).hostname.toLowerCase(); return ALLOWED_LINK_PLATFORMS.find(p => p.pattern.test(h)) ?? null; } catch { return null; }
 }
 function isAllowedLinkUrl(url: string) { return !url.trim() || detectPlatform(url) !== null; }
 
@@ -162,7 +167,9 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
             toast.error(t('Vui lòng nhập tên hiển thị', 'Please enter a display name', isVi));
             return;
         }
-        const invalidLinks = links.filter(l => l.url.trim() && !isAllowedLinkUrl(l.url));
+        // Normalize URLs (prepend https:// if missing) before validation
+        const normalizedLinks = links.map(l => ({ ...l, url: normalizeUrl(l.url) }));
+        const invalidLinks = normalizedLinks.filter(l => l.url.trim() && !isAllowedLinkUrl(l.url));
         if (invalidLinks.length > 0) {
             toast.error(t(
                 'Link không hợp lệ. Chỉ hỗ trợ: Facebook, LinkedIn, Linktree, Instagram, Zalo, X',
@@ -171,6 +178,8 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
             ));
             return;
         }
+        const linksToSave = normalizedLinks.filter(l => l.url.trim());
+        console.log('[Profile] saving links:', JSON.stringify(linksToSave));
         setSaving(true);
         try {
             const saved = await saveMyProfile({
@@ -181,7 +190,7 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                 avatar_url: avatarUrl,
                 cover_url: coverUrl,
                 cover_position_y: Math.round(coverY),
-                links: links.filter(l => l.url.trim()),
+                links: linksToSave,
                 email_contact: emailContact.trim() || null,
                 phone: phone.trim() || null,
                 photos: photos.filter(Boolean),

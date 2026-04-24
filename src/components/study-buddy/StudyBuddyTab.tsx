@@ -1294,7 +1294,7 @@ function SquadDetailModal({
                                         <p className={`text-sm text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                                             {t('Chưa có thành viên', 'No members yet', isVi)}
                                         </p>
-                                                    ) : members.map(m => (
+                                    ) : members.map(m => (
                                         <div key={m.id} className={`flex items-center justify-between gap-2 p-2.5 rounded-xl
                                             ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}>
                                             <button className="flex items-center gap-2.5 text-left" onClick={() => onViewProfile(m.user_id)}>
