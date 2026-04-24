@@ -104,14 +104,18 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
     const editingRef = useRef(editing);
     useEffect(() => { editingRef.current = editing; }, [editing]);
 
+    // Keep a ref to `user` so loadProfile can read it without being in deps.
+    // This prevents Firebase token refresh (which creates a new `user` object ref)
+    // from triggering loadProfile and overwriting in-progress form edits.
+    const userRef = useRef(user);
+    useEffect(() => { userRef.current = user; }, [user]);
+
     const loadProfile = useCallback(async () => {
         if (!userId) { setLoading(false); return; }
         setLoading(true);
         try {
             const p = isOwnProfile ? await getMyProfile() : await getUserProfile(userId);
             setProfile(p);
-            // Only reset form state if NOT currently editing — prevents Firebase auth
-            // token refresh from wiping out in-progress edits via useCallback recreation
             if (!editingRef.current) {
                 if (p) {
                     setDisplayName(p.display_name);
@@ -125,15 +129,14 @@ export default function MyProfileModal({ targetUserId, isDark, isVi, onClose }: 
                     setEmailContact(p.email_contact ?? '');
                     setPhone(p.phone ?? '');
                     setPhotos(parsePhotos(p.photos));
-                } else if (isOwnProfile && user) {
-                    // Pre-fill with Firebase auth info
-                    setDisplayName(user.displayName ?? '');
-                    setAvatarUrl(user.photoURL ?? null);
+                } else if (isOwnProfile && userRef.current) {
+                    setDisplayName(userRef.current.displayName ?? '');
+                    setAvatarUrl(userRef.current.photoURL ?? null);
                 }
             }
         } catch { /* ignore */ }
         finally { setLoading(false); }
-    }, [userId, isOwnProfile, user]);
+    }, [userId, isOwnProfile]); // ← `user` intentionally excluded: use userRef to avoid re-fetching on token refresh
 
     useEffect(() => { loadProfile(); }, [loadProfile]);
 
