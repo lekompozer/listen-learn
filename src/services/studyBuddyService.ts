@@ -82,6 +82,8 @@ export interface SquadMessage {
     content: string;
     image_url: string | null;
     created_at: string;
+    sender_nickname: string | null;
+    sender_avatar_url: string | null;
 }
 
 export interface SquadNotification {
@@ -366,4 +368,60 @@ export async function markNotifRead(notifId: string): Promise<void> {
 
 export async function markAllNotifsRead(): Promise<void> {
     await authedFetch('/api/squads/notifications/read-all', { method: 'PATCH', body: JSON.stringify({}) });
+}
+
+// ─── User Profiles ────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+    user_id: string;
+    display_name: string;
+    tagline: string;
+    level: string;
+    introduction: string;
+    avatar_url: string | null;
+    cover_url: string | null;
+    links: string;          // JSON string: [{label, url}]
+    email_contact: string | null;
+    phone: string | null;
+    photos: string;         // JSON string: url[]
+    created_at: string;
+    updated_at: string;
+}
+
+export async function getMyProfile(): Promise<UserProfile | null> {
+    const res = await authedFetch('/api/profile');
+    if (!res.ok) return null;
+    const data = await res.json() as { profile: UserProfile | null };
+    return data.profile;
+}
+
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+    const res = await fetch(`${WORKER}/api/profile/${userId}`);
+    if (!res.ok) return null;
+    const data = await res.json() as { profile: UserProfile | null };
+    return data.profile;
+}
+
+export async function saveMyProfile(body: {
+    display_name: string;
+    tagline: string;
+    level: string;
+    introduction: string;
+    avatar_url: string | null;
+    cover_url: string | null;
+    links: { label: string; url: string }[];
+    email_contact: string | null;
+    phone: string | null;
+    photos: string[];
+}): Promise<UserProfile> {
+    const res = await authedFetch('/api/profile', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Failed to save profile');
+    }
+    const data = await res.json() as { profile: UserProfile };
+    return data.profile;
 }

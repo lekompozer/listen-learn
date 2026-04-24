@@ -12,7 +12,7 @@ import {
     Users, Search, Plus, ChevronDown, X, Send, Check, CheckCheck,
     Clock, Crown, MessageSquare, UserCheck, UserX, LogOut, Trash2,
     RefreshCw, ChevronRight, ArrowLeft, Bell, ImagePlus, ChevronLeft,
-    BookMarked, MapPin, AlertTriangle,
+    BookMarked, MapPin, AlertTriangle, UserCircle,
 } from 'lucide-react';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useTheme, useLanguage } from '@/contexts/AppContext';
@@ -28,6 +28,7 @@ import {
     type MeetingType, type StudyLevel,
     type StudySquad, type StudyMember, type SquadMessage,
 } from '@/services/studyBuddyService';
+import MyProfileModal from './MyProfileModal';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -657,6 +658,12 @@ function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUse
             const res = await sendMessage(squadId, { content: text.trim(), recipient_id: recipientId });
             setMessages(prev => [...prev, res.message]);
             setText('');
+            // Force scroll to bottom after sending
+            setTimeout(() => {
+                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+                isAtBottomRef.current = true;
+                setNewMsgCount(0);
+            }, 50);
         } catch (e: any) {
             toast.error(e.message || t('Lỗi gửi tin', 'Send failed', isVi));
         } finally {
@@ -718,8 +725,24 @@ function ChatPanel({ squadId, isHost, canChat, members, isDark, isVi, currentUse
                     messages.map(msg => {
                         const isMine = msg.sender_id === currentUserId;
                         const isDM = msg.recipient_id !== null;
+                        // Look up sender info from members list (fallback to backend-provided sender_nickname)
+                        const senderMember = members.find(m => m.user_id === msg.sender_id);
+                        const senderName = senderMember?.nickname ?? msg.sender_nickname ?? '';
+                        const senderAvatar = senderMember?.avatar_url ?? msg.sender_avatar_url ?? null;
                         return (
                             <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                                {/* Sender name for other people's messages */}
+                                {!isMine && senderName && (
+                                    <div className="flex items-center gap-1.5 mb-0.5 ml-1">
+                                        {senderAvatar
+                                            ? <img src={senderAvatar} alt="" className="w-5 h-5 rounded-full flex-shrink-0" />
+                                            : <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isDark ? 'bg-teal-600 text-white' : 'bg-teal-500 text-white'}`}>
+                                                {senderName[0]?.toUpperCase()}
+                                            </div>
+                                        }
+                                        <span className={`text-[10px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{senderName}</span>
+                                    </div>
+                                )}
                                 {isDM && (
                                     <span className={`text-[10px] mb-0.5 px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-600/20 text-purple-300' : 'bg-purple-50 text-purple-600'}`}>
                                         {isMine
@@ -1552,6 +1575,8 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
     const [showCreate, setShowCreate] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [mySquadIds, setMySquadIds] = useState<Set<string>>(new Set());
+    const [showMyProfile, setShowMyProfile] = useState(false);
     const [chatWidth, setChatWidth] = useState(400);
     const isDragging = useRef(false);
     const dragStartX = useRef(0);
@@ -1607,6 +1632,7 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                 const [hostedRes, joinedRes] = await Promise.all([getMyHosted(), getMyJoined()]);
                 const all = [...hostedRes.items, ...joinedRes.items];
                 const unique = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
+                setMySquadIds(new Set(unique.map(s => s.id)));
                 if (unique.length > 0) setSelectedSquadId(unique[0].id);
             } catch { /* ignore */ }
         })();
@@ -1716,6 +1742,17 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                                 title={t('Squad của tôi', 'My squads', isVi)}
                             >
                                 <BookMarked className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+
+                        {/* My Profile icon */}
+                        {user && (
+                            <button
+                                onClick={() => setShowMyProfile(true)}
+                                className={`p-1.5 rounded-xl border transition-colors ${isDark ? 'border-white/8 bg-gray-800/60 text-gray-400 hover:text-teal-400' : 'border-gray-200 bg-white text-gray-500 hover:text-teal-600'}`}
+                                title={t('Hồ sơ của tôi', 'My profile', isVi)}
+                            >
+                                <UserCircle className="w-3.5 h-3.5" />
                             </button>
                         )}
 
@@ -1836,7 +1873,13 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                                         squad={squad}
                                         isDark={isDark}
                                         isVi={isVi}
-                                        onClick={() => setSelectedSquadId(squad.id)}
+                                        onClick={() => {
+                                            setSelectedSquadId(squad.id);
+                                            // Non-members → open detail modal; members/host → open chat panel
+                                            if (!mySquadIds.has(squad.id)) {
+                                                setShowDetailModal(true);
+                                            }
+                                        }}
                                     />
                                 ))}
                             </div>
@@ -1910,7 +1953,12 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     isDark={isDark}
                     isVi={isVi}
                     onClose={() => setShowCreate(false)}
-                    onCreated={(squad) => { setShowCreate(false); setSquads(prev => [squad, ...prev]); setSelectedSquadId(squad.id); }}
+                    onCreated={(squad) => {
+                        setShowCreate(false);
+                        setSquads(prev => [squad, ...prev]);
+                        setSelectedSquadId(squad.id);
+                        setMySquadIds(prev => new Set([...prev, squad.id]));
+                    }}
                     userDisplayName={userDisplayName}
                     userPhotoURL={userPhotoURL}
                 />
@@ -1935,6 +1983,14 @@ export default function StudyBuddyTab({ isDark, isVi }: StudyBuddyTabProps) {
                     userPhotoURL={userPhotoURL}
                     onClose={() => setShowDetailModal(false)}
                     onRefreshList={() => loadSquads()}
+                />
+            )}
+
+            {showMyProfile && (
+                <MyProfileModal
+                    isDark={isDark}
+                    isVi={isVi}
+                    onClose={() => setShowMyProfile(false)}
                 />
             )}
         </div>
