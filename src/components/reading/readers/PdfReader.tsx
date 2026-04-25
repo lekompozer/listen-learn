@@ -1,11 +1,12 @@
 'use client';
 /**
  * PdfReader.tsx — Scroll-mode PDF viewer using pdfjs-dist v3.
- * All pages rendered vertically. Text layer enables text selection.
+ * Text layer: mouseup re-dispatches epubSelectionEnd for SelectionSpeakPopup.
+ * OCR mode: drag to select a region on image pages → ocr_extract_text_base64.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { ZoomIn, ZoomOut, ScanText, X, Loader2 } from 'lucide-react';
 import type { Book } from '../lib/readingStore';
 import { savePosition, readFileBytes } from '../lib/readingStore';
 
@@ -16,10 +17,14 @@ if (typeof (URL as any).parse !== 'function') {
     };
 }
 
+const isTauriDesktop = () => typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
+
 interface PdfReaderProps {
     book: Book;
     isDark: boolean;
 }
+
+type OcrSel = { x1: number; y1: number; x2: number; y2: number } | null;
 
 export default function PdfReader({ book, isDark }: PdfReaderProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -29,6 +34,12 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [debugLog, setDebugLog] = useState<string[]>([]);
+
+    // ── OCR mode ────────────────────────────────────────────────────────────
+    const [ocrMode, setOcrMode] = useState(false);
+    const [ocrSel, setOcrSel] = useState<OcrSel>(null);
+    const [ocrProcessing, setOcrProcessing] = useState(false);
+    const ocrStartRef = useRef<{ x: number; y: number } | null>(null);
 
     // ── Load PDF bytes ──────────────────────────────────────────────────────
     useEffect(() => {
@@ -94,11 +105,12 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                     canvas.width = viewport.width;
                     canvas.height = viewport.height;
                     canvas.style.cssText = `display:block;width:${viewport.width}px;height:${viewport.height}px;`;
+                    canvas.setAttribute('data-pdf-canvas', String(pageNum));
                     inner.appendChild(canvas);
 
                     const textLayer = document.createElement('div');
                     textLayer.className = 'pdf-text-layer';
-                    textLayer.style.cssText = `position:absolute;top:0;left:0;width:${viewport.width}px;height:${viewport.height}px;overflow:hidden;line-height:1;`;
+                    textLayer.style.cssText = `position:absolute;top:0;left:0;width:${viewport.width}px;height:${viewport.height}px;overflow:hidden;line-height:1;pointer-events:auto;-webkit-user-select:text;user-select:text;`;
                     inner.appendChild(textLayer);
 
                     const label = document.createElement('div');
@@ -123,6 +135,118 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
 
         return () => { cancelled = true; };
     }, [pdfDoc, scale, book.id]);
+
+    // ── Text layer selection → epubSelectionEnd (fixes WKWebView bubbling) ──
+    useEffect(() => {
+        const container = scrollRef.current;
+        if (!container) return;
+        const onMouseUp = () => {
+            const sel = window.getSelection();
+            const text = sel?.toString().trim();
+            if (!text || !sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            const ancestor = range.commonAncestorContainer;
+            const el = (ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement : ancestor) as HTMLElement | null;
+            if (!el?.closest('.pdf-text-layer')) return;
+            const rect = range.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return;
+            document.dispatchEvent(new CustomEvent('epubSelectionEnd', {
+                detail: { text, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } },
+            }));
+        };
+        container.addEventListener('mouseup', onMouseUp);
+        container.addEventListener('touchend', onMouseUp);
+        return () => {
+            container.removeEventListener('mouseup', onMouseUp);
+            container.removeEventListener('touchend', onMouseUp);
+        };
+    }, []);
+
+    // ── OCR overlay handlers ────────────────────────────────────────────────
+    const handleOcrMouseDown = useCallback((e: React.MouseEvent) => {
+        ocrStartRef.current = { x: e.clientX, y: e.clientY };
+        setOcrSel(null);
+    }, []);
+
+    const handleOcrMouseMove = useCallback((e: React.MouseEvent) => {
+        if (!ocrStartRef.current) return;
+        setOcrSel({ x1: ocrStartRef.current.x, y1: ocrStartRef.current.y, x2: e.clientX, y2: e.clientY });
+    }, []);
+
+    const handleOcrMouseUp = useCallback(async (e: React.MouseEvent) => {
+        if (!ocrStartRef.current || ocrProcessing) return;
+        const start = ocrStartRef.current;
+        ocrStartRef.current = null;
+
+        // Normalize selection rect
+        let x1 = Math.min(start.x, e.clientX);
+        let y1 = Math.min(start.y, e.clientY);
+        let x2 = Math.max(start.x, e.clientX);
+        let y2 = Math.max(start.y, e.clientY);
+
+        // If too small (single click), expand to ~80×40px area
+        if (x2 - x1 < 20) { x1 -= 60; x2 += 60; }
+        if (y2 - y1 < 20) { y1 -= 20; y2 += 20; }
+
+        // Find the PDF canvas under the selection center
+        const cx = (x1 + x2) / 2;
+        const cy = (y1 + y2) / 2;
+        const canvases = document.querySelectorAll<HTMLCanvasElement>('[data-pdf-canvas]');
+        let targetCanvas: HTMLCanvasElement | null = null;
+        for (const c of canvases) {
+            const r = c.getBoundingClientRect();
+            if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+                targetCanvas = c;
+                break;
+            }
+        }
+
+        setOcrSel(null);
+        if (!targetCanvas) return;
+
+        const canvasRect = targetCanvas.getBoundingClientRect();
+        const scaleX = targetCanvas.width / canvasRect.width;
+        const scaleY = targetCanvas.height / canvasRect.height;
+
+        const rx = Math.max(0, (x1 - canvasRect.left) * scaleX);
+        const ry = Math.max(0, (y1 - canvasRect.top) * scaleY);
+        const rw = Math.min(targetCanvas.width - rx, (x2 - x1) * scaleX);
+        const rh = Math.min(targetCanvas.height - ry, (y2 - y1) * scaleY);
+
+        if (rw < 4 || rh < 4) return;
+
+        // Extract selected region into an offscreen canvas
+        const offscreen = document.createElement('canvas');
+        offscreen.width = Math.ceil(rw);
+        offscreen.height = Math.ceil(rh);
+        const ctx = offscreen.getContext('2d')!;
+        ctx.drawImage(targetCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+        const dataUrl = offscreen.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+
+        setOcrProcessing(true);
+        try {
+            let text = '';
+            if (isTauriDesktop()) {
+                const { invoke } = await import('@tauri-apps/api/core');
+                text = await invoke<string>('ocr_extract_text_base64', { imageBase64: base64 });
+            } else {
+                text = '[OCR chỉ hỗ trợ trên Desktop app]';
+            }
+            if (text?.trim()) {
+                document.dispatchEvent(new CustomEvent('epubSelectionEnd', {
+                    detail: {
+                        text: text.trim(),
+                        rect: { left: (x1 + x2) / 2, top: y1 - 10, width: 0, height: 0 },
+                    },
+                }));
+            }
+        } catch (err: any) {
+            console.error('[PDF OCR]', err);
+        } finally {
+            setOcrProcessing(false);
+        }
+    }, [ocrProcessing]);
 
     const handleScroll = () => {
         if (!scrollRef.current || !totalPages) return;
@@ -168,6 +292,7 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
 
     return (
         <div className={`relative h-full flex flex-col overflow-hidden ${bg}`}>
+            {/* ── Toolbar ── */}
             <div className={`flex-shrink-0 flex items-center justify-between px-4 py-2 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'} ${controlBg}`}>
                 <p className="text-xs opacity-50 max-w-[200px] truncate">{book.originalName}</p>
                 <div className="flex items-center gap-1">
@@ -178,21 +303,39 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                     <button onClick={() => setScale(s => Math.min(3, +(s + 0.2).toFixed(1)))} className="p-1.5 rounded hover:bg-black/10 transition-colors">
                         <ZoomIn className="w-4 h-4" />
                     </button>
+                    <div className="w-px h-4 bg-gray-400/30 mx-1" />
+                    {/* OCR toggle button */}
+                    <button
+                        onClick={() => setOcrMode(m => !m)}
+                        title="OCR — kéo chọn vùng để nhận dạng chữ trong ảnh"
+                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${ocrMode
+                            ? 'bg-teal-600 text-white'
+                            : 'hover:bg-black/10 text-current opacity-70 hover:opacity-100'
+                            }`}
+                    >
+                        {ocrProcessing
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <ScanText className="w-3.5 h-3.5" />
+                        }
+                        <span>OCR</span>
+                    </button>
                 </div>
                 <span className="text-xs opacity-50">{totalPages} trang</span>
             </div>
 
             <style>{`
+                .pdf-text-layer {
+                    -webkit-user-select: text !important;
+                    user-select: text !important;
+                }
                 .pdf-text-layer > span {
                     color: transparent;
                     position: absolute;
                     white-space: pre;
                     cursor: text;
                     transform-origin: 0% 0%;
-                    user-select: text;
-                    -webkit-user-select: text;
-                    user-select: text;
-                    -webkit-user-select: text;
+                    -webkit-user-select: text !important;
+                    user-select: text !important;
                 }
                 .pdf-text-layer > span::selection {
                     background: rgba(99,102,241,0.35);
@@ -200,7 +343,51 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 }
             `}</style>
 
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto py-2" />
+            {/* ── OCR overlay — fixed over entire viewport ── */}
+            {ocrMode && (
+                <div
+                    className="fixed inset-0 z-[9990]"
+                    style={{ cursor: ocrProcessing ? 'wait' : 'crosshair' }}
+                    onMouseDown={handleOcrMouseDown}
+                    onMouseMove={handleOcrMouseMove}
+                    onMouseUp={handleOcrMouseUp}
+                >
+                    {/* Selection rect */}
+                    {ocrSel && (() => {
+                        const left = Math.min(ocrSel.x1, ocrSel.x2);
+                        const top = Math.min(ocrSel.y1, ocrSel.y2);
+                        const width = Math.abs(ocrSel.x2 - ocrSel.x1);
+                        const height = Math.abs(ocrSel.y2 - ocrSel.y1);
+                        return (
+                            <div style={{
+                                position: 'fixed', left, top, width, height,
+                                border: '2px solid #14b8a6',
+                                background: 'rgba(20,184,166,0.12)',
+                                pointerEvents: 'none',
+                                borderRadius: 2,
+                            }} />
+                        );
+                    })()}
+                    {/* Hint badge */}
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9991] flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900/90 border border-teal-500/50 text-teal-300 text-xs shadow-xl">
+                        <ScanText className="w-3.5 h-3.5" />
+                        Kéo để chọn vùng nhận dạng chữ (OCR)
+                        <button
+                            onClick={e => { e.stopPropagation(); setOcrMode(false); }}
+                            className="ml-1 hover:text-white"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto py-2 select-text"
+                style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
+            />
         </div>
     );
 }

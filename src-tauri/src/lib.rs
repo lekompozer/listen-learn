@@ -500,6 +500,7 @@ pub fn run() {
             reading::reading_save_position,
             reading::reading_read_file,
             ocr::ocr_extract_text,
+            ocr::ocr_extract_text_base64,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");

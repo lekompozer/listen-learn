@@ -112,3 +112,27 @@ Write-Output $result.Text
         Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
     }
 }
+
+/// ocr_extract_text_base64 — accepts a base64-encoded PNG/JPEG image,
+/// writes it to a temp file, runs OCR, then cleans up.
+#[tauri::command]
+pub async fn ocr_extract_text_base64(image_base64: String) -> Result<String, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(image_base64.trim())
+        .map_err(|e| format!("base64 decode: {e}"))?;
+
+    // Write to temp PNG
+    let tmp = format!(
+        "/tmp/ll_ocr_region_{}.png",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
+    std::fs::write(&tmp, &bytes).map_err(|e| format!("write tmp: {e}"))?;
+
+    let result = ocr_extract_text(tmp.clone()).await;
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
