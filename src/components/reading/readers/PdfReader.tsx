@@ -38,11 +38,13 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 const pdfjsLib = await import('pdfjs-dist');
                 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
 
-                // Fetch the asset:// file as ArrayBuffer
-                const response = await fetch(book.assetUrl);
-                if (!response.ok) throw new Error(`Failed to fetch PDF (${response.status})`);
-                const data = await response.arrayBuffer();
-                const doc = await pdfjsLib.getDocument({ data }).promise;
+                // Pass URL directly — pdfjs streams range-requests instead of loading all at once.
+                // Much better for large PDFs (17MB+), avoids OOM / timeout on ArrayBuffer fetch.
+                const doc = await pdfjsLib.getDocument({
+                    url: book.assetUrl,
+                    // Allow range requests so pdfjs can load pages on-demand
+                    rangeChunkSize: 65536,
+                }).promise;
                 if (!cancelled) {
                     setPdfDoc(doc);
                     setTotalPages(doc.numPages);

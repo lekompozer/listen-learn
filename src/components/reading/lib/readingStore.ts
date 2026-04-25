@@ -16,7 +16,8 @@ export interface Book {
     addedAt: string;
     lastReadAt?: string;
     lastPosition?: BookPosition;
-    assetUrl: string;
+    filePath: string;   // raw OS path — used by Tauri to recompute assetUrl
+    assetUrl: string;   // asset://localhost/<encoded-path> — computed at runtime
 }
 
 const isTauri = () =>

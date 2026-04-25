@@ -33,8 +33,11 @@ pub struct Book {
     pub last_read_at: Option<String>,
     #[serde(rename = "lastPosition")]
     pub last_position: Option<BookPosition>,
-    /// asset:// URL the webview can fetch the file from
-    #[serde(rename = "assetUrl")]
+    /// Raw absolute OS path — stored in library.json for path reconstruction
+    #[serde(rename = "filePath", default)]
+    pub file_path: String,
+    /// asset:// URL computed at runtime — NOT stored in library.json
+    #[serde(rename = "assetUrl", skip_serializing_if = "String::is_empty", default)]
     pub asset_url: String,
 }
 
@@ -87,12 +90,34 @@ fn ext_to_type(ext: &str) -> &'static str {
     }
 }
 
+/// Replicate JS `encodeURIComponent` — encodes everything except A-Za-z0-9 - _ . ! ~ * ' ( )
+fn encode_uri_component(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
+            | b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')' => {
+                result.push(b as char);
+            }
+            _ => {
+                result.push_str(&format!("%{b:02X}"));
+            }
+        }
+    }
+    result
+}
+
 fn make_asset_url(dest: &PathBuf) -> String {
-    // Convert absolute path → asset:// URL that Tauri's asset protocol serves
-    // macOS/Linux: asset:///absolute/path
-    // Windows:     asset://localhost/C:/path (Tauri handles drive letters)
-    let s = dest.to_string_lossy().replace('\\', "/");
-    format!("asset://{s}")
+    // Match Tauri's convertFileSrc(path) output exactly:
+    // macOS/Linux: asset://localhost/<encodeURIComponent(path)>
+    // Windows:     http://asset.localhost/<encodeURIComponent(path)>
+    let path_str = dest.to_string_lossy();
+    let encoded = encode_uri_component(&path_str);
+    if cfg!(target_os = "windows") {
+        format!("http://asset.localhost/{encoded}")
+    } else {
+        format!("asset://localhost/{encoded}")
+    }
 }
 
 // ─── Tauri commands ─────────────────────────────────────────────────────────────
@@ -136,6 +161,7 @@ pub async fn reading_import_file(
         added_at: now,
         last_read_at: None,
         last_position: None,
+        file_path: dest.to_string_lossy().into_owned(),
         asset_url: make_asset_url(&dest),
     };
 
@@ -152,27 +178,39 @@ pub async fn reading_import_file(
 pub async fn reading_list_books(app: tauri::AppHandle) -> Result<Vec<Book>, String> {
     let mut lib = load_library(&app).map_err(|e| e.to_string())?;
 
-    // Re-check asset paths are still valid; remove entries whose files were deleted externally
-    let files = files_dir(&app).map_err(|e| e.to_string())?;
+    // Re-check files still exist; also recompute assetUrl from filePath (migration fix)
+    let files_base = files_dir(&app).map_err(|e| e.to_string())?;
     lib.books.retain(|b| {
-        // Derive filename from asset_url
-        let url = &b.asset_url;
-        let path = PathBuf::from(url.trim_start_matches("asset://"));
-        if path.exists() {
-            true
+        // Prefer filePath (new field); fall back to id-based reconstruction
+        if !b.file_path.is_empty() {
+            PathBuf::from(&b.file_path).exists()
         } else {
-            // Also try reconstructing from id
             let ext = match b.book_type.as_str() {
                 "epub" => "epub",
-                "image" => {
-                    let name = &b.original_name;
-                    name.rsplit('.').next().unwrap_or("png")
-                }
+                "image" => b.original_name.rsplit('.').next().unwrap_or("png"),
                 _ => "pdf",
             };
-            files.join(format!("{}.{}", b.id, ext)).exists()
+            files_base.join(format!("{}.{}", b.id, ext)).exists()
         }
     });
+
+    // Recompute assetUrl at runtime (so old library.json entries get the correct URL)
+    for b in &mut lib.books {
+        let path = if !b.file_path.is_empty() {
+            PathBuf::from(&b.file_path)
+        } else {
+            let ext = match b.book_type.as_str() {
+                "epub" => "epub",
+                "image" => b.original_name.rsplit('.').next().unwrap_or("png"),
+                _ => "pdf",
+            };
+            files_base.join(format!("{}.{}", b.id, ext))
+        };
+        b.asset_url = make_asset_url(&path);
+        if b.file_path.is_empty() {
+            b.file_path = path.to_string_lossy().into_owned();
+        }
+    }
 
     // Sort: books with lastReadAt first (most recent), then by addedAt desc
     lib.books.sort_by(|a, b| {
@@ -196,7 +234,15 @@ pub async fn reading_get_asset_url(
         .iter()
         .find(|b| b.id == id)
         .ok_or_else(|| format!("Book not found: {id}"))?;
-    Ok(book.asset_url.clone())
+    // Recompute at call time to ensure correct URL format
+    let path = if !book.file_path.is_empty() {
+        PathBuf::from(&book.file_path)
+    } else {
+        files_dir(&app)
+            .map_err(|e| e.to_string())?
+            .join(format!("{}.{}", book.id, book.book_type))
+    };
+    Ok(make_asset_url(&path))
 }
 
 /// Delete a book from the library and remove its file from disk.
@@ -213,10 +259,19 @@ pub async fn reading_delete_book(
         .ok_or_else(|| format!("Book not found: {id}"))?;
 
     let book = lib.books.remove(pos);
-    // Remove file
-    let asset_path = PathBuf::from(book.asset_url.trim_start_matches("asset://"));
-    if asset_path.exists() {
-        let _ = std::fs::remove_file(&asset_path);
+    // Remove the physical file using filePath (never try to parse the asset:// URL)
+    if !book.file_path.is_empty() {
+        let _ = std::fs::remove_file(&book.file_path);
+    } else {
+        // Fall back: reconstruct from id
+        if let Ok(dir) = files_dir(&app) {
+            let ext = match book.book_type.as_str() {
+                "epub" => "epub",
+                "image" => book.original_name.rsplit('.').next().unwrap_or("png"),
+                _ => "pdf",
+            };
+            let _ = std::fs::remove_file(dir.join(format!("{}.{}", book.id, ext)));
+        }
     }
 
     save_library(&app, &lib).map_err(|e| e.to_string())?;
