@@ -23,6 +23,7 @@ const PodcastGridPage = dynamic(() => import('@/components/podcast/PodcastGridPa
 const EnglishVideosFeed = dynamic(() => import('@/components/videos/EnglishVideosFeed'), { ssr: false });
 const SpeakWithAITab = dynamic(() => import('@/components/speak-with-ai/SpeakWithAITab'), { ssr: false });
 const SubscriptionModal = dynamic(() => import('@/components/songs/SubscriptionModal'), { ssr: false });
+const DictionaryPanel = dynamic(() => import('@/components/DictionaryPanel'), { ssr: false });
 
 export type TabType = 'daily-vocab' | 'songs' | 'conversations' | 'podcast' | 'videos';
 
@@ -56,6 +57,7 @@ export default function ListenLearnApp() {
     const [isCheckingStatus, setIsCheckingStatus] = useState(false);
     const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isDictOpen, setIsDictOpen] = useState(false);
     const [isGamificationVisible, setIsGamificationVisible] = useState(true);
     const [gamificationRefreshKey, setGamificationRefreshKey] = useState(0);
     const [hasSongOpen, setHasSongOpen] = useState(false);
@@ -249,6 +251,13 @@ export default function ListenLearnApp() {
         }
     };
 
+    // Open dictionary panel when SelectionSpeakPopup dispatches "Open in Dictionary"
+    useEffect(() => {
+        const handler = () => setIsDictOpen(true);
+        window.addEventListener('ll-open-dictionary', handler);
+        return () => window.removeEventListener('ll-open-dictionary', handler);
+    }, []);
+
     return (
         <div className={`flex flex-col h-screen w-screen overflow-hidden ${isDark ? 'bg-gray-900 text-white' : 'bg-[#c6d4d4] text-gray-900'}`}>
             {/* First-run onboarding tour */}
@@ -268,6 +277,8 @@ export default function ListenLearnApp() {
                     }}
                     isSidebarVisible={isSidebarVisible}
                     onToggleSidebar={() => setIsSidebarVisible(v => !v)}
+                    isDictOpen={isDictOpen}
+                    onDictToggle={() => setIsDictOpen(v => !v)}
                 />
             </div>
 
@@ -373,6 +384,9 @@ export default function ListenLearnApp() {
 
 
             </div>
+            {/* Dictionary Panel — slides in from right */}
+            <DictionaryPanel isOpen={isDictOpen} onClose={() => setIsDictOpen(false)} />
+
             {showSubscriptionModal && (
                 <SubscriptionModal
                     isOpen={showSubscriptionModal}

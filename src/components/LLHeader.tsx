@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    LogIn, LogOut, Globe, Crown, BookOpen, Music, MessageCircle, Radio, Play,
+    LogIn, LogOut, Globe, Crown, BookOpen, BookMarked, Music, MessageCircle, Radio, Play,
     Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, ChevronDown, ExternalLink,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -97,9 +97,11 @@ interface LLHeaderProps {
     onUpgradeClick: () => void;
     isSidebarVisible?: boolean;
     onToggleSidebar?: () => void;
+    isDictOpen?: boolean;
+    onDictToggle?: () => void;
 }
 
-export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeClick, isSidebarVisible, onToggleSidebar }: LLHeaderProps) {
+export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeClick, isSidebarVisible, onToggleSidebar, isDictOpen, onDictToggle }: LLHeaderProps) {
     const { user, isLoading, signIn, signOut } = useWordaiAuth();
     const { isVietnamese, toggleLanguage } = useLanguage();
     const { isDark, toggleTheme } = useTheme();
@@ -259,6 +261,23 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                             <span>{isVietnamese ? 'Nâng cấp' : 'Upgrade'}</span>
                         </button>
                     )
+                )}
+
+                {/* Dictionary toggle */}
+                {onDictToggle && (
+                    <button
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={onDictToggle}
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                        className={`p-1.5 rounded transition-colors ${isDictOpen
+                            ? isDark ? 'text-blue-400 bg-blue-500/20' : 'text-blue-600 bg-blue-100'
+                            : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                        title={isDictOpen
+                            ? t('Đóng từ điển', 'Close dictionary', isVietnamese)
+                            : t('Mở từ điển', 'Open dictionary', isVietnamese)}
+                    >
+                        <BookMarked className="w-3.5 h-3.5" />
+                    </button>
                 )}
 
                 {/* Squad Notifications Bell */}
