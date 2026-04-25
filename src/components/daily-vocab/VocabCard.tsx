@@ -905,6 +905,7 @@ export default function VocabCard({
             const buffer = new Uint8Array(analyser.frequencyBinCount);
             const silenceThreshold = 18;  // raised from 10 — avoids premature stop from ambient noise
             const silenceMs = 2500;
+            let speechDetectedOnce = false; // don't start silence countdown until user speaks first
 
             const monitorSilence = () => {
                 if (mr.state !== 'recording') return;
@@ -918,11 +919,13 @@ export default function VocabCard({
 
                 const now = performance.now();
                 if (peakDelta > silenceThreshold) {
-                    silenceStartedAtRef.current = null;
+                    speechDetectedOnce = true;
+                    silenceStartedAtRef.current = null; // reset silence timer on speech
+                } else if (!speechDetectedOnce) {
+                    // Still waiting for user to start speaking — don't count silence yet
                 } else if (silenceStartedAtRef.current == null) {
-                    silenceStartedAtRef.current = now;
+                    silenceStartedAtRef.current = now; // first frame of silence after speech
                 } else if (now - silenceStartedAtRef.current >= silenceMs) {
-                    // requestData() flushes any buffered audio before stop() — critical on iOS Safari
                     try { mr.requestData(); } catch { /* ignore if not supported */ }
                     mr.stop();
                     return;
@@ -931,7 +934,7 @@ export default function VocabCard({
                 silenceRafRef.current = requestAnimationFrame(monitorSilence);
             };
 
-            silenceStartedAtRef.current = performance.now();
+            silenceStartedAtRef.current = null; // start as null — wait for speech first
             silenceRafRef.current = requestAnimationFrame(monitorSilence);
         } catch (err) {
             // Always release mic tracks even if MediaRecorder creation failed

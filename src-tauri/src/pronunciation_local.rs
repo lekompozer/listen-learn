@@ -304,16 +304,30 @@ pub fn score_pronunciation_local(
         .create_state()
         .map_err(|e| format!("create_state failed: {e}"))?;
 
+    // Pad audio to at least 1.5s — whisper.cpp needs enough context to activate.
+    // Short recordings (< 1s) consistently return empty transcripts.
+    const MIN_SAMPLES: usize = 16000 * 3 / 2; // 1.5s at 16kHz
+    let padded: Vec<f32>;
+    let audio: &[f32] = if audio_pcm_f32.len() < MIN_SAMPLES {
+        padded = {
+            let mut v = audio_pcm_f32.clone();
+            v.resize(MIN_SAMPLES, 0.0);
+            v
+        };
+        &padded
+    } else {
+        &audio_pcm_f32
+    };
+
     // --- Whisper params ---
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-    // temperature=0 → force the model to transcribe exactly what it hears (no hallucination)
     params.set_temperature(0.0);
     params.set_temperature_inc(0.0);
     // Initial prompt = expected sentence → biases Whisper toward the correct vocabulary
     params.set_initial_prompt(&expected_text);
     // Enable token-level timestamps + probabilities
     params.set_token_timestamps(true);
-    params.set_single_segment(true);          // one sentence = one segment, cleaner output
+    // NOT setting single_segment — can cause empty output on short audio
     params.set_print_special(false);
     params.set_print_progress(false);
     params.set_print_realtime(false);
@@ -321,14 +335,15 @@ pub fn score_pronunciation_local(
     params.set_language(Some("en"));
 
     log::info!(
-        "[Whisper-local] audio: {} samples ({:.1}s) expected={:?}",
+        "[Whisper-local] audio: {} samples ({:.1}s) padded={} expected={:?}",
         audio_pcm_f32.len(),
         audio_pcm_f32.len() as f32 / 16000.0,
+        audio.len() != audio_pcm_f32.len(),
         expected_text,
     );
 
     state
-        .full(params, &audio_pcm_f32)
+        .full(params, audio)
         .map_err(|e| format!("Whisper inference failed: {e}"))?;
 
     // --- Collect token-level data ---
