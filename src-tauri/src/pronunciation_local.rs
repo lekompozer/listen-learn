@@ -318,17 +318,15 @@ pub fn score_pronunciation_local(
     params.set_print_timestamps(false);
     params.set_language(Some("en"));
 
-    // Trim leading/trailing silence — faster inference + more accurate on short words
-    let trimmed = trim_silence(&audio_pcm_f32);
     log::info!(
-        "[Whisper-local] audio: {} → {} samples after silence trim ({:.1}s → {:.1}s)",
-        audio_pcm_f32.len(), trimmed.len(),
+        "[Whisper-local] audio: {} samples ({:.1}s) expected={:?}",
+        audio_pcm_f32.len(),
         audio_pcm_f32.len() as f32 / 16000.0,
-        trimmed.len() as f32 / 16000.0,
+        expected_text,
     );
 
     state
-        .full(params, trimmed)
+        .full(params, &audio_pcm_f32)
         .map_err(|e| format!("Whisper inference failed: {e}"))?;
 
     // --- Collect token-level data ---
