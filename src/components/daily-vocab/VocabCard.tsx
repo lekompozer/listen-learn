@@ -706,23 +706,36 @@ export default function VocabCard({
             if (isDesktopApp && whisperModelReady) {
                 const { invoke } = await import('@tauri-apps/api/core');
 
-                // Decode base64 → ArrayBuffer → 16 kHz mono f32 via Web Audio API
-                // AudioContext({ sampleRate: 16000 }) forces the browser to resample
-                // so Whisper always receives exactly the sample rate it expects.
+                // Decode base64 → ArrayBuffer → 16 kHz mono f32
+                // IMPORTANT: decodeAudioData always decodes at the file's native sample rate
+                // (44100/48000 Hz on macOS). We must use OfflineAudioContext to properly
+                // resample to 16 kHz — simply passing sampleRate:16000 to AudioContext does NOT resample.
                 const binary = atob(base64);
                 const bytes = new Uint8Array(binary.length);
                 for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-                const audioCtx = new AudioContext({ sampleRate: 16000 });
-                let audioBuffer: AudioBuffer;
+                // Step 1: decode at native sample rate
+                const decodeCtx = new AudioContext();
+                let nativeBuffer: AudioBuffer;
                 try {
-                    audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+                    nativeBuffer = await decodeCtx.decodeAudioData(bytes.buffer.slice(0));
                 } finally {
-                    audioCtx.close();
+                    decodeCtx.close();
                 }
 
-                // getChannelData(0) = mono, already at 16 kHz
-                const pcmF32 = Array.from(audioBuffer.getChannelData(0));
+                // Step 2: resample to 16 kHz via OfflineAudioContext
+                const TARGET_RATE = 16000;
+                const targetLength = Math.ceil(nativeBuffer.duration * TARGET_RATE);
+                const offlineCtx = new OfflineAudioContext(1, targetLength, TARGET_RATE);
+                const src = offlineCtx.createBufferSource();
+                src.buffer = nativeBuffer;
+                src.connect(offlineCtx.destination);
+                src.start(0);
+                const resampled = await offlineCtx.startRendering();
+
+                // getChannelData(0) = mono at 16 kHz
+                const pcmF32 = Array.from(resampled.getChannelData(0));
+                console.log('[Whisper] PCM samples:', pcmF32.length, 'duration:', (pcmF32.length / TARGET_RATE).toFixed(2), 's', 'native rate:', nativeBuffer.sampleRate);
 
                 const localData = await invoke<{
                     overall_score: number;
@@ -737,13 +750,22 @@ export default function VocabCard({
                     expectedText: word.word,
                 });
 
-                // Normalise overall_score to 0-1 to match PronunciationResult shape
+                console.log('[Whisper] result:', JSON.stringify(localData));
+
+                // Map to PronunciationResult — overall_score from Rust is 0-100, UI expects 0-1
                 const data: PronunciationResult = {
                     success: true,
                     overall_score: localData.overall_score / 100,
                     transcript: localData.transcript,
                     expected_text: localData.expected_text,
                     feedback: localData.feedback,
+                    // Map whisper word results → PronunciationWord shape for the word pills UI
+                    words: localData.words.map(w => ({
+                        word: w.expected,
+                        expected_ipa: '',
+                        score: w.correct ? w.prob / 100 : 0,
+                        phonemes: [],
+                    })),
                 };
                 setPronunciationResult(data);
                 const pct = Math.round(localData.overall_score);
@@ -881,7 +903,7 @@ export default function VocabCard({
             sourceNodeRef.current = sourceNode;
 
             const buffer = new Uint8Array(analyser.frequencyBinCount);
-            const silenceThreshold = 10;
+            const silenceThreshold = 18;  // raised from 10 — avoids premature stop from ambient noise
             const silenceMs = 2500;
 
             const monitorSilence = () => {
