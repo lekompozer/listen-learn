@@ -33,14 +33,17 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
         (async () => {
             try {
                 setLoading(true);
-                setError('');
+                setError('Debug: import pdfjs');
                 // Dynamic import to keep bundle lean
                 const pdfjsLib = await import('pdfjs-dist');
                 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
 
+                setError('Debug: readFileBytes...');
                 // Read file via Tauri binary IPC — avoids asset:// fetch issues in WKWebView
                 const data = await readFileBytes(book.id);
+                setError('Debug: getDocument(data)...');
                 const doc = await pdfjsLib.getDocument({ data }).promise;
+                setError('Debug: ready');
                 if (!cancelled) {
                     setPdfDoc(doc);
                     setTotalPages(doc.numPages);
@@ -114,7 +117,7 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
         <div className={`h-full flex items-center justify-center ${bg}`}>
             <div className="text-center">
                 <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-3" />
-                <p className="text-sm text-gray-400">Đang tải PDF…</p>
+                <p className="text-sm text-gray-400">Đang tải PDF… {error}</p>
             </div>
         </div>
     );

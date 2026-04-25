@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import dynamic from 'next/dynamic';
 import ReadingLibrary from './ReadingLibrary';
+import ReadingReader from './ReadingReader';
 import type { Book } from './lib/readingStore';
 import { Library, X } from 'lucide-react';
-
-const ReadingReader = dynamic(() => import('./ReadingReader'), { ssr: false });
 
 interface ReadingTabProps {
     isDark: boolean;
@@ -61,7 +59,7 @@ export function ReadingTab({ isDark }: ReadingTabProps) {
             />
 
             {/* Reader pane area */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 min-h-0">
                 {/* Horizontal Tab Bar */}
                 {openedBooks.length > 0 && (
                     <div className={`flex flex-shrink-0 border-b overflow-x-auto no-scrollbar
@@ -96,7 +94,7 @@ export function ReadingTab({ isDark }: ReadingTabProps) {
                 )}
 
                 {/* Sub-Pane (Render Book) */}
-                <div className="flex-1 relative overflow-hidden bg-black/5">
+                <div className="flex-1 relative overflow-hidden bg-black/5 min-h-0">
                     {activeBook ? (
                         <div className="absolute inset-0">
                             {/* Mount all opened books, but hide inactive ones to save renderer state (PDF canvas layer / EPUB DOM) */}

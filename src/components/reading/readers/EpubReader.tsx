@@ -31,15 +31,20 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
         (async () => {
             try {
                 setLoading(true);
-                setError('');
+                setError('Debug: import epubjs');
                 const Epub = (await import('epubjs')).default;
+                
+                setError('Debug: readFileBytes...');
                 // Read file via Tauri binary IPC — avoids asset:// fetch issues in WKWebView
                 const arrayBuffer = await readFileBytes(book.id);
 
+                setError('Debug: Epub(arrayBuffer)...');
                 bookObj = Epub(arrayBuffer);
 
+                setError('Debug: bookObj.ready...');
                 await bookObj.ready;
 
+                setError('Debug: renderTo...');
                 rend = bookObj.renderTo(containerRef.current, {
                     width: '100%',
                     height: '100%',
@@ -137,7 +142,7 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
         <div className={`h-full flex items-center justify-center ${bg}`}>
             <div className="text-center">
                 <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-3" />
-                <p className="text-sm text-gray-400">Đang tải EPUB…</p>
+                <p className="text-sm text-gray-400">Đang tải EPUB… {error}</p>
             </div>
         </div>
     );

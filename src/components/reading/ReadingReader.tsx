@@ -1,23 +1,12 @@
 'use client';
 /**
  * ReadingReader.tsx — Dispatch to PdfReader or EpubReader based on book type.
- * Lazy-loaded to keep initial bundle size small.
  */
 
-import dynamic from 'next/dynamic';
 import type { Book } from './lib/readingStore';
 import { FileText } from 'lucide-react';
-
-const PdfReader = dynamic(() => import('./readers/PdfReader'), { ssr: false, loading: () => <ReaderLoading /> });
-const EpubReader = dynamic(() => import('./readers/EpubReader'), { ssr: false, loading: () => <ReaderLoading /> });
-
-function ReaderLoading() {
-    return (
-        <div className="h-full flex items-center justify-center bg-gray-900">
-            <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
-        </div>
-    );
-}
+import PdfReader from './readers/PdfReader';
+import EpubReader from './readers/EpubReader';
 
 interface ReadingReaderProps {
     book: Book;
