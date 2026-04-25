@@ -745,15 +745,15 @@ export default function VocabCard({
                 // setPendingAudioBase64 so the confirmation box replaces the mic
                 // button in a single render — no flash of the idle mic icon.
 
-                // iOS Safari bug: ondataavailable sometimes fires AFTER onstop.
-                // Wait a tick (2 rAF cycles) to ensure all chunks have arrived.
-                await new Promise<void>(resolve => setTimeout(resolve, 80));
+                // iOS Safari / WKWebView bug: ondataavailable sometimes fires AFTER onstop.
+                // With timeslice=250ms chunks arrive periodically, but wait for the final flush.
+                await new Promise<void>(resolve => setTimeout(resolve, 150));
 
                 const blob = new Blob(audioChunksRef.current, { type: mimeTypeRef.current });
 
-                if (blob.size < 100) {
+                if (blob.size < 10) {
                     // Truly empty — nothing was recorded (e.g. mic denied mid-session)
-                    console.warn('[Pronunciation] blob too small, skipping:', blob.size);
+                    console.warn('[Pronunciation] blob too small, skipping. size:', blob.size, 'chunks:', audioChunksRef.current.length, 'mime:', mimeTypeRef.current);
                     setIsRecording(false);
                     return;
                 }
@@ -773,7 +773,10 @@ export default function VocabCard({
             setIsRecording(true);
             setIsMicPulsing(true);
             setPronunciationScore(null);
-            mr.start();
+            // Use timeslice=250ms so ondataavailable fires periodically during recording,
+            // not just once when stop() is called — fixes WKWebView/macOS Desktop where
+            // ondataavailable can fire AFTER onstop without a timeslice.
+            mr.start(250);
 
             const audioContext = new AudioContext();
             const analyser = audioContext.createAnalyser();
@@ -1234,33 +1237,24 @@ export default function VocabCard({
                     </p>
 
                     {/* Confirmation buttons — replace mic button when recording stops */}
-                    <AnimatePresence>
-                        {pendingAudioBase64 && !isScoring && (
-                            <motion.div
-                                key="confirm-btns"
-                                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                                transition={{ duration: 0.2 }}
-                                className="flex gap-2 mt-1"
+                    {pendingAudioBase64 && !isScoring && (
+                        <div className="flex gap-2 mt-1">
+                            <button
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); sendPronunciationScore(pendingAudioBase64); }}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-green-500 text-white rounded-full text-sm font-semibold active:scale-95 transition-all shadow-lg"
                             >
-                                <button
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => { e.stopPropagation(); sendPronunciationScore(pendingAudioBase64); }}
-                                    className="flex items-center gap-1.5 px-4 py-2 bg-green-500 text-white rounded-full text-sm font-semibold active:scale-95 transition-all shadow-lg"
-                                >
-                                    <Check className="w-4 h-4" /> Gửi
-                                </button>
-                                <button
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => { e.stopPropagation(); setPendingAudioBase64(null); }}
-                                    className="flex items-center gap-1.5 px-4 py-2 bg-white/25 backdrop-blur-sm text-white rounded-full text-sm font-semibold active:scale-95 transition-all shadow-lg"
-                                >
-                                    <X className="w-4 h-4" /> Hủy
-                                </button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                                <Check className="w-4 h-4" /> Gửi
+                            </button>
+                            <button
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); setPendingAudioBase64(null); }}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-white/25 backdrop-blur-sm text-white rounded-full text-sm font-semibold active:scale-95 transition-all shadow-lg"
+                            >
+                                <X className="w-4 h-4" /> Hủy
+                            </button>
+                        </div>
+                    )}
                 </div>}
 
                 {/* Score badge — shown after scoring completes */}
