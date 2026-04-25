@@ -9,7 +9,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Book } from '../lib/readingStore';
-import { savePosition, readFileBytes } from '../lib/readingStore';
+import { savePosition } from '../lib/readingStore';
+
+// Polyfill URL.parse — not available on older macOS WKWebView (Intel Macs pre-Sonoma)
+if (typeof (URL as any).parse !== 'function') {
+    (URL as any).parse = function (url: string, base?: string) {
+        try { return new URL(url, base); } catch { return null; }
+    };
+}
 
 interface PdfReaderProps {
     book: Book;
@@ -43,24 +50,18 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 log('import pdfjs-dist...');
                 const pdfjsLib = await import('pdfjs-dist');
 
-                // WKWebView can't load workers from tauri:// — fetch + blob URL workaround
-                log('fetching worker as blob URL...');
-                const workerResp = await fetch('/pdfjs/pdf.worker.min.mjs');
-                const workerBlob = await workerResp.blob();
-                const workerBlobUrl = URL.createObjectURL(workerBlob);
-                pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
-                log('workerSrc = blob URL OK');
+                // Use direct tauri:// URL for worker — WKWebView blocks blob: module imports
+                const workerUrl = new URL('/pdfjs/pdf.worker.min.mjs', window.location.href).href;
+                pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+                log(`workerSrc = ${workerUrl}`);
 
-                log('readFileBytes IPC...');
-                const data = await readFileBytes(book.id);
-                log(`readFileBytes OK — ${data.byteLength.toLocaleString()} bytes`);
-
-                log('getDocument({ data })...');
-                const loadingTask = pdfjsLib.getDocument({ data });
+                // Use asset URL directly — avoids 17MB IPC transfer
+                log(`getDocument via asset URL...`);
+                const loadingTask = pdfjsLib.getDocument({ url: book.assetUrl });
                 const doc = await Promise.race([
                     loadingTask.promise,
                     new Promise<never>((_, reject) =>
-                        setTimeout(() => { (loadingTask as any).destroy?.(); reject(new Error('getDocument() timeout 15s — main thread hung')); }, 15000)
+                        setTimeout(() => { (loadingTask as any).destroy?.(); reject(new Error('getDocument() timeout 30s')); }, 30000)
                     ),
                 ]);
                 log(`getDocument OK — ${doc.numPages} pages`);

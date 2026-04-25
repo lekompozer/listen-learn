@@ -42,16 +42,14 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                 const Epub = (await import('epubjs')).default;
                 log('import OK');
 
+                // Read bytes via Tauri IPC — avoids asset:// CORS issue with WKWebView iframes
+                // frame-src now has blob: in CSP so epubjs iframe rendering works
                 log('readFileBytes IPC...');
                 const arrayBuffer = await readFileBytes(book.id);
-                log(`readFileBytes OK — ${arrayBuffer.byteLength.toLocaleString()} bytes`);
+                log(`readFileBytes OK — ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)} MB`);
 
-                // Pass as Blob URL — more reliable than raw ArrayBuffer in WKWebView
-                log('creating blob URL from arrayBuffer...');
-                const epubBlob = new Blob([arrayBuffer], { type: 'application/epub+zip' });
-                const epubBlobUrl = URL.createObjectURL(epubBlob);
-                log('Epub(blobUrl)...');
-                bookObj = Epub(epubBlobUrl);
+                log('Epub(arrayBuffer)...');
+                bookObj = Epub(arrayBuffer);
                 log('Epub() OK, waiting bookObj.ready...');
 
                 await Promise.race([
