@@ -38,8 +38,17 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
     const [ocrMode, setOcrMode] = useState(false);
     const [ocrSel, setOcrSel] = useState<OcrSel>(null);
     const [ocrProcessing, setOcrProcessing] = useState(false);
-    const [ocrDebugText, setOcrDebugText] = useState<string>(''); // shows last OCR result
+    // ocrResult holds the last OCR text + screen coords for the floating overlay card
+    const [ocrResult, setOcrResult] = useState<{ text: string; midX: number; y1: number; y2: number } | null>(null);
+    const ocrCardRef = useRef<HTMLDivElement>(null);
     const ocrStartRef = useRef<{ x: number; y: number } | null>(null);
+
+    // ── Clear OCR result when switching books ─────────────────────────────────────
+    useEffect(() => {
+        setOcrResult(null);
+        setOcrMode(false);
+        setOcrSel(null);
+    }, [book.id]);
 
     // ── Load PDF bytes ──────────────────────────────────────────────────────
     useEffect(() => {
@@ -172,6 +181,25 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
         };
     }, []);
 
+    // ── Dispatch epubSelectionEnd AFTER OCR card renders (so we can measure card height) ──
+    useEffect(() => {
+        if (!ocrResult || ocrResult.text.startsWith('⚠️')) return; // skip error-only results
+        // requestAnimationFrame ensures the card is painted and measurable
+        const raf = requestAnimationFrame(() => {
+            const cardH = ocrCardRef.current?.getBoundingClientRect().height ?? 80;
+            // SelectionSpeakPopup bottom = popup.y, so place it above the card
+            const popupY = ocrResult.y1 - 15 - cardH - 8;
+            console.log('[PdfReader] OCR card height:', cardH, '→ dispatching epubSelectionEnd at y:', popupY);
+            document.dispatchEvent(new CustomEvent('epubSelectionEnd', {
+                detail: {
+                    text: ocrResult.text,
+                    rect: { left: ocrResult.midX, top: popupY, width: 1, height: 1 },
+                },
+            }));
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [ocrResult]);
+
     // ── OCR overlay handlers ────────────────────────────────────────────────
     const handleOcrMouseDown = useCallback((e: React.MouseEvent) => {
         ocrStartRef.current = { x: e.clientX, y: e.clientY };
@@ -247,17 +275,12 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
             }
             console.log('[PDF OCR] result:', JSON.stringify(text?.slice(0, 200)));
             if (text?.trim()) {
-                setOcrDebugText(text.trim().slice(0, 120));
-                document.dispatchEvent(new CustomEvent('epubSelectionEnd', {
-                    detail: {
-                        text: text.trim(),
-                        // width=1 so SelectionSpeakPopup doesn't dismiss (it checks width===0)
-                        rect: { left: midX, top: y1 - 10, width: 1, height: 1 },
-                    },
-                }));
+                // Store result for overlay card — epubSelectionEnd is dispatched after card renders
+                setOcrResult({ text: text.trim(), midX, y1, y2 });
             } else {
                 console.warn('[PDF OCR] no text detected in region');
-                setOcrDebugText('⚠️ Không nhận dạng được chữ');
+                // Show brief toast-style overlay at selection center
+                setOcrResult({ text: '⚠️ Không nhận dạng được chữ trong vùng này', midX, y1, y2 });
             }
         } catch (err: any) {
             console.error('[PDF OCR] error:', err);
@@ -328,17 +351,6 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 <span className="text-xs opacity-50">{totalPages} trang</span>
             </div>
 
-            {/* OCR debug: show last result text */}
-            {ocrDebugText && (
-                <div className={`flex-shrink-0 flex items-start gap-2 px-4 py-2 border-b text-xs ${isDark ? 'border-gray-700 bg-teal-900/30 text-teal-300' : 'border-teal-200 bg-teal-50 text-teal-700'}`}>
-                    <ScanText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                    <span className="break-all leading-relaxed">{ocrDebugText}</span>
-                    <button onClick={() => setOcrDebugText('')} className="ml-auto flex-shrink-0 opacity-50 hover:opacity-100">
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                </div>
-            )}
-
             <style>{`
                 .pdf-text-layer {
                     -webkit-user-select: text !important;
@@ -404,6 +416,51 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 className="flex-1 overflow-y-auto py-2 select-text"
                 style={{ WebkitUserSelect: 'text', userSelect: 'text' }}
             />
+
+            {/* ── OCR result floating overlay card ──────────────────────────── */}
+            {ocrResult && (
+                <div
+                    ref={ocrCardRef}
+                    style={{
+                        position: 'fixed',
+                        // Bottom of card sits 15px above the top of the selection rect
+                        bottom: window.innerHeight - (ocrResult.y1 - 15),
+                        left: Math.min(
+                            Math.max(ocrResult.midX - 200, 8),
+                            window.innerWidth - 408
+                        ),
+                        width: Math.min(400, window.innerWidth - 16),
+                        zIndex: 99997, // below SelectionSpeakPopup (99999) but above OCR overlay (9990)
+                    }}
+                    className={`rounded-2xl shadow-2xl border backdrop-blur-md px-4 py-3
+                        ${isDark
+                            ? 'bg-gray-900/95 border-teal-500/40 text-gray-100'
+                            : 'bg-white/97 border-teal-400/60 text-gray-800'
+                        }`}
+                >
+                    {/* Header */}
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <ScanText className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" />
+                        <span className="text-[11px] font-semibold text-teal-400 uppercase tracking-wide">OCR</span>
+                        <button
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => setOcrResult(null)}
+                            className={`ml-auto p-0.5 rounded hover:bg-white/10 transition-colors ${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-700'}`}
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                    {/* OCR text — larger, readable */}
+                    <p className={`text-sm leading-relaxed whitespace-pre-wrap select-text
+                        ${ocrResult.text.startsWith('⚠️')
+                            ? 'text-amber-400 text-xs'
+                            : isDark ? 'text-gray-100' : 'text-gray-800'
+                        }`}
+                    >
+                        {ocrResult.text}
+                    </p>
+                </div>
+            )}
         </div>
     );
 }

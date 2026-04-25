@@ -29,7 +29,7 @@ async function quickLookup(word: string): Promise<QuickResult> {
     // Truncate to 500 chars for translate API
     const translateQuery = word.trim().slice(0, 500);
     const transPromise = fetch(
-        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=vi&dt=t&q=${encodeURIComponent(translateQuery)}`
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(translateQuery)}`
     ).catch(() => null);
 
     const [dictRes, transRes] = await Promise.all([dictPromise, transPromise]);
