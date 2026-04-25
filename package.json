@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3002",
     "dev:port3001": "next dev --port 3002",
+    "dev:port3002": "next dev --port 3002",
     "dev:desktop": "bash scripts/dev.sh",
     "build": "next build",
     "build:desktop-app": "bash scripts/build-desktop.sh",

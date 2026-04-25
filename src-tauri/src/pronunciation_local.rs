@@ -228,12 +228,14 @@ pub struct LocalPronunciationResult {
 }
 
 /// Compute RMS energy of a sample window.
+#[allow(dead_code)]
 #[inline]
 fn rms_window(window: &[f32]) -> f32 {
     let sum_sq: f32 = window.iter().map(|s| s * s).sum();
     (sum_sq / window.len() as f32).sqrt()
 }
 
+#[allow(dead_code)]
 /// Trim leading and trailing silence from 16 kHz mono PCM samples.
 /// Returns a slice of the original buffer (zero-copy).
 /// Works well for quiet-room recordings (English learners sitting at desk).
