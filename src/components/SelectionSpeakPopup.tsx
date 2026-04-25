@@ -62,8 +62,17 @@ export default function SelectionSpeakPopup() {
 
     const dismissResult = () => { setMode('idle'); setResult(null); setSpeakResult(null); };
 
-    const handleSelectionEnd = useCallback(() => {
+    const handleSelectionEnd = useCallback((e?: Event | MouseEvent) => {
         setTimeout(() => {
+            // Check if it's a synthetic custom selection event from an iframe (e.g. EpubReader)
+            if (e && e.type === 'epubSelectionEnd' && typeof (e as any).detail === 'object') {
+                const { text, rect } = (e as any).detail;
+                if (!text || rect.width === 0) { setPopup(null); dismissResult(); return; }
+                setPopup({ x: rect.left + rect.width / 2, y: rect.top - 10, text });
+                setMode('idle'); setResult(null);
+                return;
+            }
+
             const selection = window.getSelection();
             const text = selection?.toString().trim() ?? '';
             if (!text || !selection || selection.rangeCount === 0) { setPopup(null); dismissResult(); return; }
@@ -76,7 +85,7 @@ export default function SelectionSpeakPopup() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleMouseDown = useCallback((e: MouseEvent) => {
+    const handleMouseDown = useCallback((e: MouseEvent | CustomEvent) => {
         if (popupRef.current?.contains(e.target as Node)) return;
         setPopup(null); setSpeaking(false); setMode('idle'); setResult(null); setSpeakResult(null); setSpeakState('idle');
     }, []);
@@ -84,11 +93,13 @@ export default function SelectionSpeakPopup() {
     useEffect(() => {
         document.addEventListener('mouseup', handleSelectionEnd);
         document.addEventListener('touchend', handleSelectionEnd);
-        document.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mousedown', handleMouseDown as EventListener);
+        document.addEventListener('epubSelectionEnd', handleSelectionEnd as EventListener);
         return () => {
             document.removeEventListener('mouseup', handleSelectionEnd);
             document.removeEventListener('touchend', handleSelectionEnd);
-            document.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('mousedown', handleMouseDown as EventListener);
+            document.removeEventListener('epubSelectionEnd', handleSelectionEnd as EventListener);
         };
     }, [handleSelectionEnd, handleMouseDown]);
 

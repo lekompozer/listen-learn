@@ -3,6 +3,18 @@
  * In web mode (no Tauri), returns empty data gracefully.
  */
 
+// Polyfill Promise.withResolvers for macOS < 14.4 WKWebView
+if (typeof Promise.withResolvers !== 'function') {
+    (Promise as any).withResolvers = function () {
+        let resolve: any, reject: any;
+        const promise = new Promise((res, rej) => {
+            resolve = res;
+            reject = rej;
+        });
+        return { promise, resolve, reject };
+    };
+}
+
 export interface BookPosition {
     page: number;
     scroll: number;
@@ -57,8 +69,21 @@ export async function savePosition(id: string, page: number, scroll: number): Pr
  */
 export async function readFileBytes(id: string): Promise<ArrayBuffer> {
     const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
-    // Tauri binary commands return ArrayBuffer when ResponseType is not specified
-    return tauriInvoke<ArrayBuffer>('reading_read_file', { id });
+    // Tauri binary commands return Uint8Array or Array in v2
+    const data = await tauriInvoke<any>('reading_read_file', { id });
+
+    if (data instanceof ArrayBuffer) {
+        return data;
+    }
+    if (data instanceof Uint8Array) {
+        // Return a fresh ArrayBuffer without underlying padding
+        const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+        return buffer as ArrayBuffer;
+    }
+    if (Array.isArray(data)) {
+        return new Uint8Array(data).buffer as ArrayBuffer;
+    }
+    throw new Error('Unexpected binary format received from Tauri IPC');
 }
 
 export function formatSize(bytes: number): string {

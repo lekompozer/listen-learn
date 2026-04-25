@@ -37,6 +37,9 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                 const arrayBuffer = await readFileBytes(book.id);
 
                 bookObj = Epub(arrayBuffer);
+
+                await bookObj.ready;
+
                 rend = bookObj.renderTo(containerRef.current, {
                     width: '100%',
                     height: '100%',
@@ -71,13 +74,33 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                             ?.querySelector('iframe')
                             ?.contentDocument;
                         if (!iframeDoc) return;
+
+                        const iframeWindow = containerRef.current?.querySelector('iframe')?.contentWindow;
+                        const iframeRect = containerRef.current?.getBoundingClientRect();
+
                         const forward = () => {
-                            const sel = iframeDoc.getSelection()?.toString().trim();
-                            if (!sel) return;
-                            // Mirror the selection into a temporary element on the parent
-                            // document so window.getSelection() sees it.
-                            // Easier: just dispatch a synthetic mouseup on the parent.
-                            document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                            const sel = iframeWindow?.getSelection();
+                            const text = sel?.toString().trim();
+                            if (!text || !sel || sel.rangeCount === 0) {
+                                document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                return;
+                            }
+
+                            const range = sel.getRangeAt(0);
+                            const rect = range.getBoundingClientRect();
+
+                            // Adjust rect to host document coordinates
+                            const absoluteRect = {
+                                left: rect.left + (iframeRect?.left ?? 0),
+                                top: rect.top + (iframeRect?.top ?? 0),
+                                width: rect.width,
+                                height: rect.height,
+                            };
+
+                            const event = new CustomEvent('epubSelectionEnd', {
+                                detail: { text, rect: absoluteRect }
+                            });
+                            document.dispatchEvent(event);
                         };
                         iframeDoc.addEventListener('mouseup', forward);
                         iframeDoc.addEventListener('touchend', forward);

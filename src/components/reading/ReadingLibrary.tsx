@@ -118,12 +118,12 @@ export default function ReadingLibrary({ isDark, selectedId, onSelect }: Reading
                     </div>
                 ) : (
                     books.map(book => (
-                        <button
+                        <div
                             key={book.id}
                             onClick={() => onSelect(book)}
-                            className={`w-full text-left rounded-xl px-3 py-2.5 border transition-all group relative ${selectedId === book.id ? itemActive : itemIdle}`}
+                            className={`cursor-pointer w-full text-left rounded-xl px-3 py-2.5 border transition-all group relative ${selectedId === book.id ? itemActive : itemIdle}`}
                         >
-                            <div className="flex items-start gap-2">
+                            <div className="flex items-start gap-2 pr-6">
                                 <span className="text-lg leading-none mt-0.5 flex-shrink-0">{bookIcon(book.type)}</span>
                                 <div className="flex-1 min-w-0">
                                     <p className={`text-xs font-medium leading-snug truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
@@ -143,7 +143,7 @@ export default function ReadingLibrary({ isDark, selectedId, onSelect }: Reading
                             >
                                 <Trash2 className="w-3 h-3" />
                             </button>
-                        </button>
+                        </div>
                     ))
                 )}
             </div>
