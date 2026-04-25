@@ -15,7 +15,34 @@ pub async fn ocr_extract_text(image_path: String) -> Result<String, String> {
     return ocr_windows(&image_path).await;
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    Err("OCR is not supported on this platform".to_string())
+    return ocr_linux(image_path).await;
+}
+
+// ── Linux: Tesseract ──────────────────────────────────────────────────────────
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+async fn ocr_linux(image_path: &str) -> Result<String, String> {
+    use std::process::Command;
+
+    let tmp_base = format!("/tmp/ll_ocr_tess_{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis());
+
+    let out = Command::new("tesseract")
+        .args([image_path, &tmp_base, "-l", "eng+vie", "--psm", "6"])
+        .output()
+        .map_err(|e| format!("Tesseract not found. Install with: sudo apt install tesseract-ocr tesseract-ocr-vie — error: {e}"))?;
+
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+
+    let txt_path = format!("{}.txt", tmp_base);
+    let text = std::fs::read_to_string(&txt_path).map_err(|e| format!("read output: {e}"))?;
+    let _ = std::fs::remove_file(&txt_path);
+    let trimmed = text.trim().to_string();
+    if trimmed.is_empty() { return Err("OCR returned no text".to_string()); }
+    Ok(trimmed)
 }
 
 // ── macOS: Vision framework via Swift ────────────────────────────────────────
@@ -66,14 +93,13 @@ print(text)
     }
 }
 
-// ── Windows: Windows.Media.Ocr via PowerShell ────────────────────────────────
+// ── Windows: Windows.Media.Ocr (Win10+) with Tesseract fallback (Win7/8) ─────
 #[cfg(target_os = "windows")]
 async fn ocr_windows(image_path: &str) -> Result<String, String> {
     use std::process::Command;
 
+    // Try WinRT OcrEngine first (Windows 10+)
     let escaped = image_path.replace('\'', "''");
-
-    // PowerShell script using WinRT OcrEngine
     let script = format!(r#"
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -107,10 +133,50 @@ Write-Output $result.Text
     if out.status.success() {
         let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if text.is_empty() { return Err("OCR returned no text".to_string()); }
-        Ok(text)
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        return Ok(text);
     }
+
+    // WinRT failed (Win7/8 or no language pack) → fallback to Tesseract
+    ocr_windows_tesseract(image_path)
+}
+
+/// Tesseract fallback for Windows 7/8/older systems without WinRT OCR.
+/// Requires `tesseract` to be installed and in PATH.
+/// Install: https://github.com/UB-Mannheim/tesseract/wiki
+#[cfg(target_os = "windows")]
+fn ocr_windows_tesseract(image_path: &str) -> Result<String, String> {
+    use std::process::Command;
+
+    // Write output to temp txt file (tesseract appends .txt automatically)
+    let tmp_base = format!(
+        "{}\\ll_ocr_tess_{}",
+        std::env::temp_dir().display(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
+
+    let out = Command::new("tesseract")
+        .args([image_path, &tmp_base, "-l", "eng+vie", "--psm", "6"])
+        .output()
+        .map_err(|e| format!("Tesseract not found. Please install from https://github.com/UB-Mannheim/tesseract/wiki — error: {e}"))?;
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(format!("Tesseract OCR failed: {stderr}"));
+    }
+
+    let txt_path = format!("{}.txt", tmp_base);
+    let text = std::fs::read_to_string(&txt_path)
+        .map_err(|e| format!("read tesseract output: {e}"))?;
+    let _ = std::fs::remove_file(&txt_path);
+
+    let trimmed = text.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("OCR returned no text (image may have no readable text)".to_string());
+    }
+    Ok(trimmed)
 }
 
 /// ocr_extract_text_base64 — accepts a base64-encoded PNG/JPEG image,

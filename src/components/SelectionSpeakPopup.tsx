@@ -37,7 +37,7 @@ async function quickLookup(word: string): Promise<QuickResult> {
         // Quick sanity check — parse and see if translation is non-empty
         if (transRes.ok) {
             const raw = await transRes.clone().json().catch(() => null);
-            const testTrans = raw ? (raw[0] as any[])?.map((s: any[]) => s[0] ?? '').join('') : '';
+            const testTrans = raw ? (raw[0] as any[])?.filter(Boolean)?.map((s: any[]) => s[0] ?? '').join('') : '';
             if (!testTrans) transRes = null; // empty → retry with auto
         }
     } catch { transRes = null; }
@@ -67,7 +67,7 @@ async function quickLookup(word: string): Promise<QuickResult> {
     if (transRes && 'ok' in transRes && transRes.ok) {
         try {
             const data = await transRes.json();
-            translation = (data[0] as any[]).map((seg: any[]) => seg[0] ?? '').join('');
+            translation = (data[0] as any[]).filter(Boolean).map((seg: any[]) => seg[0] ?? '').join('');
         } catch { /* ignore */ }
     }
 
@@ -105,6 +105,10 @@ export default function SelectionSpeakPopup() {
                 setMode('idle'); setResult(null);
                 return;
             }
+
+            // If mouseup/touchend originated inside the popup (e.g. clicking a button),
+            // don't dismiss — the button handler manages state.
+            if (e && popupRef.current?.contains((e as MouseEvent).target as Node)) return;
 
             const selection = window.getSelection();
             const text = selection?.toString().trim() ?? '';
@@ -367,7 +371,7 @@ export default function SelectionSpeakPopup() {
                                 </button>
                             </div>
                         ) : mode === 'translate' && result ? (
-                            <div>
+                            <div className="max-h-[300px] overflow-y-auto">
                                 <p className={`font-bold text-sm mb-0.5 ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
                                     🇻🇳 {result.translation || '—'}
                                 </p>
