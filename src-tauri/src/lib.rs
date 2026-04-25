@@ -2,6 +2,7 @@ mod google_auth;
 mod edge_tts;
 mod pronunciation_local;
 mod reading;
+mod ocr;
 
 /// Proxy Cloudflare Workers AI call from Rust to avoid browser CORS restrictions.
 /// Credentials come from env vars baked in via build.rs (same as OAuth creds).
@@ -498,6 +499,7 @@ pub fn run() {
             reading::reading_delete_book,
             reading::reading_save_position,
             reading::reading_read_file,
+            ocr::ocr_extract_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");

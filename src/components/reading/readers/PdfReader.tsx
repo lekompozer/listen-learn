@@ -1,17 +1,15 @@
 'use client';
 /**
- * PdfReader.tsx — Render a PDF from an asset:// URL using PDF.js
- *
- * Uses canvas for visual rendering + text layer overlay so
- * SelectionSpeakPopup (which listens document.mouseup) works seamlessly.
+ * PdfReader.tsx — Scroll-mode PDF viewer using pdfjs-dist v3.
+ * All pages rendered vertically. Text layer enables text selection.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 import type { Book } from '../lib/readingStore';
-import { savePosition } from '../lib/readingStore';
+import { savePosition, readFileBytes } from '../lib/readingStore';
 
-// Polyfill URL.parse — not available on older macOS WKWebView (Intel Macs pre-Sonoma)
+// Polyfill URL.parse — missing on older Intel Mac WKWebView
 if (typeof (URL as any).parse !== 'function') {
     (URL as any).parse = function (url: string, base?: string) {
         try { return new URL(url, base); } catch { return null; }
@@ -24,18 +22,15 @@ interface PdfReaderProps {
 }
 
 export default function PdfReader({ book, isDark }: PdfReaderProps) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const textLayerRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const [pdfDoc, setPdfDoc] = useState<any>(null);
-    const [page, setPage] = useState<number>((book.lastPosition?.page ?? 1));
     const [totalPages, setTotalPages] = useState(0);
     const [scale, setScale] = useState(1.4);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [debugLog, setDebugLog] = useState<string[]>([]);
-    const renderTaskRef = useRef<any>(null);
 
-    // Load PDF on mount
+    // ── Load PDF bytes ──────────────────────────────────────────────────────
     useEffect(() => {
         let cancelled = false;
         const log = (msg: string) => {
@@ -49,90 +44,92 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 setDebugLog([]);
                 log('import pdfjs-dist...');
                 const pdfjsLib = await import('pdfjs-dist');
-
-                // Use direct tauri:// URL for worker — WKWebView blocks blob: module imports
-                const workerUrl = new URL('/pdfjs/pdf.worker.min.mjs', window.location.href).href;
+                const workerUrl = new URL('/pdfjs/pdf.worker.min.js', window.location.href).href;
                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-                log(`workerSrc = ${workerUrl}`);
+                log('workerSrc OK');
 
-                // Use asset URL directly — avoids 17MB IPC transfer
-                log(`getDocument via asset URL...`);
-                const loadingTask = pdfjsLib.getDocument({ url: book.assetUrl });
+                log('readFileBytes IPC...');
+                const data = await readFileBytes(book.id);
+                log(`readFileBytes OK — ${(data.byteLength / 1024 / 1024).toFixed(1)} MB`);
+
+                log('getDocument...');
+                const task = pdfjsLib.getDocument({ data });
                 const doc = await Promise.race([
-                    loadingTask.promise,
+                    task.promise,
                     new Promise<never>((_, reject) =>
-                        setTimeout(() => { (loadingTask as any).destroy?.(); reject(new Error('getDocument() timeout 30s')); }, 30000)
+                        setTimeout(() => { (task as any).destroy?.(); reject(new Error('getDocument timeout 20s')); }, 20000)
                     ),
                 ]);
-                log(`getDocument OK — ${doc.numPages} pages`);
-
-                if (!cancelled) {
-                    setPdfDoc(doc);
-                    setTotalPages(doc.numPages);
-                    setLoading(false);
-                }
+                log(`OK — ${doc.numPages} pages`);
+                if (!cancelled) { setPdfDoc(doc); setTotalPages(doc.numPages); setLoading(false); }
             } catch (e: any) {
-                if (!cancelled) {
-                    const msg = e.message ?? String(e);
-                    console.error('[PdfReader] load error:', e);
-                    setError(msg);
-                    setLoading(false);
-                }
+                if (!cancelled) { setError(e.message ?? String(e)); setLoading(false); }
             }
         })();
         return () => { cancelled = true; };
-    }, [book.assetUrl]);
+    }, [book.id]);
 
-    // Render current page
-    const renderPage = useCallback(async () => {
-        if (!pdfDoc || !canvasRef.current || !textLayerRef.current) return;
+    // ── Render all pages into scroll container ──────────────────────────────
+    useEffect(() => {
+        if (!pdfDoc || !scrollRef.current) return;
+        const container = scrollRef.current;
+        container.innerHTML = '';
+        let cancelled = false;
 
-        // Cancel any in-flight render
-        if (renderTaskRef.current) {
-            try { renderTaskRef.current.cancel(); } catch { /* ignore */ }
-        }
+        (async () => {
+            const pdfjsLib = await import('pdfjs-dist');
+            for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                if (cancelled) break;
+                try {
+                    const page = await pdfDoc.getPage(pageNum);
+                    const viewport = page.getViewport({ scale });
 
-        try {
-            const pdfPage = await pdfDoc.getPage(page);
-            const viewport = pdfPage.getViewport({ scale });
+                    const pageDiv = document.createElement('div');
+                    pageDiv.style.cssText = 'display:flex;justify-content:center;padding:8px 16px;';
 
-            const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d')!;
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
+                    const inner = document.createElement('div');
+                    inner.style.cssText = `position:relative;width:${viewport.width}px;height:${viewport.height}px;background:#fff;box-shadow:0 2px 16px rgba(0,0,0,0.35);`;
 
-            const renderTask = pdfPage.render({ canvasContext: ctx, viewport });
-            renderTaskRef.current = renderTask;
-            await renderTask.promise;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    canvas.style.cssText = `display:block;width:${viewport.width}px;height:${viewport.height}px;`;
+                    inner.appendChild(canvas);
 
-            // Text layer — positions transparent text divs over canvas for selection
-            const textLayer = textLayerRef.current;
-            textLayer.innerHTML = '';
-            textLayer.style.width = `${viewport.width}px`;
-            textLayer.style.height = `${viewport.height}px`;
+                    const textLayer = document.createElement('div');
+                    textLayer.className = 'pdf-text-layer';
+                    textLayer.style.cssText = `position:absolute;top:0;left:0;width:${viewport.width}px;height:${viewport.height}px;overflow:hidden;line-height:1;`;
+                    inner.appendChild(textLayer);
 
-            const { TextLayer } = await import('pdfjs-dist');
-            const textContent = await pdfPage.getTextContent();
-            const tl = new TextLayer({
-                textContentSource: textContent as any,
-                container: textLayer,
-                viewport,
-            });
-            await tl.render();
+                    const label = document.createElement('div');
+                    label.textContent = String(pageNum);
+                    label.style.cssText = 'position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:11px;color:#9ca3af;pointer-events:none;';
+                    inner.appendChild(label);
 
-            // Persist position
-            savePosition(book.id, page, 0).catch(() => { });
-        } catch (e: any) {
-            if (e?.name !== 'RenderingCancelledException') {
-                console.error('[PdfReader] render error:', e);
+                    pageDiv.appendChild(inner);
+                    container.appendChild(pageDiv);
+
+                    const ctx = canvas.getContext('2d')!;
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+
+                    const textContent = await page.getTextContent();
+                    (pdfjsLib as any).renderTextLayer({ textContent, container: textLayer, viewport, textDivs: [] });
+                } catch (e) {
+                    console.error(`[PdfReader] page ${pageNum}:`, e);
+                }
             }
-        }
-    }, [pdfDoc, page, scale, book.id]);
+            if (!cancelled) savePosition(book.id, 1, 0).catch(() => { });
+        })();
 
-    useEffect(() => { renderPage(); }, [renderPage]);
+        return () => { cancelled = true; };
+    }, [pdfDoc, scale, book.id]);
 
-    const prevPage = () => setPage(p => Math.max(1, p - 1));
-    const nextPage = () => setPage(p => Math.min(totalPages, p + 1));
+    const handleScroll = () => {
+        if (!scrollRef.current || !totalPages) return;
+        const { scrollTop, scrollHeight } = scrollRef.current;
+        const page = Math.max(1, Math.min(totalPages, Math.round((scrollTop / scrollHeight) * totalPages) + 1));
+        savePosition(book.id, page, 0).catch(() => { });
+    };
 
     const bg = isDark ? 'bg-gray-900' : 'bg-gray-100';
     const controlBg = isDark ? 'bg-gray-800/90 text-gray-200' : 'bg-white/90 text-gray-700';
@@ -162,10 +159,7 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 <p className="text-xs font-mono bg-red-900/30 border border-red-700/50 text-red-300 rounded px-3 py-2 text-left break-all mb-3">{error}</p>
                 {debugLog.length > 0 && (
                     <div className="text-xs font-mono bg-gray-800/80 border border-gray-600/50 text-gray-300 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
-                        <p className="text-gray-500 mb-1">Log:</p>
-                        {debugLog.map((line, i) => (
-                            <div key={i}>• {line}</div>
-                        ))}
+                        {debugLog.map((line, i) => <div key={i}>• {line}</div>)}
                     </div>
                 )}
             </div>
@@ -174,41 +168,39 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
 
     return (
         <div className={`relative h-full flex flex-col overflow-hidden ${bg}`}>
-            {/* Controls */}
             <div className={`flex-shrink-0 flex items-center justify-between px-4 py-2 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'} ${controlBg}`}>
+                <p className="text-xs opacity-50 max-w-[200px] truncate">{book.originalName}</p>
                 <div className="flex items-center gap-1">
-                    <button onClick={() => setScale(s => Math.max(0.7, s - 0.2))} className="p-1.5 rounded hover:bg-black/10 transition-colors">
+                    <button onClick={() => setScale(s => Math.max(0.7, +(s - 0.2).toFixed(1)))} className="p-1.5 rounded hover:bg-black/10 transition-colors">
                         <ZoomOut className="w-4 h-4" />
                     </button>
                     <span className="text-xs w-12 text-center">{Math.round(scale * 100)}%</span>
-                    <button onClick={() => setScale(s => Math.min(3, s + 0.2))} className="p-1.5 rounded hover:bg-black/10 transition-colors">
+                    <button onClick={() => setScale(s => Math.min(3, +(s + 0.2).toFixed(1)))} className="p-1.5 rounded hover:bg-black/10 transition-colors">
                         <ZoomIn className="w-4 h-4" />
                     </button>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                    <button onClick={prevPage} disabled={page <= 1} className="p-1 rounded hover:bg-black/10 disabled:opacity-30">
-                        <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-xs">{page} / {totalPages}</span>
-                    <button onClick={nextPage} disabled={page >= totalPages} className="p-1 rounded hover:bg-black/10 disabled:opacity-30">
-                        <ChevronRight className="w-4 h-4" />
-                    </button>
-                </div>
-                <p className="text-xs opacity-50 max-w-[180px] truncate">{book.originalName}</p>
+                <span className="text-xs opacity-50">{totalPages} trang</span>
             </div>
 
-            {/* Canvas + text layer */}
-            <div className="flex-1 overflow-auto flex justify-center py-4">
-                <div className="relative shadow-2xl">
-                    <canvas ref={canvasRef} />
-                    {/* Text layer: transparent, positioned absolute over canvas */}
-                    <div
-                        ref={textLayerRef}
-                        className="absolute top-0 left-0 text-layer"
-                        style={{ pointerEvents: 'auto' }}
-                    />
-                </div>
-            </div>
+            <style>{`
+                .pdf-text-layer > span {
+                    color: transparent;
+                    position: absolute;
+                    white-space: pre;
+                    cursor: text;
+                    transform-origin: 0% 0%;
+                    user-select: text;
+                    -webkit-user-select: text;
+                    user-select: text;
+                    -webkit-user-select: text;
+                }
+                .pdf-text-layer > span::selection {
+                    background: rgba(99,102,241,0.35);
+                    color: transparent;
+                }
+            `}</style>
+
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto py-2" />
         </div>
     );
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Listen & Learn",
-  "version": "0.2.13",
+  "version": "0.2.17",
   "identifier": "pro.wynai.listenlearn",
   "build": {
     "frontendDist": "../out",
@@ -11,7 +11,7 @@
   },
   "app": {
     "security": {
-      "csp": "default-src 'self' tauri: asset: data: blob:; worker-src 'self' tauri: asset: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com; frame-src 'self' blob: https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.tiktok.com https://www.facebook.com; media-src 'self' tauri: asset: blob: data: https: http:; connect-src 'self' tauri: asset: blob: data: https: http: wss: ws:; img-src 'self' tauri: asset: blob: data: https: http:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:;",
+      "csp": "default-src 'self' tauri: asset: data: blob:; worker-src 'self' tauri: asset: blob:; child-src 'self' blob: tauri: asset:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.youtube-nocookie.com https://s.ytimg.com; frame-src 'self' blob: https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.tiktok.com https://www.facebook.com; media-src 'self' tauri: asset: blob: data: https: http:; connect-src 'self' tauri: asset: blob: data: https: http: wss: ws:; img-src 'self' tauri: asset: blob: data: https: http:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:;",
       "assetProtocol": {
         "enable": true,
         "scope": [
