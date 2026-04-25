@@ -28,11 +28,27 @@ async function quickLookup(word: string): Promise<QuickResult> {
 
     // Truncate to 500 chars for translate API
     const translateQuery = word.trim().slice(0, 500);
-    const transPromise = fetch(
-        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(translateQuery)}`
-    ).catch(() => null);
+    // Try sl=en first; if it returns empty/fails, retry with sl=auto
+    let transRes: Response | null = null;
+    try {
+        transRes = await fetch(
+            `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(translateQuery)}`
+        );
+        // Quick sanity check — parse and see if translation is non-empty
+        if (transRes.ok) {
+            const raw = await transRes.clone().json().catch(() => null);
+            const testTrans = raw ? (raw[0] as any[])?.map((s: any[]) => s[0] ?? '').join('') : '';
+            if (!testTrans) transRes = null; // empty → retry with auto
+        }
+    } catch { transRes = null; }
 
-    const [dictRes, transRes] = await Promise.all([dictPromise, transPromise]);
+    if (!transRes || !transRes.ok) {
+        transRes = await fetch(
+            `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=vi&dt=t&q=${encodeURIComponent(translateQuery)}`
+        ).catch(() => null);
+    }
+
+    const [dictRes] = await Promise.all([dictPromise]);
 
     let phonetic = '';
     let definition = '';
@@ -105,6 +121,15 @@ export default function SelectionSpeakPopup() {
     const handleMouseDown = useCallback((e: MouseEvent | CustomEvent) => {
         if (popupRef.current?.contains(e.target as Node)) return;
         setPopup(null); setSpeaking(false); setMode('idle'); setResult(null); setSpeakResult(null); setSpeakState('idle');
+    }, []);
+
+    // Clear popup when book/document changes
+    useEffect(() => {
+        const onClear = () => {
+            setPopup(null); setSpeaking(false); setMode('idle'); setResult(null); setSpeakResult(null); setSpeakState('idle');
+        };
+        document.addEventListener('clearSelectionPopup', onClear);
+        return () => document.removeEventListener('clearSelectionPopup', onClear);
     }, []);
 
     useEffect(() => {

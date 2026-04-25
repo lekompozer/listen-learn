@@ -48,6 +48,8 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
         setOcrResult(null);
         setOcrMode(false);
         setOcrSel(null);
+        // Also dismiss SelectionSpeakPopup (it lives outside PdfReader)
+        document.dispatchEvent(new CustomEvent('clearSelectionPopup'));
     }, [book.id]);
 
     // ── Load PDF bytes ──────────────────────────────────────────────────────
@@ -432,10 +434,10 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                         width: Math.min(400, window.innerWidth - 16),
                         zIndex: 99997, // below SelectionSpeakPopup (99999) but above OCR overlay (9990)
                     }}
-                    className={`rounded-2xl shadow-2xl border backdrop-blur-md px-4 py-3
+                    className={`rounded-2xl shadow-2xl border px-4 py-3
                         ${isDark
-                            ? 'bg-gray-900/95 border-teal-500/40 text-gray-100'
-                            : 'bg-white/97 border-teal-400/60 text-gray-800'
+                            ? 'bg-gray-900 border-teal-500/40 text-gray-100'
+                            : 'bg-white border-teal-400/60 text-gray-800'
                         }`}
                 >
                     {/* Header */}
