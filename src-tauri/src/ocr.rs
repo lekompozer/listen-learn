@@ -15,7 +15,7 @@ pub async fn ocr_extract_text(image_path: String) -> Result<String, String> {
     return ocr_windows(&image_path).await;
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    return ocr_linux(image_path).await;
+    return ocr_linux(&image_path).await;
 }
 
 // ── Linux: Tesseract ──────────────────────────────────────────────────────────
