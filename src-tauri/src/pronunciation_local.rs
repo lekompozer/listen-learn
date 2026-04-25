@@ -350,11 +350,13 @@ pub fn score_pronunciation_local(
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_temperature(0.0);
     params.set_temperature_inc(0.0);
-    // Initial prompt = expected sentence → biases Whisper toward the correct vocabulary
-    params.set_initial_prompt(&expected_text);
+    // NOTE: do NOT use set_initial_prompt(expected_text) — whisper.cpp treats it as
+    // "previous context already spoken", causing the decoder to skip the beginning of
+    // the audio (because it thinks those words were already said before recording started).
+    // Instead transcribe freely and compare afterward.
+    params.set_no_context(true);  // ignore any leftover context from previous runs
     // Enable token-level timestamps + probabilities
     params.set_token_timestamps(true);
-    // NOT setting single_segment — can cause empty output on short audio
     params.set_print_special(false);
     params.set_print_progress(false);
     params.set_print_realtime(false);
