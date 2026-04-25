@@ -497,6 +497,7 @@ pub fn run() {
             reading::reading_get_asset_url,
             reading::reading_delete_book,
             reading::reading_save_position,
+            reading::reading_read_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");

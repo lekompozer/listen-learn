@@ -262,12 +262,12 @@ export default function SelectionSpeakPopup() {
                             <div>
                                 <div className="flex items-center gap-2 mb-1.5">
                                     <span className={`text-base font-bold ${speakResult.score >= 80 ? 'text-green-400' :
-                                            speakResult.score >= 60 ? 'text-yellow-400' : 'text-red-400'
+                                        speakResult.score >= 60 ? 'text-yellow-400' : 'text-red-400'
                                         }`}>{speakResult.score}%</span>
                                     <div className="flex-1 h-1.5 rounded-full bg-gray-700 overflow-hidden">
                                         <div
                                             className={`h-full rounded-full transition-all ${speakResult.score >= 80 ? 'bg-green-400' :
-                                                    speakResult.score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+                                                speakResult.score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
                                                 }`}
                                             style={{ width: `${speakResult.score}%` }}
                                         />
@@ -329,7 +329,7 @@ export default function SelectionSpeakPopup() {
                         onClick={handleSpeakClick}
                         disabled={speakState === 'scoring' || speakState === 'preparing'}
                         className={`${btnBase} ${speakState === 'recording' ? 'bg-red-600/30 text-red-300' :
-                                speakState === 'preparing' ? 'bg-amber-500/20 text-amber-400' :
+                            speakState === 'preparing' ? 'bg-amber-500/20 text-amber-400' :
                                 speakState === 'scoring' ? 'bg-amber-500/20 text-amber-400' :
                                     inactiveBtn
                             }`}
@@ -340,9 +340,9 @@ export default function SelectionSpeakPopup() {
                         }
                         <span>{
                             speakState === 'preparing' ? (isVietnamese ? '...' : '...') :
-                            speakState === 'recording' ? (isVietnamese ? '■ Dừng' : '■ Stop') :
-                                speakState === 'scoring' ? (isVietnamese ? 'Chấm…' : 'Scoring…') :
-                                    (isVietnamese ? 'Thử đọc' : 'Try Speak')
+                                speakState === 'recording' ? (isVietnamese ? '■ Dừng' : '■ Stop') :
+                                    speakState === 'scoring' ? (isVietnamese ? 'Chấm…' : 'Scoring…') :
+                                        (isVietnamese ? 'Thử đọc' : 'Try Speak')
                         }</span>
                     </button>
 

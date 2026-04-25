@@ -300,3 +300,39 @@ pub async fn reading_save_position(
     save_library(&app, &lib).map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Read a book's raw file bytes and return them as a binary IPC response.
+/// The JS caller gets an `ArrayBuffer` — no asset:// URL fetching needed.
+#[tauri::command]
+pub async fn reading_read_file(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<tauri::ipc::Response, String> {
+    let lib = load_library(&app).map_err(|e| e.to_string())?;
+    let book = lib
+        .books
+        .iter()
+        .find(|b| b.id == id)
+        .ok_or_else(|| format!("Book not found: {id}"))?;
+
+    let path = if !book.file_path.is_empty() {
+        PathBuf::from(&book.file_path)
+    } else {
+        let ext = match book.book_type.as_str() {
+            "epub" => "epub",
+            "image" => book.original_name.rsplit('.').next().unwrap_or("png"),
+            _ => "pdf",
+        };
+        files_dir(&app)
+            .map_err(|e| e.to_string())?
+            .join(format!("{}.{}", book.id, ext))
+    };
+
+    if !path.exists() {
+        return Err(format!("File not found on disk: {}", path.display()));
+    }
+
+    let bytes = std::fs::read(&path).map_err(|e| format!("Read failed: {e}"))?;
+    log::info!("[Reading] read_file '{}' ({} bytes)", book.original_name, bytes.len());
+    Ok(tauri::ipc::Response::new(bytes))
+}

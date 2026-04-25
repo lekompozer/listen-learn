@@ -51,6 +51,16 @@ export async function savePosition(id: string, page: number, scroll: number): Pr
     return invoke<void>('reading_save_position', { id, page, scroll });
 }
 
+/**
+ * Read a book's raw bytes as an ArrayBuffer.
+ * Uses Tauri's binary IPC response — no asset:// URL fetching.
+ */
+export async function readFileBytes(id: string): Promise<ArrayBuffer> {
+    const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
+    // Tauri binary commands return ArrayBuffer when ResponseType is not specified
+    return tauriInvoke<ArrayBuffer>('reading_read_file', { id });
+}
+
 export function formatSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

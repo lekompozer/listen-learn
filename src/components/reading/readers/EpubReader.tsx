@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Book } from '../lib/readingStore';
-import { savePosition } from '../lib/readingStore';
+import { savePosition, readFileBytes } from '../lib/readingStore';
 
 interface EpubReaderProps {
     book: Book;
@@ -33,10 +33,8 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                 setLoading(true);
                 setError('');
                 const Epub = (await import('epubjs')).default;
-                // Fetch the epub file as ArrayBuffer
-                const response = await fetch(book.assetUrl);
-                if (!response.ok) throw new Error(`Failed to fetch EPUB (${response.status})`);
-                const arrayBuffer = await response.arrayBuffer();
+                // Read file via Tauri binary IPC — avoids asset:// fetch issues in WKWebView
+                const arrayBuffer = await readFileBytes(book.id);
 
                 bookObj = Epub(arrayBuffer);
                 rend = bookObj.renderTo(containerRef.current, {
@@ -90,7 +88,7 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                 rend.on('relocated', (loc: any) => {
                     const pg = loc?.start?.location ?? 0;
                     setCurrentPage(pg);
-                    savePosition(book.id, pg, 0).catch(() => {});
+                    savePosition(book.id, pg, 0).catch(() => { });
                 });
 
             } catch (e: any) {
@@ -103,7 +101,7 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
             try { bookObj?.destroy(); } catch { /* ignore */ }
             // unlistenResize reserved for future resize observer cleanup
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [book.assetUrl]);
 
     const prevPage = () => rendition?.prev();

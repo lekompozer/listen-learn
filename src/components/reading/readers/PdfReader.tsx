@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import type { Book } from '../lib/readingStore';
-import { savePosition } from '../lib/readingStore';
+import { savePosition, readFileBytes } from '../lib/readingStore';
 
 interface PdfReaderProps {
     book: Book;
@@ -38,13 +38,9 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 const pdfjsLib = await import('pdfjs-dist');
                 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
 
-                // Pass URL directly — pdfjs streams range-requests instead of loading all at once.
-                // Much better for large PDFs (17MB+), avoids OOM / timeout on ArrayBuffer fetch.
-                const doc = await pdfjsLib.getDocument({
-                    url: book.assetUrl,
-                    // Allow range requests so pdfjs can load pages on-demand
-                    rangeChunkSize: 65536,
-                }).promise;
+                // Read file via Tauri binary IPC — avoids asset:// fetch issues in WKWebView
+                const data = await readFileBytes(book.id);
+                const doc = await pdfjsLib.getDocument({ data }).promise;
                 if (!cancelled) {
                     setPdfDoc(doc);
                     setTotalPages(doc.numPages);
@@ -98,7 +94,7 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
             await tl.render();
 
             // Persist position
-            savePosition(book.id, page, 0).catch(() => {});
+            savePosition(book.id, page, 0).catch(() => { });
         } catch (e: any) {
             if (e?.name !== 'RenderingCancelledException') {
                 console.error('[PdfReader] render error:', e);
