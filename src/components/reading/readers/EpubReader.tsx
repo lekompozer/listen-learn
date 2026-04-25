@@ -21,6 +21,7 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
     const [rendition, setRendition] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [debugLog, setDebugLog] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(0);
 
     useEffect(() => {
@@ -29,22 +30,39 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
         let rend: any;
 
         (async () => {
+            const log = (msg: string) => {
+                const ts = new Date().toISOString().slice(11, 23);
+                console.log(`[EpubReader] ${ts} ${msg}`);
+                setDebugLog(prev => [...prev, `${ts} ${msg}`]);
+            };
             try {
                 setLoading(true);
-                setError('Debug: import epubjs');
+                setDebugLog([]);
+                log('import epubjs...');
                 const Epub = (await import('epubjs')).default;
-                
-                setError('Debug: readFileBytes...');
-                // Read file via Tauri binary IPC — avoids asset:// fetch issues in WKWebView
+                log('import OK');
+
+                log('readFileBytes IPC...');
                 const arrayBuffer = await readFileBytes(book.id);
+                log(`readFileBytes OK — ${arrayBuffer.byteLength.toLocaleString()} bytes`);
 
-                setError('Debug: Epub(arrayBuffer)...');
-                bookObj = Epub(arrayBuffer);
+                // Pass as Blob URL — more reliable than raw ArrayBuffer in WKWebView
+                log('creating blob URL from arrayBuffer...');
+                const epubBlob = new Blob([arrayBuffer], { type: 'application/epub+zip' });
+                const epubBlobUrl = URL.createObjectURL(epubBlob);
+                log('Epub(blobUrl)...');
+                bookObj = Epub(epubBlobUrl);
+                log('Epub() OK, waiting bookObj.ready...');
 
-                setError('Debug: bookObj.ready...');
-                await bookObj.ready;
+                await Promise.race([
+                    bookObj.ready,
+                    new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error('bookObj.ready timeout 15s')), 15000)
+                    ),
+                ]);
+                log('bookObj.ready OK');
 
-                setError('Debug: renderTo...');
+                log('renderTo container...');
                 rend = bookObj.renderTo(containerRef.current, {
                     width: '100%',
                     height: '100%',
@@ -66,9 +84,15 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                     },
                 });
 
+                log('rend.display()...');
                 // Display at last position or start
-                const cfi = book.lastPosition ? undefined : undefined; // future: store CFI
-                await rend.display();
+                await Promise.race([
+                    rend.display(),
+                    new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error('rend.display() timeout 15s')), 15000)
+                    ),
+                ]);
+                log('display OK — EPUB loaded!');
                 setRendition(rend);
                 setLoading(false);
 
@@ -120,7 +144,9 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
                 });
 
             } catch (e: any) {
-                setError(e.message ?? 'Failed to load EPUB');
+                const msg = e.message ?? String(e);
+                console.error('[EpubReader] load error:', e);
+                setError(msg);
                 setLoading(false);
             }
         })();
@@ -140,16 +166,36 @@ export default function EpubReader({ book, isDark }: EpubReaderProps) {
 
     if (loading) return (
         <div className={`h-full flex items-center justify-center ${bg}`}>
-            <div className="text-center">
-                <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-3" />
-                <p className="text-sm text-gray-400">Đang tải EPUB… {error}</p>
+            <div className="text-center max-w-xl px-6 w-full">
+                <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-4" />
+                <p className="text-sm text-gray-400 mb-3">Đang tải EPUB…</p>
+                {debugLog.length > 0 && (
+                    <div className="text-xs font-mono bg-yellow-900/60 border border-yellow-600/60 text-yellow-200 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
+                        {debugLog.map((line, i) => (
+                            <div key={i} className={i === debugLog.length - 1 ? 'text-yellow-300 font-bold' : 'opacity-60'}>
+                                {i === debugLog.length - 1 ? '▶ ' : '✓ '}{line}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 
     if (error) return (
         <div className={`h-full flex items-center justify-center ${bg}`}>
-            <p className="text-red-400 text-sm">❌ {error}</p>
+            <div className="max-w-xl px-6 text-center w-full">
+                <p className="text-red-400 text-base font-semibold mb-3">❌ Không thể tải EPUB</p>
+                <p className="text-xs font-mono bg-red-900/30 border border-red-700/50 text-red-300 rounded px-3 py-2 text-left break-all mb-3">{error}</p>
+                {debugLog.length > 0 && (
+                    <div className="text-xs font-mono bg-gray-800/80 border border-gray-600/50 text-gray-300 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
+                        <p className="text-gray-500 mb-1">Log:</p>
+                        {debugLog.map((line, i) => (
+                            <div key={i}>• {line}</div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 

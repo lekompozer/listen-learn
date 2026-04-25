@@ -25,25 +25,46 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
     const [scale, setScale] = useState(1.4);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [debugLog, setDebugLog] = useState<string[]>([]);
     const renderTaskRef = useRef<any>(null);
 
     // Load PDF on mount
     useEffect(() => {
         let cancelled = false;
+        const log = (msg: string) => {
+            const ts = new Date().toISOString().slice(11, 23);
+            console.log(`[PdfReader] ${ts} ${msg}`);
+            setDebugLog(prev => [...prev, `${ts} ${msg}`]);
+        };
         (async () => {
             try {
                 setLoading(true);
-                setError('Debug: import pdfjs');
-                // Dynamic import to keep bundle lean
+                setDebugLog([]);
+                log('import pdfjs-dist...');
                 const pdfjsLib = await import('pdfjs-dist');
-                pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
 
-                setError('Debug: readFileBytes...');
-                // Read file via Tauri binary IPC — avoids asset:// fetch issues in WKWebView
+                // WKWebView can't load workers from tauri:// — fetch + blob URL workaround
+                log('fetching worker as blob URL...');
+                const workerResp = await fetch('/pdfjs/pdf.worker.min.mjs');
+                const workerBlob = await workerResp.blob();
+                const workerBlobUrl = URL.createObjectURL(workerBlob);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
+                log('workerSrc = blob URL OK');
+
+                log('readFileBytes IPC...');
                 const data = await readFileBytes(book.id);
-                setError('Debug: getDocument(data)...');
-                const doc = await pdfjsLib.getDocument({ data }).promise;
-                setError('Debug: ready');
+                log(`readFileBytes OK — ${data.byteLength.toLocaleString()} bytes`);
+
+                log('getDocument({ data })...');
+                const loadingTask = pdfjsLib.getDocument({ data });
+                const doc = await Promise.race([
+                    loadingTask.promise,
+                    new Promise<never>((_, reject) =>
+                        setTimeout(() => { (loadingTask as any).destroy?.(); reject(new Error('getDocument() timeout 15s — main thread hung')); }, 15000)
+                    ),
+                ]);
+                log(`getDocument OK — ${doc.numPages} pages`);
+
                 if (!cancelled) {
                     setPdfDoc(doc);
                     setTotalPages(doc.numPages);
@@ -51,7 +72,9 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 }
             } catch (e: any) {
                 if (!cancelled) {
-                    setError(e.message ?? 'Failed to load PDF');
+                    const msg = e.message ?? String(e);
+                    console.error('[PdfReader] load error:', e);
+                    setError(msg);
                     setLoading(false);
                 }
             }
@@ -115,16 +138,36 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
 
     if (loading) return (
         <div className={`h-full flex items-center justify-center ${bg}`}>
-            <div className="text-center">
-                <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-3" />
-                <p className="text-sm text-gray-400">Đang tải PDF… {error}</p>
+            <div className="text-center max-w-xl px-6 w-full">
+                <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-4" />
+                <p className="text-sm text-gray-400 mb-3">Đang tải PDF…</p>
+                {debugLog.length > 0 && (
+                    <div className="text-xs font-mono bg-yellow-900/60 border border-yellow-600/60 text-yellow-200 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
+                        {debugLog.map((line, i) => (
+                            <div key={i} className={i === debugLog.length - 1 ? 'text-yellow-300 font-bold' : 'opacity-60'}>
+                                {i === debugLog.length - 1 ? '▶ ' : '✓ '}{line}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
 
     if (error) return (
         <div className={`h-full flex items-center justify-center ${bg}`}>
-            <p className="text-red-400 text-sm">❌ {error}</p>
+            <div className="max-w-xl px-6 text-center w-full">
+                <p className="text-red-400 text-base font-semibold mb-3">❌ Không thể tải PDF</p>
+                <p className="text-xs font-mono bg-red-900/30 border border-red-700/50 text-red-300 rounded px-3 py-2 text-left break-all mb-3">{error}</p>
+                {debugLog.length > 0 && (
+                    <div className="text-xs font-mono bg-gray-800/80 border border-gray-600/50 text-gray-300 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
+                        <p className="text-gray-500 mb-1">Log:</p>
+                        {debugLog.map((line, i) => (
+                            <div key={i}>• {line}</div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 
