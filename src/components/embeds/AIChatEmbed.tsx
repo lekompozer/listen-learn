@@ -8,12 +8,16 @@ import type { StoredTheme } from '@/app/documents/components/SettingsSidebar/uti
 
 interface AIChatEmbedProps {
     isDark: boolean;
+    isMinimized?: boolean;
+    isWidget?: boolean;
+    initialRequirements?: string;
+    onToggleMinimize?: () => void;
 }
 
-export function AIChatEmbed({ isDark }: AIChatEmbedProps) {
+export function AIChatEmbed({ isDark, isMinimized = false, isWidget = false, initialRequirements = '', onToggleMinimize }: AIChatEmbedProps) {
     const { user } = useWordaiAuth();
     const [sidebarWidth, setSidebarWidth] = useState(600);
-    const [requirements, setRequirements] = useState('');
+    const [requirements, setRequirements] = useState(initialRequirements);
     const [showDocumentHistory, setShowDocumentHistory] = useState(false);
     const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -35,6 +39,34 @@ export function AIChatEmbed({ isDark }: AIChatEmbedProps) {
         }),
         [isDark],
     );
+
+    // In widget/minimized mode ChatSidebar renders fixed-position itself — no wrapper needed
+    if (isWidget || isMinimized) {
+        return (
+            <ChatSidebar
+                width={sidebarWidth}
+                showDocumentHistory={showDocumentHistory}
+                setShowDocumentHistory={setShowDocumentHistory}
+                quoteHistory={[]}
+                chatMessages={[]}
+                error={null}
+                requirements={requirements}
+                setRequirements={setRequirements}
+                loading={false}
+                selectedTemplateId=""
+                availableTemplates={[]}
+                onGenerateQuote={() => { }}
+                onDownload={() => { }}
+                onMouseDown={() => { }}
+                isDark={isDark}
+                language="vi"
+                isMinimized={isMinimized}
+                isWidget={isWidget}
+                onToggleMinimize={onToggleMinimize}
+                globalTheme={globalTheme}
+            />
+        );
+    }
 
     return (
         <div
@@ -58,8 +90,8 @@ export function AIChatEmbed({ isDark }: AIChatEmbedProps) {
                 onMouseDown={() => { }}
                 isDark={isDark}
                 language="vi"
-                isMinimized={false}
-                isWidget={false}
+                isMinimized={isMinimized}
+                isWidget={isWidget}
                 globalTheme={globalTheme}
             />
         </div>
