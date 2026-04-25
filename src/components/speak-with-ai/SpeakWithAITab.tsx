@@ -332,6 +332,7 @@ async function callSpeakChatAPI(params: {
     });
     if (!resp.ok) {
         const errBody = await resp.json().catch(() => ({}));
+        console.error('[SpeakChat] backend error', resp.status, JSON.stringify(errBody));
         if (resp.status === 403 && errBody.detail?.error === 'insufficient_points') {
             const e = new Error('insufficient_points');
             (e as any).detail = errBody.detail;
@@ -799,6 +800,7 @@ export default function SpeakWithAITab() {
             if (!replyText && user && !isDesktopGemma4) {
                 // Web (any model) or Desktop + DeepSeek: use backend /api/v1/speak/chat
                 const token = await user.getIdToken();
+                console.log('[SpeakChat] calling backend, uid:', user.uid, 'token prefix:', token.slice(0, 20) + '...');
                 const apiModel: 'gemma4' | 'deepseek' = selectedModel === 'deepseek' ? 'deepseek' : 'gemma4';
                 try {
                     const data = await callSpeakChatAPI({
@@ -826,10 +828,13 @@ export default function SpeakWithAITab() {
             }
 
             // Fallback: unauthenticated, API error, or Rust Gemma4 failed — call AI directly
+            // On web: only use Cloudflare Gemma4 (public token OK). Never call DeepSeek directly
+            // from the browser — key would be exposed and is not set in production anyway.
             if (!replyText) {
                 let lastErr: any;
                 const useGemma4 = selectedModel === 'auto' ? canUseGemma4() : selectedModel === 'gemma4';
-                const useDeepSeek = selectedModel === 'auto' ? true : selectedModel === 'deepseek';
+                // DeepSeek direct: desktop only (key baked in Rust), never from web browser
+                const useDeepSeek = isTauriDesktop() && (selectedModel === 'auto' ? true : selectedModel === 'deepseek');
 
                 if (useGemma4) {
                     try {
@@ -864,6 +869,11 @@ export default function SpeakWithAITab() {
                             }
                         }
                     }
+                }
+
+                // Web + not logged in: nudge user to login
+                if (!replyText && !isTauriDesktop() && !user) {
+                    throw new Error('Vui lòng đăng nhập để sử dụng tính năng này.');
                 }
 
                 if (!replyText) throw lastErr ?? new Error('All AI providers failed');
