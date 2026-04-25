@@ -903,9 +903,15 @@ export default function VocabCard({
             sourceNodeRef.current = sourceNode;
 
             const buffer = new Uint8Array(analyser.frequencyBinCount);
-            const silenceThreshold = 18;  // raised from 10 — avoids premature stop from ambient noise
-            const silenceMs = 2500;
-            let speechDetectedOnce = false; // don't start silence countdown until user speaks first
+            // Voice peaks at ~40-80; AC fan / ambient noise peaks at ~5-20.
+            // Require 5 consecutive frames above threshold to avoid noise spikes.
+            const silenceThreshold = 40;
+            const silenceMs = 2000;
+            const maxRecordMs = 8000; // hard stop after 8s no matter what
+            let speechFrameCount = 0;
+            const speechFramesRequired = 5; // ~83ms sustained speech at 60fps
+            let speechDetectedOnce = false;
+            const recordStartTime = performance.now();
 
             const monitorSilence = () => {
                 if (mr.state !== 'recording') return;
@@ -918,23 +924,37 @@ export default function VocabCard({
                 }
 
                 const now = performance.now();
-                if (peakDelta > silenceThreshold) {
-                    speechDetectedOnce = true;
-                    silenceStartedAtRef.current = null; // reset silence timer on speech
-                } else if (!speechDetectedOnce) {
-                    // Still waiting for user to start speaking — don't count silence yet
-                } else if (silenceStartedAtRef.current == null) {
-                    silenceStartedAtRef.current = now; // first frame of silence after speech
-                } else if (now - silenceStartedAtRef.current >= silenceMs) {
-                    try { mr.requestData(); } catch { /* ignore if not supported */ }
+
+                // Hard stop — never record longer than 8s
+                if (now - recordStartTime >= maxRecordMs) {
+                    try { mr.requestData(); } catch { /* ignore */ }
                     mr.stop();
                     return;
+                }
+
+                if (peakDelta > silenceThreshold) {
+                    speechFrameCount++;
+                    if (speechFrameCount >= speechFramesRequired) {
+                        speechDetectedOnce = true;
+                    }
+                    silenceStartedAtRef.current = null;
+                } else {
+                    speechFrameCount = 0; // reset frame counter on sub-threshold frame
+                    if (!speechDetectedOnce) {
+                        // Waiting for sustained speech above threshold
+                    } else if (silenceStartedAtRef.current == null) {
+                        silenceStartedAtRef.current = now;
+                    } else if (now - silenceStartedAtRef.current >= silenceMs) {
+                        try { mr.requestData(); } catch { /* ignore */ }
+                        mr.stop();
+                        return;
+                    }
                 }
 
                 silenceRafRef.current = requestAnimationFrame(monitorSilence);
             };
 
-            silenceStartedAtRef.current = null; // start as null — wait for speech first
+            silenceStartedAtRef.current = null;
             silenceRafRef.current = requestAnimationFrame(monitorSilence);
         } catch (err) {
             // Always release mic tracks even if MediaRecorder creation failed

@@ -134,6 +134,29 @@ fn get_or_load_ctx(model_path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+/// Trim leading noise/silence from f32 audio before sending to Whisper.
+/// Scans forward in 50ms windows; when a window's peak exceeds the voice threshold,
+/// we keep audio starting 100ms before that point (to preserve the word onset).
+/// This removes AC fan / ambient recording at the start that confuses Whisper.
+fn trim_leading_noise(audio: &[f32]) -> &[f32] {
+    const WIN: usize = 800;           // 50ms at 16kHz
+    const PEAK_THRESHOLD: f32 = 0.02; // AC fan ≈ 0.005-0.015; quiet voice ≈ 0.05+
+    let mut i = 0;
+    while i + WIN <= audio.len() {
+        let peak = audio[i..i + WIN]
+            .iter()
+            .map(|x| x.abs())
+            .fold(0.0f32, f32::max);
+        if peak >= PEAK_THRESHOLD {
+            // Keep 100ms before speech onset so we don't clip the first phoneme
+            let keep_from = i.saturating_sub(WIN * 2);
+            return &audio[keep_from..];
+        }
+        i += WIN;
+    }
+    audio // no speech found — return full audio unchanged
+}
+
 /// Normalise text for comparison: lowercase, collapse whitespace, strip punctuation.
 fn normalise(s: &str) -> String {
     s.to_lowercase()
@@ -304,19 +327,22 @@ pub fn score_pronunciation_local(
         .create_state()
         .map_err(|e| format!("create_state failed: {e}"))?;
 
-    // Pad audio to at least 1.5s — whisper.cpp needs enough context to activate.
-    // Short recordings (< 1s) consistently return empty transcripts.
+    // Trim leading noise/silence — AC fan / ambient sound before user speaks
+    // confuses Whisper and causes first-word loss.
+    let trimmed_audio = trim_leading_noise(&audio_pcm_f32);
+
+    // Pad trimmed audio to at least 1.5s — whisper.cpp needs enough context.
     const MIN_SAMPLES: usize = 16000 * 3 / 2; // 1.5s at 16kHz
     let padded: Vec<f32>;
-    let audio: &[f32] = if audio_pcm_f32.len() < MIN_SAMPLES {
+    let audio: &[f32] = if trimmed_audio.len() < MIN_SAMPLES {
         padded = {
-            let mut v = audio_pcm_f32.clone();
+            let mut v = trimmed_audio.to_vec();
             v.resize(MIN_SAMPLES, 0.0);
             v
         };
         &padded
     } else {
-        &audio_pcm_f32
+        trimmed_audio
     };
 
     // --- Whisper params ---
@@ -335,10 +361,11 @@ pub fn score_pronunciation_local(
     params.set_language(Some("en"));
 
     log::info!(
-        "[Whisper-local] audio: {} samples ({:.1}s) padded={} expected={:?}",
+        "[Whisper-local] audio: {} samples ({:.1}s) trimmed_to={} padded={} expected={:?}",
         audio_pcm_f32.len(),
         audio_pcm_f32.len() as f32 / 16000.0,
-        audio.len() != audio_pcm_f32.len(),
+        trimmed_audio.len(),
+        audio.len() != trimmed_audio.len(),
         expected_text,
     );
 
@@ -364,9 +391,11 @@ pub fn score_pronunciation_local(
                 .full_get_token_data(seg_idx, tok_idx)
                 .map_err(|e| e.to_string())?;
 
-            // Skip special tokens ([_BEG_], [_TT_*], etc.)
-            if text.starts_with('[') && text.ends_with(']') { continue; }
-            let word = text.trim().to_string();
+            // Skip special tokens ([_BEG_], [_TT_*]) and noise/event tags
+            // (" [birds chirping]", " [BLANK_AUDIO]", etc. have leading space — use trim())
+            let trimmed_text = text.trim();
+            if trimmed_text.starts_with('[') && trimmed_text.ends_with(']') { continue; }
+            let word = trimmed_text.to_string();
             if word.is_empty() { continue; }
             full_transcript.push_str(&text);
             raw_tokens.push((word, data.p as f64));
