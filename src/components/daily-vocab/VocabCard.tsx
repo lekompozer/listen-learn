@@ -1350,8 +1350,17 @@ export default function VocabCard({
                     {!pendingAudioBase64 && (
                         <button
                             onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => { e.stopPropagation(); handleMicPress(); }}
-                            disabled={isInteractionLocked}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (isRecording) {
+                                    // Click red mic → stop immediately
+                                    try { mediaRecorderRef.current?.requestData(); } catch { /* ignore */ }
+                                    mediaRecorderRef.current?.stop();
+                                } else {
+                                    handleMicPress();
+                                }
+                            }}
+                            disabled={isScoring}
                             className={`relative flex h-16 w-16 items-center justify-center rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : isScoring ? 'bg-amber-400/80 text-white' : 'bg-white/20 backdrop-blur-md text-white border border-white/30 hover:bg-white/30 hover:scale-105'}`}
                         >
                             {/* Three concentric blinking rings during recording */}
@@ -1370,7 +1379,7 @@ export default function VocabCard({
                         </button>
                     )}
                     <p className="text-center text-[11px] font-medium text-white/85">
-                        {isRecording ? '🔴 Đang ghi âm… (im lặng 2.5s để dừng)' : isScoring ? '⏳ Đang phân tích phát âm...' : pendingAudioBase64 ? '🎙️ Gửi để chấm điểm?' : 'Đọc thử từ này'}
+                        {isRecording ? '🔴 Đang ghi âm… (nhấn để dừng)' : isScoring ? '⏳ Đang phân tích phát âm...' : pendingAudioBase64 ? '🎙️ Gửi để chấm điểm?' : 'Đọc thử từ này'}
                     </p>
                     {/* Whisper model download prompt — desktop only, shown when model not yet downloaded */}
                     {isDesktopApp && whisperModelReady === false && (
