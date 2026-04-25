@@ -257,16 +257,14 @@ export default function SelectionSpeakPopup() {
                         ) : showSpeakResult && speakResult ? (
                             <div>
                                 <div className="flex items-center gap-2 mb-1.5">
-                                    <span className={`text-base font-bold ${
-                                        speakResult.score >= 80 ? 'text-green-400' :
-                                        speakResult.score >= 60 ? 'text-yellow-400' : 'text-red-400'
-                                    }`}>{speakResult.score}%</span>
+                                    <span className={`text-base font-bold ${speakResult.score >= 80 ? 'text-green-400' :
+                                            speakResult.score >= 60 ? 'text-yellow-400' : 'text-red-400'
+                                        }`}>{speakResult.score}%</span>
                                     <div className="flex-1 h-1.5 rounded-full bg-gray-700 overflow-hidden">
                                         <div
-                                            className={`h-full rounded-full transition-all ${
-                                                speakResult.score >= 80 ? 'bg-green-400' :
-                                                speakResult.score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
-                                            }`}
+                                            className={`h-full rounded-full transition-all ${speakResult.score >= 80 ? 'bg-green-400' :
+                                                    speakResult.score >= 60 ? 'bg-yellow-400' : 'bg-red-400'
+                                                }`}
                                             style={{ width: `${speakResult.score}%` }}
                                         />
                                     </div>
@@ -326,11 +324,10 @@ export default function SelectionSpeakPopup() {
                         onMouseDown={e => e.preventDefault()}
                         onClick={handleSpeakClick}
                         disabled={speakState === 'scoring'}
-                        className={`${btnBase} ${
-                            speakState === 'recording' ? 'bg-red-600/30 text-red-300' :
-                            speakState === 'scoring' ? 'bg-amber-500/20 text-amber-400' :
-                            inactiveBtn
-                        }`}
+                        className={`${btnBase} ${speakState === 'recording' ? 'bg-red-600/30 text-red-300' :
+                                speakState === 'scoring' ? 'bg-amber-500/20 text-amber-400' :
+                                    inactiveBtn
+                            }`}
                     >
                         {speakState === 'scoring'
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
@@ -338,8 +335,8 @@ export default function SelectionSpeakPopup() {
                         }
                         <span>{
                             speakState === 'recording' ? (isVietnamese ? '■ Dừng' : '■ Stop') :
-                            speakState === 'scoring' ? (isVietnamese ? 'Chấm…' : 'Scoring…') :
-                            (isVietnamese ? 'Thử đọc' : 'Try Speak')
+                                speakState === 'scoring' ? (isVietnamese ? 'Chấm…' : 'Scoring…') :
+                                    (isVietnamese ? 'Thử đọc' : 'Try Speak')
                         }</span>
                     </button>
 

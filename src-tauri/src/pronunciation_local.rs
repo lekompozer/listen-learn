@@ -327,22 +327,23 @@ pub fn score_pronunciation_local(
         .create_state()
         .map_err(|e| format!("create_state failed: {e}"))?;
 
-    // Trim leading noise/silence — AC fan / ambient sound before user speaks
-    // confuses Whisper and causes first-word loss.
-    let trimmed_audio = trim_leading_noise(&audio_pcm_f32);
+    // NOTE: trim_leading_noise was removed — it clips the first word when speech starts
+    // softly (e.g. "Just" in "Just let things happen naturally").
+    // The JS layer already uses speechDetectedOnce + threshold 40 to avoid recording
+    // pure ambient noise, so Whisper gets clean audio from the start.
 
-    // Pad trimmed audio to at least 1.5s — whisper.cpp needs enough context.
+    // Pad audio to at least 1.5s — whisper.cpp needs enough context.
     const MIN_SAMPLES: usize = 16000 * 3 / 2; // 1.5s at 16kHz
     let padded: Vec<f32>;
-    let audio: &[f32] = if trimmed_audio.len() < MIN_SAMPLES {
+    let audio: &[f32] = if audio_pcm_f32.len() < MIN_SAMPLES {
         padded = {
-            let mut v = trimmed_audio.to_vec();
+            let mut v = audio_pcm_f32.clone();
             v.resize(MIN_SAMPLES, 0.0);
             v
         };
         &padded
     } else {
-        trimmed_audio
+        &audio_pcm_f32
     };
 
     // --- Whisper params ---
@@ -361,11 +362,10 @@ pub fn score_pronunciation_local(
     params.set_language(Some("en"));
 
     log::info!(
-        "[Whisper-local] audio: {} samples ({:.1}s) trimmed_to={} padded={} expected={:?}",
+        "[Whisper-local] audio: {} samples ({:.1}s) padded={} expected={:?}",
         audio_pcm_f32.len(),
         audio_pcm_f32.len() as f32 / 16000.0,
-        trimmed_audio.len(),
-        audio.len() != trimmed_audio.len(),
+        audio.len() != audio_pcm_f32.len(),
         expected_text,
     );
 
@@ -393,8 +393,10 @@ pub fn score_pronunciation_local(
 
             // Skip special tokens ([_BEG_], [_TT_*]) and noise/event tags
             // (" [birds chirping]", " [BLANK_AUDIO]", etc. have leading space — use trim())
+            // Also skip <|endoftext|>, <|en|>, <|notimestamps|> type tokens (starts with <|)
             let trimmed_text = text.trim();
             if trimmed_text.starts_with('[') && trimmed_text.ends_with(']') { continue; }
+            if trimmed_text.starts_with("<|") && trimmed_text.ends_with("|>") { continue; }
             let word = trimmed_text.to_string();
             if word.is_empty() { continue; }
             full_transcript.push_str(&text);
@@ -447,10 +449,12 @@ pub fn score_pronunciation_local(
         correct_probs.iter().sum::<f32>() / correct_probs.len() as f32
     };
 
-    // --- Combined score: 60% token confidence + 40% word accuracy ---
-    // When transcript is completely wrong (accuracy=0), token confidence is irrelevant.
-    // When transcript is perfect, token confidence tells us clarity of articulation.
-    let overall_score = (0.6 * token_score + 0.4 * accuracy_score).clamp(0.0, 100.0);
+    // --- Combined score ---
+    // Accuracy (WER-based) is the primary signal — it's reliable even when alignment fails.
+    // Token confidence is secondary (only meaningful when words are correctly aligned).
+    // Use max() to never penalise when alignment is off but transcription is correct.
+    let combined = 0.4 * token_score + 0.6 * accuracy_score;
+    let overall_score = combined.max(accuracy_score * 0.85).clamp(0.0, 100.0);
 
     // --- Human-readable feedback ---
     let feedback = build_feedback(overall_score, &word_results, &full_transcript.trim().to_string(), &expected_text);
