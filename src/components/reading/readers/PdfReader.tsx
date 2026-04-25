@@ -33,37 +33,26 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
     const [scale, setScale] = useState(1.4);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [debugLog, setDebugLog] = useState<string[]>([]);
 
     // ── OCR mode ────────────────────────────────────────────────────────────
     const [ocrMode, setOcrMode] = useState(false);
     const [ocrSel, setOcrSel] = useState<OcrSel>(null);
     const [ocrProcessing, setOcrProcessing] = useState(false);
+    const [ocrDebugText, setOcrDebugText] = useState<string>(''); // shows last OCR result
     const ocrStartRef = useRef<{ x: number; y: number } | null>(null);
 
     // ── Load PDF bytes ──────────────────────────────────────────────────────
     useEffect(() => {
         let cancelled = false;
-        const log = (msg: string) => {
-            const ts = new Date().toISOString().slice(11, 23);
-            console.log(`[PdfReader] ${ts} ${msg}`);
-            setDebugLog(prev => [...prev, `${ts} ${msg}`]);
-        };
         (async () => {
             try {
                 setLoading(true);
-                setDebugLog([]);
-                log('import pdfjs-dist...');
+                console.log('[PdfReader] loading', book.originalName);
                 const pdfjsLib = await import('pdfjs-dist');
                 const workerUrl = new URL('/pdfjs/pdf.worker.min.js', window.location.href).href;
                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-                log('workerSrc OK');
-
-                log('readFileBytes IPC...');
                 const data = await readFileBytes(book.id);
-                log(`readFileBytes OK — ${(data.byteLength / 1024 / 1024).toFixed(1)} MB`);
-
-                log('getDocument...');
+                console.log(`[PdfReader] bytes OK ${(data.byteLength / 1024 / 1024).toFixed(1)} MB`);
                 const task = pdfjsLib.getDocument({ data });
                 const doc = await Promise.race([
                     task.promise,
@@ -71,9 +60,10 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                         setTimeout(() => { (task as any).destroy?.(); reject(new Error('getDocument timeout 20s')); }, 20000)
                     ),
                 ]);
-                log(`OK — ${doc.numPages} pages`);
+                console.log(`[PdfReader] loaded ${doc.numPages} pages`);
                 if (!cancelled) { setPdfDoc(doc); setTotalPages(doc.numPages); setLoading(false); }
             } catch (e: any) {
+                console.error('[PdfReader] load error', e);
                 if (!cancelled) { setError(e.message ?? String(e)); setLoading(false); }
             }
         })();
@@ -138,27 +128,47 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
 
     // ── Text layer selection → epubSelectionEnd (fixes WKWebView bubbling) ──
     useEffect(() => {
-        const container = scrollRef.current;
-        if (!container) return;
-        const onMouseUp = () => {
+        let lastText = '';
+
+        const tryDispatch = () => {
             const sel = window.getSelection();
-            const text = sel?.toString().trim();
-            if (!text || !sel || sel.rangeCount === 0) return;
+            const text = sel?.toString().trim() ?? '';
+            if (!text || text === lastText) return;
+            if (!sel || sel.rangeCount === 0) return;
             const range = sel.getRangeAt(0);
             const ancestor = range.commonAncestorContainer;
             const el = (ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement : ancestor) as HTMLElement | null;
             if (!el?.closest('.pdf-text-layer')) return;
-            const rect = range.getBoundingClientRect();
-            if (rect.width === 0 && rect.height === 0) return;
+
+            lastText = text;
+            // getBoundingClientRect on transformed spans is unreliable in WKWebView
+            // — use the canvas rect of the page as anchor instead
+            const pageEl = el.closest('[style*="position:relative"]') as HTMLElement | null;
+            const canvasEl = pageEl?.querySelector<HTMLCanvasElement>('[data-pdf-canvas]');
+            const anchorRect = (canvasEl ?? el).getBoundingClientRect();
+
+            console.log('[PdfReader] text selected:', JSON.stringify(text.slice(0, 80)), 'anchorRect:', anchorRect);
             document.dispatchEvent(new CustomEvent('epubSelectionEnd', {
-                detail: { text, rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } },
+                detail: {
+                    text,
+                    rect: { left: anchorRect.left + anchorRect.width / 2, top: anchorRect.top, width: anchorRect.width, height: 0 },
+                },
             }));
         };
-        container.addEventListener('mouseup', onMouseUp);
-        container.addEventListener('touchend', onMouseUp);
+
+        // selectionchange is more reliable than mouseup in WKWebView
+        const onSelChange = () => tryDispatch();
+        // mouseup as fallback (catches touch + mouse)
+        const onMouseUp = () => setTimeout(tryDispatch, 50);
+        const onTouchEnd = () => setTimeout(tryDispatch, 100);
+
+        document.addEventListener('selectionchange', onSelChange);
+        document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('touchend', onTouchEnd);
         return () => {
-            container.removeEventListener('mouseup', onMouseUp);
-            container.removeEventListener('touchend', onMouseUp);
+            document.removeEventListener('selectionchange', onSelChange);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.removeEventListener('touchend', onTouchEnd);
         };
     }, []);
 
@@ -225,26 +235,35 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
         const base64 = dataUrl.split(',')[1];
 
         setOcrProcessing(true);
+        const midX = (x1 + x2) / 2;
         try {
             let text = '';
+            console.log('[PDF OCR] invoking ocr_extract_text_base64, base64 length:', base64.length);
             if (isTauriDesktop()) {
                 const { invoke } = await import('@tauri-apps/api/core');
                 text = await invoke<string>('ocr_extract_text_base64', { imageBase64: base64 });
             } else {
                 text = '[OCR chỉ hỗ trợ trên Desktop app]';
             }
+            console.log('[PDF OCR] result:', JSON.stringify(text?.slice(0, 200)));
             if (text?.trim()) {
+                setOcrDebugText(text.trim().slice(0, 120));
                 document.dispatchEvent(new CustomEvent('epubSelectionEnd', {
                     detail: {
                         text: text.trim(),
-                        rect: { left: (x1 + x2) / 2, top: y1 - 10, width: 0, height: 0 },
+                        // width=1 so SelectionSpeakPopup doesn't dismiss (it checks width===0)
+                        rect: { left: midX, top: y1 - 10, width: 1, height: 1 },
                     },
                 }));
+            } else {
+                console.warn('[PDF OCR] no text detected in region');
+                setOcrDebugText('⚠️ Không nhận dạng được chữ');
             }
         } catch (err: any) {
-            console.error('[PDF OCR]', err);
+            console.error('[PDF OCR] error:', err);
         } finally {
             setOcrProcessing(false);
+            setOcrMode(false);
         }
     }, [ocrProcessing]);
 
@@ -260,18 +279,9 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
 
     if (loading) return (
         <div className={`h-full flex items-center justify-center ${bg}`}>
-            <div className="text-center max-w-xl px-6 w-full">
-                <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-4" />
-                <p className="text-sm text-gray-400 mb-3">Đang tải PDF…</p>
-                {debugLog.length > 0 && (
-                    <div className="text-xs font-mono bg-yellow-900/60 border border-yellow-600/60 text-yellow-200 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
-                        {debugLog.map((line, i) => (
-                            <div key={i} className={i === debugLog.length - 1 ? 'text-yellow-300 font-bold' : 'opacity-60'}>
-                                {i === debugLog.length - 1 ? '▶ ' : '✓ '}{line}
-                            </div>
-                        ))}
-                    </div>
-                )}
+            <div className="text-center px-6">
+                <div className="h-8 w-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin mx-auto mb-3" />
+                <p className="text-sm text-gray-400">Đang tải PDF…</p>
             </div>
         </div>
     );
@@ -280,12 +290,7 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
         <div className={`h-full flex items-center justify-center ${bg}`}>
             <div className="max-w-xl px-6 text-center w-full">
                 <p className="text-red-400 text-base font-semibold mb-3">❌ Không thể tải PDF</p>
-                <p className="text-xs font-mono bg-red-900/30 border border-red-700/50 text-red-300 rounded px-3 py-2 text-left break-all mb-3">{error}</p>
-                {debugLog.length > 0 && (
-                    <div className="text-xs font-mono bg-gray-800/80 border border-gray-600/50 text-gray-300 rounded px-3 py-2 text-left max-h-48 overflow-y-auto space-y-0.5">
-                        {debugLog.map((line, i) => <div key={i}>• {line}</div>)}
-                    </div>
-                )}
+                <p className="text-xs font-mono bg-red-900/30 border border-red-700/50 text-red-300 rounded px-3 py-2 text-left break-all">{error}</p>
             </div>
         </div>
     );
@@ -322,6 +327,17 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                 </div>
                 <span className="text-xs opacity-50">{totalPages} trang</span>
             </div>
+
+            {/* OCR debug: show last result text */}
+            {ocrDebugText && (
+                <div className={`flex-shrink-0 flex items-start gap-2 px-4 py-2 border-b text-xs ${isDark ? 'border-gray-700 bg-teal-900/30 text-teal-300' : 'border-teal-200 bg-teal-50 text-teal-700'}`}>
+                    <ScanText className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                    <span className="break-all leading-relaxed">{ocrDebugText}</span>
+                    <button onClick={() => setOcrDebugText('')} className="ml-auto flex-shrink-0 opacity-50 hover:opacity-100">
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
 
             <style>{`
                 .pdf-text-layer {

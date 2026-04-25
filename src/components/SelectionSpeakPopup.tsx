@@ -19,29 +19,43 @@ interface QuickResult {
 
 async function quickLookup(word: string): Promise<QuickResult> {
     const w = word.trim().toLowerCase();
-    const [dictRes, transRes] = await Promise.allSettled([
-        fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`),
-        fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(word)}`),
-    ]);
+    // For multi-word / long OCR text: skip dictionary, only translate
+    const isMultiWord = w.split(/\s+/).length > 3;
+
+    const dictPromise = isMultiWord
+        ? Promise.resolve(null)
+        : fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w.split(/\s+/)[0])}`).catch(() => null);
+
+    // Truncate to 500 chars for translate API
+    const translateQuery = word.trim().slice(0, 500);
+    const transPromise = fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=vi&dt=t&q=${encodeURIComponent(translateQuery)}`
+    ).catch(() => null);
+
+    const [dictRes, transRes] = await Promise.all([dictPromise, transPromise]);
 
     let phonetic = '';
     let definition = '';
-    if (dictRes.status === 'fulfilled' && dictRes.value.ok) {
-        const data = await dictRes.value.json();
-        if (Array.isArray(data) && data[0]) {
-            const entry = data[0];
-            phonetic = entry.phonetic ?? entry.phonetics?.find((p: any) => p.text)?.text ?? '';
-            definition = entry.meanings?.[0]?.definitions?.[0]?.definition ?? '';
-        }
+    if (dictRes && 'ok' in dictRes && dictRes.ok) {
+        try {
+            const data = await dictRes.json();
+            if (Array.isArray(data) && data[0]) {
+                const entry = data[0];
+                phonetic = entry.phonetic ?? entry.phonetics?.find((p: any) => p.text)?.text ?? '';
+                definition = entry.meanings?.[0]?.definitions?.[0]?.definition ?? '';
+            }
+        } catch { /* ignore */ }
     }
 
     let translation = '';
-    if (transRes.status === 'fulfilled' && transRes.value.ok) {
-        const data = await transRes.value.json();
-        translation = (data[0] as any[]).map((seg: any[]) => seg[0] ?? '').join('');
+    if (transRes && 'ok' in transRes && transRes.ok) {
+        try {
+            const data = await transRes.json();
+            translation = (data[0] as any[]).map((seg: any[]) => seg[0] ?? '').join('');
+        } catch { /* ignore */ }
     }
 
-    return { word, phonetic, definition, translation };
+    return { word: w.split(/\s+/)[0], phonetic, definition, translation };
 }
 
 export default function SelectionSpeakPopup() {
@@ -67,8 +81,11 @@ export default function SelectionSpeakPopup() {
             // Check if it's a synthetic custom selection event from an iframe (e.g. EpubReader)
             if (e && e.type === 'epubSelectionEnd' && typeof (e as any).detail === 'object') {
                 const { text, rect } = (e as any).detail;
-                if (!text || rect.width === 0) { setPopup(null); dismissResult(); return; }
-                setPopup({ x: rect.left + rect.width / 2, y: rect.top - 10, text });
+                console.log('[SelectionSpeak] epubSelectionEnd received — text:', JSON.stringify(text?.slice(0, 80)), 'rect:', JSON.stringify(rect));
+                if (!text) { setPopup(null); dismissResult(); return; }
+                // width=0 is valid for OCR point-dispatch — use center-x directly
+                const popX = rect.width > 0 ? rect.left + rect.width / 2 : rect.left;
+                setPopup({ x: popX, y: rect.top - 10, text });
                 setMode('idle'); setResult(null);
                 return;
             }
@@ -119,7 +136,10 @@ export default function SelectionSpeakPopup() {
         if (mode === 'meaning') { dismissResult(); return; } // toggle off
         setMode('loading-meaning');
         setResult(null);
-        const r = await quickLookup(popup.text.split(/\s+/)[0]); // use first word for dictionary
+        const firstWord = popup.text.split(/\s+/)[0];
+        console.log('[SelectionSpeak] handleMeaning word:', JSON.stringify(firstWord));
+        const r = await quickLookup(firstWord); // use first word for dictionary
+        console.log('[SelectionSpeak] meaning result:', JSON.stringify(r));
         setResult(r);
         setMode('meaning');
     };
@@ -129,7 +149,9 @@ export default function SelectionSpeakPopup() {
         if (mode === 'translate') { dismissResult(); return; } // toggle off
         setMode('loading-translate');
         setResult(null);
+        console.log('[SelectionSpeak] handleTranslate text:', JSON.stringify(popup.text.slice(0, 100)));
         const r = await quickLookup(popup.text);
+        console.log('[SelectionSpeak] translate result:', JSON.stringify(r));
         setResult(r);
         setMode('translate');
     };
