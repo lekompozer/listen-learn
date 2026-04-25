@@ -137,7 +137,7 @@ export default function SelectionSpeakPopup() {
             <div className="relative flex flex-col items-center gap-1">
                 {/* Result card — expands upward above the button row */}
                 {(isLoading || showResult) && (
-                    <div className={`w-72 rounded-xl shadow-2xl border px-3 py-2.5 text-xs leading-relaxed
+                    <div className={`w-[min(620px,90vw)] rounded-xl shadow-2xl border px-3 py-2.5 text-xs leading-relaxed
                         ${isDark ? 'bg-gray-900 border-white/15 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}
                     >
                         {isLoading ? (
