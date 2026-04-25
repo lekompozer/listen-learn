@@ -1203,21 +1203,34 @@ function SpeakWithAI({ points, isDarkMode, t, selectedLang }: {
                 uint8.forEach(b => { binary += String.fromCharCode(b); });
                 const audio_base64 = btoa(binary);
 
-                const response = await fetch(`${API_BASE_URL}/api/grammar/check-audio`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({
-                        audio_base64,
-                        audio_mime_type: mimeType,
-                        reference_text: referenceText,
+                let data: any;
+                if (typeof window !== 'undefined' && (window as any).__TAURI_DESKTOP__) {
+                    // Desktop: proxy via Rust to bypass CORS
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    data = await invoke('check_grammar_audio', {
+                        audioBase64: audio_base64,
+                        audioMimeType: mimeType,
+                        referenceText: referenceText ?? null,
                         language: selectedLang,
-                    }),
-                });
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.detail || err.message || 'Audio check failed');
+                        authToken: token,
+                    });
+                } else {
+                    const response = await fetch(`${API_BASE_URL}/api/grammar/check-audio`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({
+                            audio_base64,
+                            audio_mime_type: mimeType,
+                            reference_text: referenceText,
+                            language: selectedLang,
+                        }),
+                    });
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.detail || err.message || 'Audio check failed');
+                    }
+                    data = await response.json();
                 }
-                const data = await response.json();
                 // Map shared result to every sentence in this group
                 for (const item of audioItems) {
                     results.push({

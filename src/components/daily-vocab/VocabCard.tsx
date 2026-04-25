@@ -663,28 +663,42 @@ export default function VocabCard({
         setPendingAudioBase64(null);
         setIsScoring(true);
         try {
-            let authHeader: Record<string, string> = {};
+            let authToken: string | null = null;
             try {
                 const { wordaiAuth } = await import('@/lib/wordai-firebase');
                 const user = wordaiAuth.currentUser;
-                if (user) authHeader = { Authorization: `Bearer ${await user.getIdToken()}` };
+                if (user) authToken = await user.getIdToken();
             } catch { /* not logged in */ }
 
-            const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL ?? 'https://ai.wordai.pro'}/api/v1/pronunciation/score`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...authHeader },
-                    body: JSON.stringify({ audio_base64: base64, expected_text: word.word, audio_mime_type: mimeTypeRef.current }),
-                },
-            );
+            let data: any;
 
-            const data = await res.json();
-            console.log('[Pronunciation Score] response:', data);
-
-            if (!res.ok) {
-                console.warn('[Pronunciation Score] error:', res.status, data);
-                return;
+            if (typeof window !== 'undefined' && (window as any).__TAURI_DESKTOP__) {
+                // Desktop: proxy via Rust to bypass CORS (backend blocks asset:// / localhost origin)
+                const { invoke } = await import('@tauri-apps/api/core');
+                data = await invoke('score_pronunciation', {
+                    audioBase64: base64,
+                    expectedText: word.word,
+                    audioMimeType: mimeTypeRef.current,
+                    authToken: authToken ?? undefined,
+                });
+            } else {
+                const authHeader: Record<string, string> = authToken
+                    ? { Authorization: `Bearer ${authToken}` }
+                    : {};
+                const res = await fetch(
+                    `${process.env.NEXT_PUBLIC_API_URL ?? 'https://ai.wordai.pro'}/api/v1/pronunciation/score`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', ...authHeader },
+                        body: JSON.stringify({ audio_base64: base64, expected_text: word.word, audio_mime_type: mimeTypeRef.current }),
+                    },
+                );
+                data = await res.json();
+                console.log('[Pronunciation Score] response:', data);
+                if (!res.ok) {
+                    console.warn('[Pronunciation Score] error:', res.status, data);
+                    return;
+                }
             }
 
             setPronunciationResult(data);

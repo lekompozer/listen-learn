@@ -114,6 +114,77 @@ async fn transcribe_audio(audio_base64: String, language: Option<String>) -> Res
 }
 
 /// Return the current OS platform string so the frontend can hide platform-specific UI.
+/// Proxy POST /api/v1/pronunciation/score via Rust (bypasses browser CORS restrictions).
+/// `auth_token` is the Firebase ID token from the logged-in user (optional — anon allowed).
+#[tauri::command]
+async fn score_pronunciation(
+    audio_base64: String,
+    expected_text: String,
+    audio_mime_type: String,
+    auth_token: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let api_base = env!("NEXT_PUBLIC_API_URL");
+    let url = format!("{}/api/v1/pronunciation/score", api_base);
+    let client = reqwest::Client::new();
+    let mut req = client.post(&url).header("Content-Type", "application/json");
+    if let Some(token) = auth_token {
+        if !token.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+    }
+    let body = serde_json::json!({
+        "audio_base64": audio_base64,
+        "expected_text": expected_text,
+        "audio_mime_type": audio_mime_type,
+    });
+    let res = req.json(&body).send().await.map_err(|e| format!("Request failed: {e}"))?;
+    let status = res.status().as_u16();
+    let data: serde_json::Value = res.json().await.map_err(|e| format!("Parse error: {e}"))?;
+    if status >= 400 {
+        log::error!("[PronScore] API error {status}: {data}");
+        return Err(format!("API error {status}: {data}"));
+    }
+    log::info!("[PronScore] ok, overall={}", data["overall_score"]);
+    Ok(data)
+}
+
+/// Proxy POST /api/grammar/check-audio via Rust (bypasses browser CORS restrictions).
+/// `auth_token` is the Firebase ID token (required — endpoint needs auth).
+#[tauri::command]
+async fn check_grammar_audio(
+    audio_base64: String,
+    audio_mime_type: String,
+    reference_text: Option<String>,
+    language: String,
+    auth_token: String,
+) -> Result<serde_json::Value, String> {
+    let api_base = env!("NEXT_PUBLIC_API_URL");
+    let url = format!("{}/api/grammar/check-audio", api_base);
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "audio_base64": audio_base64,
+        "audio_mime_type": audio_mime_type,
+        "reference_text": reference_text,
+        "language": language,
+    });
+    let res = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", auth_token))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {e}"))?;
+    let status = res.status().as_u16();
+    let data: serde_json::Value = res.json().await.map_err(|e| format!("Parse error: {e}"))?;
+    if status >= 400 {
+        log::error!("[GrammarAudio] API error {status}: {data}");
+        return Err(format!("API error {status}: {data}"));
+    }
+    log::info!("[GrammarAudio] ok, overall={}", data["overall_score"]);
+    Ok(data)
+}
+
 #[tauri::command]
 fn get_platform() -> &'static str {
     if cfg!(target_os = "macos") { "macos" }
@@ -410,6 +481,8 @@ pub fn run() {
             edge_tts::get_edge_tts_audio,
             call_gemma4,
             transcribe_audio,
+            score_pronunciation,
+            check_grammar_audio,
             get_platform,
             js_log,
         ])
