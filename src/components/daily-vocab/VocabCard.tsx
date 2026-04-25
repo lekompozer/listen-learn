@@ -282,6 +282,8 @@ export default function VocabCard({
     const [pronunciationScore, setPronunciationScore] = useState<number | null>(null);
     const [pronunciationResult, setPronunciationResult] = useState<PronunciationResult | null>(null);
     const [isMicPulsing, setIsMicPulsing] = useState(false);
+    // true while waiting for AVFoundation/MediaRecorder hardware to warm up (~450ms after mr.start)
+    const [isPreparingMic, setIsPreparingMic] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
     const [pronTheme, setPronTheme] = useState<'light' | 'dark'>('light');
     const [pronLang, setPronLang] = useState<'vi' | 'en'>('vi');
@@ -355,7 +357,7 @@ export default function VocabCard({
     const silenceStartedAtRef = useRef<number | null>(null);
     // Ref to the pending canplay handler so we can remove it when card leaves viewport
     const canPlayRetryRef = useRef<(() => void) | null>(null);
-    const isInteractionLocked = isRecording || isScoring;
+    const isInteractionLocked = isRecording || isScoring || isPreparingMic;
     const scoreTone = getScoreTone((pronunciationResult?.overall_score ?? pronunciationScore ?? 0) / (pronunciationResult ? 1 : 100));
     const isDarkPanel = pronTheme === 'dark';
     const pronScoreTone = getScoreTone(pronunciationResult?.overall_score ?? 0, pronTheme);
@@ -854,6 +856,7 @@ export default function VocabCard({
             mr.onstop = async () => {
                 stream!.getTracks().forEach(t => t.stop());
                 cleanupSilenceDetection();
+                setIsPreparingMic(false);
                 setIsMicPulsing(false);
                 // NOTE: setIsRecording(false) is intentionally deferred to AFTER
                 // setPendingAudioBase64 so the confirmation box replaces the mic
@@ -884,13 +887,22 @@ export default function VocabCard({
                 setIsRecording(false);
             };
 
-            setIsRecording(true);
+            // ⚠️ macOS WKWebView: AVFoundation audio pipeline has a ~300-500ms startup delay
+            // after mr.start(). Audio samples don't actually flow until hardware is initialized.
+            // If we show "Recording" immediately, user starts speaking before audio is captured
+            // → first words are silently dropped from the blob (affects both Whisper & Cloudflare).
+            // Fix: start recording, show "Đang khởi động mic..." for 450ms, THEN show "Đang ghi âm".
+            setIsPreparingMic(true);
             setIsMicPulsing(true);
             setPronunciationScore(null);
             // Use timeslice=250ms so ondataavailable fires periodically during recording,
             // not just once when stop() is called — fixes WKWebView/macOS Desktop where
             // ondataavailable can fire AFTER onstop without a timeslice.
             mr.start(250);
+            // Wait for hardware to stabilize before telling user to speak
+            await new Promise<void>(resolve => setTimeout(resolve, 450));
+            setIsPreparingMic(false);
+            setIsRecording(true);
 
             const audioContext = new AudioContext();
             const analyser = audioContext.createAnalyser();
@@ -961,6 +973,7 @@ export default function VocabCard({
             stream?.getTracks().forEach(t => t.stop());
             console.error('[Pronunciation] mic access failed:', err);
             cleanupSilenceDetection();
+            setIsPreparingMic(false);
             setIsRecording(false);
             setIsMicPulsing(false);
             setIsScoring(false);
@@ -1360,8 +1373,8 @@ export default function VocabCard({
                                     handleMicPress();
                                 }
                             }}
-                            disabled={isScoring}
-                            className={`relative flex h-16 w-16 items-center justify-center rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : isScoring ? 'bg-amber-400/80 text-white' : 'bg-white/20 backdrop-blur-md text-white border border-white/30 hover:bg-white/30 hover:scale-105'}`}
+                            disabled={isScoring || isPreparingMic}
+                            className={`relative flex h-16 w-16 items-center justify-center rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : isPreparingMic ? 'bg-amber-500/80 text-white scale-105' : isScoring ? 'bg-amber-400/80 text-white' : 'bg-white/20 backdrop-blur-md text-white border border-white/30 hover:bg-white/30 hover:scale-105'}`}
                         >
                             {/* Three concentric blinking rings during recording */}
                             {isRecording && (
@@ -1371,7 +1384,7 @@ export default function VocabCard({
                                     <span className="absolute rounded-full bg-red-300/15 animate-ping pointer-events-none" style={{ inset: '-16px', animationDelay: '0.4s' }} />
                                 </>
                             )}
-                            {isScoring ? (
+                            {isScoring || isPreparingMic ? (
                                 <div className="h-6 w-6 rounded-full border-[2.5px] border-white/25 border-t-white animate-spin" />
                             ) : (
                                 <Mic className={`w-7 h-7 ${isRecording ? 'animate-pulse' : ''}`} />
@@ -1379,7 +1392,7 @@ export default function VocabCard({
                         </button>
                     )}
                     <p className="text-center text-[11px] font-medium text-white/85">
-                        {isRecording ? '🔴 Đang ghi âm… (nhấn để dừng)' : isScoring ? '⏳ Đang phân tích phát âm...' : pendingAudioBase64 ? '🎙️ Gửi để chấm điểm?' : 'Đọc thử từ này'}
+                        {isPreparingMic ? '⬤ Đang khởi động mic...' : isRecording ? '🔴 Đang ghi âm… (nhấn để dừng)' : isScoring ? '⏳ Đang phân tích phát âm...' : pendingAudioBase64 ? '🎙️ Gửi để chấm điểm?' : 'Đọc thử từ này'}
                     </p>
                     {/* Whisper model download prompt — desktop only, shown when model not yet downloaded */}
                     {isDesktopApp && whisperModelReady === false && (

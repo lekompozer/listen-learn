@@ -6,7 +6,7 @@ import { useLanguage, useTheme } from '@/contexts/AppContext';
 
 interface PopupState { x: number; y: number; text: string }
 type ResultMode = 'idle' | 'loading-meaning' | 'meaning' | 'loading-translate' | 'translate';
-type SpeakState = 'idle' | 'recording' | 'scoring';
+type SpeakState = 'idle' | 'preparing' | 'recording' | 'scoring';
 
 const isTauriDesktop = () => typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
 
@@ -136,7 +136,7 @@ export default function SelectionSpeakPopup() {
             speakMrRef.current?.stop();
             return;
         }
-        if (speakState === 'scoring') return;
+        if (speakState === 'preparing' || speakState === 'scoring') return;
 
         // Start recording
         setSpeakResult(null);
@@ -217,6 +217,10 @@ export default function SelectionSpeakPopup() {
             };
 
             mr.start(250);
+            // ⚠️ macOS WKWebView: AVFoundation audio pipeline has ~300-500ms startup delay.
+            // Show 'preparing' while hardware warms up so user doesn’t speak before audio flows.
+            setSpeakState('preparing');
+            await new Promise<void>(resolve => setTimeout(resolve, 450));
             setSpeakState('recording');
         } catch (err) {
             stream?.getTracks().forEach(t => t.stop());
@@ -323,17 +327,19 @@ export default function SelectionSpeakPopup() {
                     <button
                         onMouseDown={e => e.preventDefault()}
                         onClick={handleSpeakClick}
-                        disabled={speakState === 'scoring'}
+                        disabled={speakState === 'scoring' || speakState === 'preparing'}
                         className={`${btnBase} ${speakState === 'recording' ? 'bg-red-600/30 text-red-300' :
+                                speakState === 'preparing' ? 'bg-amber-500/20 text-amber-400' :
                                 speakState === 'scoring' ? 'bg-amber-500/20 text-amber-400' :
                                     inactiveBtn
                             }`}
                     >
-                        {speakState === 'scoring'
+                        {speakState === 'scoring' || speakState === 'preparing'
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
                             : <Mic className={`w-3.5 h-3.5 flex-shrink-0 ${speakState === 'recording' ? 'animate-pulse' : ''}`} />
                         }
                         <span>{
+                            speakState === 'preparing' ? (isVietnamese ? '...' : '...') :
                             speakState === 'recording' ? (isVietnamese ? '■ Dừng' : '■ Stop') :
                                 speakState === 'scoring' ? (isVietnamese ? 'Chấm…' : 'Scoring…') :
                                     (isVietnamese ? 'Thử đọc' : 'Try Speak')
