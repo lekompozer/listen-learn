@@ -725,14 +725,20 @@ export default function VocabCard({
             setPronunciationResult(null);
             setPendingAudioBase64(null);
 
-            // iOS Safari only supports audio/mp4 — detect at runtime
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-                : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4'
-                    : '';
-            mimeTypeRef.current = mimeType || 'audio/webm';
+            // Pick best MIME type — same candidates as SpeakWithAI for cross-platform compat.
+            // audio/webm;codecs=opus → Chrome/Windows WebView2
+            // audio/webm → Chrome fallback
+            // audio/mp4 → Safari/WKWebView macOS
+            // '' → let the browser choose its default (e.g. mp4 on older WKWebView)
+            const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', '']
+                .find(t => !t || MediaRecorder.isTypeSupported(t)) ?? '';
             const mr = mimeType
                 ? new MediaRecorder(stream, { mimeType })
                 : new MediaRecorder(stream);
+            // mr.mimeType reflects the ACTUAL codec chosen by the browser (may include codec params).
+            // Using mr.mimeType (not the candidate string) ensures the backend gets the correct
+            // audio_mime_type even when the browser picks a different default (e.g. audio/mp4 on macOS).
+            mimeTypeRef.current = mr.mimeType.split(';')[0] || mimeType || 'audio/mp4';
             mediaRecorderRef.current = mr;
 
             mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };

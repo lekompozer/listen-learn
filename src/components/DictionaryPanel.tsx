@@ -14,8 +14,8 @@ import { useTheme } from '@/contexts/AppContext';
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 interface DictDefinition { definition: string; example?: string; synonyms?: string[] }
-interface DictMeaning    { partOfSpeech: string; definitions: DictDefinition[] }
-interface DictEntry      {
+interface DictMeaning { partOfSpeech: string; definitions: DictDefinition[] }
+interface DictEntry {
     word: string;
     phonetic?: string;
     phonetics: { text?: string; audio?: string }[];
@@ -53,15 +53,15 @@ export interface DictionaryPanelProps {
 
 export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProps) {
     const { isDark } = useTheme();
-    const [search, setSearch]           = useState('');
-    const [loading, setLoading]         = useState(false);
-    const [entry, setEntry]             = useState<DictEntry | null>(null);
+    const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [entry, setEntry] = useState<DictEntry | null>(null);
     const [translation, setTranslation] = useState('');
-    const [notFound, setNotFound]       = useState(false);
-    const [audioUrl, setAudioUrl]       = useState('');
-    const [tab, setTab]                 = useState<'en' | 'vi'>('en');
-    const inputRef  = useRef<HTMLInputElement>(null);
-    const lastWord  = useRef('');
+    const [notFound, setNotFound] = useState(false);
+    const [audioUrl, setAudioUrl] = useState('');
+    const [tab, setTab] = useState<'en' | 'vi'>('en');
+    const inputRef = useRef<HTMLInputElement>(null);
+    const lastWord = useRef('');
 
     // Listen for external word-lookup events dispatched by SelectionSpeakPopup
     useEffect(() => {
@@ -74,7 +74,7 @@ export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProp
         };
         window.addEventListener('ll-open-dictionary', handler);
         return () => window.removeEventListener('ll-open-dictionary', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -111,7 +111,7 @@ export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProp
 
     const playAudio = () => {
         if (audioUrl) {
-            new Audio(audioUrl).play().catch(() => {});
+            new Audio(audioUrl).play().catch(() => { });
         } else {
             const u = new SpeechSynthesisUtterance(entry?.word ?? search);
             u.lang = 'en-US'; u.rate = 0.85;
@@ -122,10 +122,10 @@ export default function DictionaryPanel({ isOpen, onClose }: DictionaryPanelProp
     const phonetic = entry?.phonetic ?? entry?.phonetics?.find(p => p.text)?.text ?? '';
 
     // ── classes helpers ──────────────────────────────────────────────────────
-    const pill     = (active: boolean) => `px-3 py-1.5 text-xs font-semibold border-b-2 -mb-px transition ${active ? (isDark ? 'text-blue-400 border-blue-500' : 'text-blue-600 border-blue-600') : (isDark ? 'text-gray-500 border-transparent hover:text-gray-300' : 'text-gray-500 border-transparent hover:text-gray-700')}`;
-    const card     = isDark ? 'bg-gray-800' : 'bg-blue-50';
-    const posTag   = isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700';
-    const synBtn   = isDark ? 'bg-gray-700/60 text-gray-400 hover:text-blue-400' : 'bg-gray-100 text-gray-500 hover:text-blue-600';
+    const pill = (active: boolean) => `px-3 py-1.5 text-xs font-semibold border-b-2 -mb-px transition ${active ? (isDark ? 'text-blue-400 border-blue-500' : 'text-blue-600 border-blue-600') : (isDark ? 'text-gray-500 border-transparent hover:text-gray-300' : 'text-gray-500 border-transparent hover:text-gray-700')}`;
+    const card = isDark ? 'bg-gray-800' : 'bg-blue-50';
+    const posTag = isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700';
+    const synBtn = isDark ? 'bg-gray-700/60 text-gray-400 hover:text-blue-400' : 'bg-gray-100 text-gray-500 hover:text-blue-600';
 
     return (
         <div

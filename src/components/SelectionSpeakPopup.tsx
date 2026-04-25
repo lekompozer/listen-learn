@@ -63,7 +63,7 @@ export default function SelectionSpeakPopup() {
             setPopup({ x: rect.left + rect.width / 2, y: rect.top - 10, text });
             setMode('idle'); setResult(null);
         }, 10);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleMouseDown = useCallback((e: MouseEvent) => {
@@ -127,7 +127,7 @@ export default function SelectionSpeakPopup() {
     const inactiveBtn = isDark
         ? 'text-gray-300 hover:bg-white/10 hover:text-white'
         : 'text-gray-600 hover:bg-black/5 hover:text-gray-900';
-    const activeBtn  = isDark ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700';
+    const activeBtn = isDark ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700';
 
     return (
         <div
