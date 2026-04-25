@@ -286,10 +286,40 @@ export default function VocabCard({
     const [pronTheme, setPronTheme] = useState<'light' | 'dark'>('light');
     const [pronLang, setPronLang] = useState<'vi' | 'en'>('vi');
     const [pendingAudioBase64, setPendingAudioBase64] = useState<string | null>(null);
+    // Local Whisper model state (desktop only)
+    const [isDesktopApp, setIsDesktopApp] = useState(false);
+    const [whisperModelReady, setWhisperModelReady] = useState<boolean | null>(null);
+    const [isDownloadingModel, setIsDownloadingModel] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const backgroundMusicRef = useRef<HTMLAudioElement | null>(null);
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const videoContainerRef = useRef<HTMLDivElement | null>(null);
+
+    // Detect Tauri desktop + check Whisper model on mount
+    useEffect(() => {
+        const desktop = typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
+        setIsDesktopApp(desktop);
+        if (!desktop) return;
+        import('@tauri-apps/api/core').then(({ invoke }) =>
+            invoke<boolean>('check_whisper_model')
+                .then(ready => setWhisperModelReady(ready))
+                .catch(() => setWhisperModelReady(false))
+        );
+    }, []);
+
+    const handleDownloadWhisperModel = async () => {
+        if (isDownloadingModel) return;
+        setIsDownloadingModel(true);
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('download_whisper_model');
+            setWhisperModelReady(true);
+        } catch (err) {
+            console.error('[Whisper] Download failed:', err);
+        } finally {
+            setIsDownloadingModel(false);
+        }
+    };
 
     // Grab the shared (pooled) video element on mount — same DOM node across
     // all video cards, so browser autoplay-with-audio permission persists.
@@ -663,6 +693,57 @@ export default function VocabCard({
         setPendingAudioBase64(null);
         setIsScoring(true);
         try {
+            // ── Local path: Desktop + Whisper model loaded ──────────────────────
+            if (isDesktopApp && whisperModelReady) {
+                const { invoke } = await import('@tauri-apps/api/core');
+
+                // Decode base64 → ArrayBuffer → 16 kHz mono f32 via Web Audio API
+                // AudioContext({ sampleRate: 16000 }) forces the browser to resample
+                // so Whisper always receives exactly the sample rate it expects.
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+                const audioCtx = new AudioContext({ sampleRate: 16000 });
+                let audioBuffer: AudioBuffer;
+                try {
+                    audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+                } finally {
+                    audioCtx.close();
+                }
+
+                // getChannelData(0) = mono, already at 16 kHz
+                const pcmF32 = Array.from(audioBuffer.getChannelData(0));
+
+                const localData = await invoke<{
+                    overall_score: number;
+                    transcript: string;
+                    expected_text: string;
+                    words: Array<{ expected: string; heard: string; prob: number; correct: boolean }>;
+                    feedback: string;
+                    token_score: number;
+                    accuracy_score: number;
+                }>('score_pronunciation_local', {
+                    audioPcmF32: pcmF32,
+                    expectedText: word.word,
+                });
+
+                // Normalise overall_score to 0-1 to match PronunciationResult shape
+                const data: PronunciationResult = {
+                    success: true,
+                    overall_score: localData.overall_score / 100,
+                    transcript: localData.transcript,
+                    expected_text: localData.expected_text,
+                    feedback: localData.feedback,
+                };
+                setPronunciationResult(data);
+                const pct = Math.round(localData.overall_score);
+                setPronunciationScore(pct);
+                if (pct >= 80) onConfetti();
+                return;
+            }
+
+            // ── Remote path: Web browser or desktop without Whisper model ───────
             let authToken: string | null = null;
             try {
                 const { wordaiAuth } = await import('@/lib/wordai-firebase');
@@ -672,8 +753,8 @@ export default function VocabCard({
 
             let data: any;
 
-            if (typeof window !== 'undefined' && (window as any).__TAURI_DESKTOP__) {
-                // Desktop: proxy via Rust to bypass CORS (backend blocks asset:// / localhost origin)
+            if (isDesktopApp) {
+                // Desktop fallback (model not yet downloaded): proxy via Rust
                 const { invoke } = await import('@tauri-apps/api/core');
                 data = await invoke('score_pronunciation', {
                     audioBase64: base64,
@@ -694,11 +775,7 @@ export default function VocabCard({
                     },
                 );
                 data = await res.json();
-                console.log('[Pronunciation Score] response:', data);
-                if (!res.ok) {
-                    console.warn('[Pronunciation Score] error:', res.status, data);
-                    return;
-                }
+                if (!res.ok) { console.warn('[Pronunciation Score] error:', res.status, data); return; }
             }
 
             setPronunciationResult(data);
@@ -706,7 +783,7 @@ export default function VocabCard({
             setPronunciationScore(pct);
             if (pct >= 80) onConfetti();
         } catch (err) {
-            console.error('[Pronunciation Score] fetch failed:', err);
+            console.error('[Pronunciation Score] failed:', err);
         } finally {
             setIsScoring(false);
         }
@@ -1241,6 +1318,20 @@ export default function VocabCard({
                     <p className="text-center text-[11px] font-medium text-white/85">
                         {isRecording ? '🔴 Đang ghi âm… (im lặng 2.5s để dừng)' : isScoring ? '⏳ Đang phân tích phát âm...' : pendingAudioBase64 ? '🎙️ Gửi để chấm điểm?' : 'Đọc thử từ này'}
                     </p>
+                    {/* Whisper model download prompt — desktop only, shown when model not yet downloaded */}
+                    {isDesktopApp && whisperModelReady === false && (
+                        <button
+                            onPointerDown={e => e.stopPropagation()}
+                            onClick={e => { e.stopPropagation(); handleDownloadWhisperModel(); }}
+                            disabled={isDownloadingModel}
+                            className="flex items-center gap-1 text-[10px] text-amber-300/90 hover:text-amber-200 transition-colors disabled:opacity-60"
+                        >
+                            {isDownloadingModel ? '⏬ Đang tải model AI…' : '💾 Tải Whisper AI để chấm offline (142MB)'}
+                        </button>
+                    )}
+                    {isDesktopApp && whisperModelReady === true && (
+                        <span className="text-[10px] text-green-400/70">⚡ Chấm điểm local</span>
+                    )}
 
                     {/* Confirmation buttons — replace mic button when recording stops */}
                     {pendingAudioBase64 && !isScoring && (

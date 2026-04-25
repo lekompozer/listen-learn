@@ -1,5 +1,6 @@
 mod google_auth;
 mod edge_tts;
+mod pronunciation_local;
 
 /// Proxy Cloudflare Workers AI call from Rust to avoid browser CORS restrictions.
 /// Credentials come from env vars baked in via build.rs (same as OAuth creds).
@@ -485,6 +486,10 @@ pub fn run() {
             check_grammar_audio,
             get_platform,
             js_log,
+            pronunciation_local::check_whisper_model,
+            pronunciation_local::get_whisper_model_info,
+            pronunciation_local::download_whisper_model,
+            pronunciation_local::score_pronunciation_local,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Listen & Learn");
