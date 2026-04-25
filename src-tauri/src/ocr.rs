@@ -23,21 +23,28 @@ pub async fn ocr_extract_text(image_path: String) -> Result<String, String> {
 async fn ocr_linux(image_path: &str) -> Result<String, String> {
     use std::process::Command;
 
-    let tmp_base = format!("/tmp/ll_ocr_tess_{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis());
+    let tmp_base = std::env::temp_dir().join(format!(
+        "ll_ocr_tess_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    ));
+
+    let tmp_base_str = tmp_base.to_string_lossy().to_string();
 
     let out = Command::new("tesseract")
-        .args([image_path, &tmp_base, "-l", "eng+vie", "--psm", "6"])
+        .args([image_path, &tmp_base_str, "-l", "eng+vie", "--psm", "6"])
         .output()
         .map_err(|e| format!("Tesseract not found. Install with: sudo apt install tesseract-ocr tesseract-ocr-vie — error: {e}"))?;
 
+    let txt_path = format!("{}.txt", tmp_base_str);
+
     if !out.status.success() {
+        let _ = std::fs::remove_file(&txt_path);
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
 
-    let txt_path = format!("{}.txt", tmp_base);
     let text = std::fs::read_to_string(&txt_path).map_err(|e| format!("read output: {e}"))?;
     let _ = std::fs::remove_file(&txt_path);
     let trimmed = text.trim().to_string();
@@ -148,26 +155,28 @@ fn ocr_windows_tesseract(image_path: &str) -> Result<String, String> {
     use std::process::Command;
 
     // Write output to temp txt file (tesseract appends .txt automatically)
-    let tmp_base = format!(
-        "{}\\ll_ocr_tess_{}",
-        std::env::temp_dir().display(),
+    let tmp_base = std::env::temp_dir().join(format!(
+        "ll_ocr_tess_{}",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis()
-    );
+    ));
+    let tmp_base_str = tmp_base.to_string_lossy().to_string();
 
     let out = Command::new("tesseract")
-        .args([image_path, &tmp_base, "-l", "eng+vie", "--psm", "6"])
+        .args([image_path, &tmp_base_str, "-l", "eng+vie", "--psm", "6"])
         .output()
         .map_err(|e| format!("Tesseract not found. Please install from https://github.com/UB-Mannheim/tesseract/wiki — error: {e}"))?;
 
+    let txt_path = format!("{}.txt", tmp_base_str);
+
     if !out.status.success() {
+        let _ = std::fs::remove_file(&txt_path);
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(format!("Tesseract OCR failed: {stderr}"));
     }
 
-    let txt_path = format!("{}.txt", tmp_base);
     let text = std::fs::read_to_string(&txt_path)
         .map_err(|e| format!("read tesseract output: {e}"))?;
     let _ = std::fs::remove_file(&txt_path);
@@ -188,17 +197,19 @@ pub async fn ocr_extract_text_base64(image_base64: String) -> Result<String, Str
         .decode(image_base64.trim())
         .map_err(|e| format!("base64 decode: {e}"))?;
 
-    // Write to temp PNG
-    let tmp = format!(
-        "/tmp/ll_ocr_region_{}.png",
+    // Write to temp PNG (cross-platform temp path)
+    let tmp = std::env::temp_dir().join(format!(
+        "ll_ocr_region_{}.png",
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis()
-    );
-    std::fs::write(&tmp, &bytes).map_err(|e| format!("write tmp: {e}"))?;
+    ));
 
-    let result = ocr_extract_text(tmp.clone()).await;
-    let _ = std::fs::remove_file(&tmp);
+    let tmp_path = tmp.to_string_lossy().to_string();
+    std::fs::write(&tmp_path, &bytes).map_err(|e| format!("write tmp: {e}"))?;
+
+    let result = ocr_extract_text(tmp_path.clone()).await;
+    let _ = std::fs::remove_file(&tmp_path);
     result
 }
