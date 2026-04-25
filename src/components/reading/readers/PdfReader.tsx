@@ -103,16 +103,36 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                     inner.style.cssText = `position:relative;width:${viewport.width}px;height:${viewport.height}px;background:#fff;box-shadow:0 2px 16px rgba(0,0,0,0.35);`;
 
                     const canvas = document.createElement('canvas');
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = viewport.width * dpr;
+                    canvas.height = viewport.height * dpr;
                     canvas.style.cssText = `display:block;width:${viewport.width}px;height:${viewport.height}px;`;
                     canvas.setAttribute('data-pdf-canvas', String(pageNum));
                     inner.appendChild(canvas);
 
                     const textLayer = document.createElement('div');
                     textLayer.className = 'pdf-text-layer';
-                    textLayer.style.cssText = `position:absolute;top:0;left:0;width:${viewport.width}px;height:${viewport.height}px;overflow:hidden;line-height:1;pointer-events:auto;-webkit-user-select:text;user-select:text;`;
+                    textLayer.style.cssText = `position:absolute;top:0;left:0;width:${viewport.width}px;height:${viewport.height}px;overflow:hidden;line-height:1;pointer-events:auto;-webkit-user-select:text;user-select:text;--scale-factor:${viewport.scale};`;
                     inner.appendChild(textLayer);
+
+                    // Add global styles for text layer spans once
+                    if (!document.getElementById('pdf-text-layer-style')) {
+                        const style = document.createElement('style');
+                        style.id = 'pdf-text-layer-style';
+                        style.textContent = `
+                            .pdf-text-layer > span {
+                                color: transparent;
+                                position: absolute;
+                                white-space: pre;
+                                cursor: text;
+                                transform-origin: 0% 0%;
+                            }
+                            .pdf-text-layer > br {
+                                display: none;
+                            }
+                        `;
+                        document.head.appendChild(style);
+                    }
 
                     const label = document.createElement('div');
                     label.textContent = String(pageNum);
@@ -123,6 +143,8 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                     container.appendChild(pageDiv);
 
                     const ctx = canvas.getContext('2d')!;
+                    // Scale the context for high-DPI displays
+                    ctx.scale(dpr, dpr);
                     await page.render({ canvasContext: ctx, viewport }).promise;
 
                     const textContent = await page.getTextContent();
