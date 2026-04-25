@@ -302,7 +302,14 @@ export default function VocabCard({
         if (!desktop) return;
         import('@tauri-apps/api/core').then(({ invoke }) =>
             invoke<boolean>('check_whisper_model')
-                .then(ready => setWhisperModelReady(ready))
+                .then(ready => {
+                    setWhisperModelReady(ready);
+                    // If model is already downloaded, preload it into RAM now
+                    // so the first pronunciation check has no loading delay
+                    if (ready) {
+                        invoke('preload_whisper_model').catch(() => {});
+                    }
+                })
                 .catch(() => setWhisperModelReady(false))
         );
     }, []);
@@ -313,6 +320,8 @@ export default function VocabCard({
         try {
             const { invoke } = await import('@tauri-apps/api/core');
             await invoke('download_whisper_model');
+            // Immediately preload into RAM so first scoring is instant
+            await invoke('preload_whisper_model').catch(() => {});
             setWhisperModelReady(true);
         } catch (err) {
             console.error('[Whisper] Download failed:', err);

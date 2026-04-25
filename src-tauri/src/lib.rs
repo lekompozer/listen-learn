@@ -489,6 +489,7 @@ pub fn run() {
             pronunciation_local::check_whisper_model,
             pronunciation_local::get_whisper_model_info,
             pronunciation_local::download_whisper_model,
+            pronunciation_local::preload_whisper_model,
             pronunciation_local::score_pronunciation_local,
         ])
         .run(tauri::generate_context!())

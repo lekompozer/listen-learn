@@ -227,6 +227,57 @@ pub struct LocalPronunciationResult {
     pub accuracy_score: f32,     // 0-100 (1 - WER)
 }
 
+/// Compute RMS energy of a sample window.
+#[inline]
+fn rms_window(window: &[f32]) -> f32 {
+    let sum_sq: f32 = window.iter().map(|s| s * s).sum();
+    (sum_sq / window.len() as f32).sqrt()
+}
+
+/// Trim leading and trailing silence from 16 kHz mono PCM samples.
+/// Returns a slice of the original buffer (zero-copy).
+/// Works well for quiet-room recordings (English learners sitting at desk).
+fn trim_silence(samples: &[f32]) -> &[f32] {
+    const WINDOW: usize = 400;    // 25 ms at 16 kHz — one analysis frame
+    const THRESHOLD: f32 = 0.01;  // ~-40 dB — safe floor for quiet rooms
+    const PAD: usize = 1600;      // 100 ms padding kept around detected speech
+
+    if samples.len() < WINDOW * 2 {
+        return samples; // too short to trim safely
+    }
+
+    // Scan forward: find first window whose RMS exceeds threshold
+    let start_frame = (0..samples.len().saturating_sub(WINDOW))
+        .find(|&i| rms_window(&samples[i..i + WINDOW]) > THRESHOLD)
+        .unwrap_or(0);
+    let start = start_frame.saturating_sub(PAD);
+
+    // Scan backward: find last window whose RMS exceeds threshold
+    let end_frame = (WINDOW..=samples.len())
+        .rev()
+        .find(|&i| rms_window(&samples[i - WINDOW..i]) > THRESHOLD)
+        .unwrap_or(samples.len());
+    let end = (end_frame + PAD).min(samples.len());
+
+    if end <= start {
+        return samples; // pathological case — no silence found, return whole buffer
+    }
+    &samples[start..end]
+}
+
+/// Warm up the Whisper model at app start (optional — call once from frontend).
+/// If the model hasn't been downloaded yet this is a silent no-op.
+#[tauri::command]
+pub fn preload_whisper_model(app: AppHandle) -> Result<(), String> {
+    let path = model_path(&app);
+    if !path.exists() {
+        return Ok(()); // model not downloaded yet — user will download later
+    }
+    get_or_load_ctx(&path)?;
+    log::info!("[Whisper-local] Model preloaded and cached in RAM");
+    Ok(())
+}
+
 /// Main Tauri command: score pronunciation locally.
 ///
 /// `audio_pcm_f32` — a JSON array of f32 PCM samples at 16 kHz mono.
@@ -267,8 +318,17 @@ pub fn score_pronunciation_local(
     params.set_print_timestamps(false);
     params.set_language(Some("en"));
 
+    // Trim leading/trailing silence — faster inference + more accurate on short words
+    let trimmed = trim_silence(&audio_pcm_f32);
+    log::info!(
+        "[Whisper-local] audio: {} → {} samples after silence trim ({:.1}s → {:.1}s)",
+        audio_pcm_f32.len(), trimmed.len(),
+        audio_pcm_f32.len() as f32 / 16000.0,
+        trimmed.len() as f32 / 16000.0,
+    );
+
     state
-        .full(params, &audio_pcm_f32)
+        .full(params, trimmed)
         .map_err(|e| format!("Whisper inference failed: {e}"))?;
 
     // --- Collect token-level data ---
