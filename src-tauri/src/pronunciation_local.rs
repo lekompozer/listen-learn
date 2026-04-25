@@ -399,10 +399,13 @@ pub fn score_pronunciation_local(
             let trimmed_text = text.trim();
             if trimmed_text.starts_with('[') && trimmed_text.ends_with(']') { continue; }
             if trimmed_text.starts_with("<|") && trimmed_text.ends_with("|>") { continue; }
-            let word = trimmed_text.to_string();
-            if word.is_empty() { continue; }
+            if trimmed_text.is_empty() { continue; }
             full_transcript.push_str(&text);
-            raw_tokens.push((word, data.p as f64));
+            // IMPORTANT: store the original `text` (with leading space intact) so that
+            // the word-boundary detection below (`tok.starts_with(' ')`) works correctly.
+            // Storing the trimmed `word` was causing all tokens to merge into one giant
+            // string → WER=100% → accuracy=0 even when transcript was nearly correct.
+            raw_tokens.push((text.clone(), data.p as f64));
         }
     }
 
