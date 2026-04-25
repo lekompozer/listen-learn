@@ -75,3 +75,25 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 html.dark * {
     scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
+/* ─── PDF.js text layer (enables text selection on PDF canvas) ──────────────── */
+.text-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    opacity: 0.25;
+    line-height: 1;
+    user-select: text;
+    -webkit-user-select: text;
+}
+.text-layer > span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+.text-layer ::selection {
+    background: #7c3aed55;
+    color: transparent;
+}

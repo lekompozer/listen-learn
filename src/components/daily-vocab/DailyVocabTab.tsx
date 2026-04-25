@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useState, useCallback } from 'react';
 import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
-    Download, ExternalLink, BookOpen, Award, Bookmark, Mic, Users, Volume2,
+    Download, ExternalLink, BookOpen, Award, Bookmark, Mic, Users, Volume2, Library,
 } from 'lucide-react';
 import { AIChatEmbed } from '@/components/embeds/AIChatEmbed';
 import { UsagePlanEmbed } from '@/components/embeds/UsagePlanEmbed';
@@ -12,7 +12,8 @@ import { AILearningEmbed } from '@/components/embeds/AILearningEmbed';
 import { SavedViewEmbed } from '@/components/embeds/SavedViewEmbed';
 import { logEvent } from 'firebase/analytics';
 import { analytics } from '@/lib/wordai-firebase';
-import { useTheme, useLanguage } from '@/contexts/AppContext';
+import { useLanguage } from '@/contexts/AppContext';
+import { ReadingTab } from '@/components/reading/ReadingTab';
 
 const SpeakWithAITab = dynamic(() => import('@/components/speak-with-ai/SpeakWithAITab'), { ssr: false });
 const StudyBuddyTab = dynamic(() => import('@/components/study-buddy/StudyBuddyTab'), { ssr: false });
@@ -25,7 +26,7 @@ const OnlineTestsView = dynamic(
     { ssr: false }
 );
 
-type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved' | 'speak' | 'study-buddy';
+type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved' | 'speak' | 'study-buddy' | 'reading';
 
 interface DailyVocabTabProps {
     isDark: boolean;
@@ -150,6 +151,7 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
 const QUICK_ACTIONS: { id: VocabSection; label: string; icon: React.ElementType }[] = [
     { id: 'online-tests', label: 'Online Tests', icon: Award },
     { id: 'ai-chat', label: 'AI Chat', icon: MessageCircle },
+    { id: 'reading', label: 'Reading', icon: Library },
     { id: 'saved', label: 'Saved', icon: Bookmark },
 ];
 const PRACTICE_ITEMS: { label: string; icon: React.ElementType; id: VocabSection | null }[] = [
@@ -308,6 +310,10 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTab
 
                 {section === 'saved' && (
                     <SavedViewEmbed isDark={isDark} />
+                )}
+
+                {section === 'reading' && (
+                    <ReadingTab isDark={isDark} />
                 )}
 
                 {section === 'speak' && (

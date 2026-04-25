@@ -1,6 +1,6 @@
 [package]
 name = "listen-learn"
-version = "0.2.5"
+version = "0.2.6"
 description = "WynAI Listen & Learn — Learn English through songs and podcasts"
 authors = ["WordAI"]
 license = ""
@@ -36,3 +36,5 @@ url = "2"
 urlencoding = "2"
 open = "5"
 whisper-rs = { version = "0.11", features = [] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }

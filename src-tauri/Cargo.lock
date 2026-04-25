@@ -464,8 +464,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c673075a2e0e5f4a1dde27ce9dee1ea4558c7ffe648f576438a20ca1d2acc4b0"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link 0.2.1",
 ]
 
@@ -2164,9 +2166,10 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "listen-learn"
-version = "0.2.4"
+version = "0.2.6"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "futures-util",
  "log",
  "open",
@@ -2186,6 +2189,7 @@ dependencies = [
  "tokio-tungstenite",
  "url",
  "urlencoding",
+ "uuid",
  "whisper-rs",
 ]
 
