@@ -12,7 +12,7 @@ const formatUsageDisplay = (count: number, limit: number, language: 'vi' | 'en' 
     return `${count} / ${limit}`;
 };
 
-function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi' | 'en' }) {
+function AccountUsageTab({ isDark, language, onConvKeyActivated }: { isDark: boolean; language: 'vi' | 'en'; onConvKeyActivated?: () => void }) {
     const tl = (vi: string, en: string) => language === 'vi' ? vi : en;
     const { data: subscriptionInfo, isLoading, error, refetch } = useSubscriptionInfo();
 
@@ -33,6 +33,7 @@ function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi'
             setConvKeyMessage(tl(`Kích hoạt thành công! Gói ${result.plan_type.replace('_', ' ')} — hết hạn ${expires}`, `Activated! Plan ${result.plan_type.replace('_', ' ')} — expires ${expires}`));
             setConvKey('');
             refetch();
+            onConvKeyActivated?.();
         } catch (err: any) {
             setConvKeyStatus('error');
             setConvKeyMessage(err.message || tl('Kích hoạt thất bại', 'Activation failed'));
@@ -301,8 +302,8 @@ function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi'
                 </div>
                 {convKeyMessage && (
                     <div className={`mt-3 flex items-start gap-2 text-sm px-4 py-3 rounded-lg ${convKeyStatus === 'success'
-                            ? isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
-                            : isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
+                        ? isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                        : isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
                         }`}>
                         {convKeyStatus === 'success'
                             ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -317,9 +318,9 @@ function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi'
 }
 
 
-interface UsagePlanEmbedProps { isDark: boolean; }
+interface UsagePlanEmbedProps { isDark: boolean; onConvKeyActivated?: () => void; }
 
-export function UsagePlanEmbed({ isDark }: UsagePlanEmbedProps) {
+export function UsagePlanEmbed({ isDark, onConvKeyActivated }: UsagePlanEmbedProps) {
     const [language, setLanguage] = useState<'vi' | 'en'>('vi');
     useEffect(() => {
         const lang = localStorage.getItem('wordai-language') as 'vi' | 'en';
@@ -328,7 +329,7 @@ export function UsagePlanEmbed({ isDark }: UsagePlanEmbedProps) {
     return (
         <div className={'h-full overflow-y-auto ' + (isDark ? 'bg-[#0b0f19]' : 'bg-gray-50')}>
             <div className="max-w-5xl mx-auto px-4 py-6">
-                <AccountUsageTab isDark={isDark} language={language} />
+                <AccountUsageTab isDark={isDark} language={language} onConvKeyActivated={onConvKeyActivated} />
             </div>
         </div>
     );

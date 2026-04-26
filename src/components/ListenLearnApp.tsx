@@ -331,7 +331,7 @@ export default function ListenLearnApp() {
 
                 {/* Daily Vocab Tab */}
                 {activeTab === 'daily-vocab' && (
-                    <DailyVocabTab isDark={isDark} isSidebarVisible={isSidebarVisible} />
+                    <DailyVocabTab isDark={isDark} isSidebarVisible={isSidebarVisible} onConvKeyActivated={checkConversationsPremiumStatus} />
                 )}
 
                 {/* Conversations Tab */}

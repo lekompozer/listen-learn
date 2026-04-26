@@ -1,6 +1,6 @@
 [package]
 name = "listen-learn"
-version = "0.2.20"
+version = "1.0.0"
 description = "WynAI Listen & Learn — Learn English through songs and podcasts"
 authors = ["WordAI"]
 license = ""

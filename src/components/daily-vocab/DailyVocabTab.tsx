@@ -31,6 +31,7 @@ type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | '
 interface DailyVocabTabProps {
     isDark: boolean;
     isSidebarVisible?: boolean;
+    onConvKeyActivated?: () => void;
 }
 
 // ─── Platform data (mirrors wordai /download) ─────────────────────────────────
@@ -288,7 +289,7 @@ function StudyBuddyTabWrapper({ isDark }: { isDark: boolean }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTabProps) {
+export function DailyVocabTab({ isDark, isSidebarVisible = true, onConvKeyActivated }: DailyVocabTabProps) {
     const [section, setSection] = useState<VocabSection>('daily-vocab');
 
     // Navigate to a specific section when dispatched (e.g. from LLHeader user menu)
@@ -311,7 +312,7 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTab
                 )}
 
                 {section === 'usage-plan' && (
-                    <UsagePlanEmbed isDark={isDark} />
+                    <UsagePlanEmbed isDark={isDark} onConvKeyActivated={onConvKeyActivated} />
                 )}
 
                 {section === 'online-tests' && (
