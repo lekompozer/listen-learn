@@ -4,7 +4,7 @@
  * LoginModal — Full-screen login/register overlay for Listen & Learn Desktop.
  *
  * Design mirrors the WynAI web login page (wordai.pro/login):
- *  - Video background (local: /login-bg.mp4)
+ *  - Video background (remote CDN to bypass Tauri local media limitations)
  *  - Left panel: branding (transparent over video)
  *  - Right panel: white/glass form — Google OAuth + Email/Password tabs
  *
@@ -190,10 +190,13 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     // Video bg layer — rendered once, ref-controlled to force play in WKWebView
     const videoBg = (
         <div className="absolute inset-0 bg-black overflow-hidden">
-            <video ref={setVideoRef} loop muted playsInline
-                className="absolute inset-0 w-full h-full object-cover opacity-80">
-                <source src="/login-bg.mp4" type="video/mp4" />
-            </video>
+            <video
+                ref={setVideoRef}
+                autoPlay loop muted playsInline
+                className="absolute inset-0 w-full h-full object-cover opacity-80"
+                /* Use remote CDN URI to bypass Tauri custom schema byte-range limits on large local MP4s across Windows/Mac/Linux */
+                src="https://static.wordai.pro/login/video-login1.mp4"
+            />
             <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-transparent" />
         </div>
     );
