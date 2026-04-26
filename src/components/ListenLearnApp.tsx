@@ -251,6 +251,17 @@ export default function ListenLearnApp() {
         }
     };
 
+    // Navigate to daily-vocab tab → usage-plan section when dispatched from LLHeader user menu
+    useEffect(() => {
+        const handler = () => {
+            handleTabChange('daily-vocab');
+            // DailyVocabTab listens for this event separately to set its section
+            window.dispatchEvent(new CustomEvent('ll:set-vocab-section', { detail: 'usage-plan' }));
+        };
+        window.addEventListener('ll:goto-usage-plan', handler);
+        return () => window.removeEventListener('ll:goto-usage-plan', handler);
+    }, [handleTabChange]);
+
     // Open dictionary panel when SelectionSpeakPopup dispatches "Open in Dictionary"
     useEffect(() => {
         const handler = () => setIsDictOpen(true);

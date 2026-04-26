@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
     FileText, Newspaper, MessageCircle, Music, GraduationCap, Code2,
     Download, ExternalLink, BookOpen, Award, Bookmark, Mic, Users, Volume2, Library,
@@ -282,6 +282,16 @@ function StudyBuddyTabWrapper({ isDark }: { isDark: boolean }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTabProps) {
     const [section, setSection] = useState<VocabSection>('daily-vocab');
+
+    // Navigate to a specific section when dispatched (e.g. from LLHeader user menu)
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const section = (e as CustomEvent<VocabSection>).detail;
+            if (section) setSection(section);
+        };
+        window.addEventListener('ll:set-vocab-section', handler);
+        return () => window.removeEventListener('ll:set-vocab-section', handler);
+    }, []);
 
     return (
         <div className="h-full flex overflow-hidden">

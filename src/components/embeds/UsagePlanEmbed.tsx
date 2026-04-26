@@ -300,11 +300,10 @@ function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi'
                     </button>
                 </div>
                 {convKeyMessage && (
-                    <div className={`mt-3 flex items-start gap-2 text-sm px-4 py-3 rounded-lg ${
-                        convKeyStatus === 'success'
+                    <div className={`mt-3 flex items-start gap-2 text-sm px-4 py-3 rounded-lg ${convKeyStatus === 'success'
                             ? isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
                             : isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
-                    }`}>
+                        }`}>
                         {convKeyStatus === 'success'
                             ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
                             : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />

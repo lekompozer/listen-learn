@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     LogIn, LogOut, Globe, Crown, BookOpen, BookMarked, Music, MessageCircle, Radio, Play,
-    Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, ChevronDown, ExternalLink,
+    Download, RefreshCw, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, ChevronDown, ExternalLink, KeyRound,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -367,6 +367,18 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
                                         <span>{isVietnamese ? 'Đang dùng bản mới nhất' : 'Up to date'}</span>
                                     </div>
                                 ) : null}
+
+                                {/* Upgrade / Enter key */}
+                                <button
+                                    onClick={() => {
+                                        setUserMenuOpen(false);
+                                        window.dispatchEvent(new CustomEvent('ll:goto-usage-plan'));
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-teal-300 hover:bg-white/5' : 'text-teal-700 hover:bg-gray-50'}`}
+                                >
+                                    <KeyRound className="w-3.5 h-3.5" />
+                                    <span>{t('Nhập CONV Key / Nâng cấp', 'Enter CONV Key / Upgrade', isVietnamese)}</span>
+                                </button>
 
                                 {/* Logout */}
                                 <div className={`border-t ${isDark ? 'border-white/10' : 'border-gray-100'} mt-1 pt-1`}>
