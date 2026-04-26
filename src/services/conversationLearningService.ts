@@ -1292,6 +1292,31 @@ export async function validateAffiliateCode(code: string): Promise<ValidateCodeR
     return res.json();
 }
 
+export interface ActivateConvKeyResult {
+    message: string;
+    plan_type: string;
+    expires_at: string;
+    activated_at: string;
+}
+
+/**
+ * Activate a CONV software key
+ * POST /api/v1/conversations/subscription/activate-key
+ */
+export async function activateConvKey(keyCode: string): Promise<ActivateConvKeyResult> {
+    const token = await getAuthToken();
+    const res = await fetch(`${CONVERSATION_BASE}/subscription/activate-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ key_code: keyCode }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || err.message || `Kích hoạt thất bại (${res.status})`);
+    }
+    return res.json();
+}
+
 // ========== SAVED VOCABULARY & GRAMMAR TYPES ==========
 
 export interface SavedVocabularyItem {

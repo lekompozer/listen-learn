@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useSubscriptionInfo } from '@/hooks/useSubscription';
 import { formatStorage, calculatePercentage } from '@/services/subscriptionService';
+import { activateConvKey } from '@/services/conversationLearningService';
 import PointsBadge from '@/components/PointsBadge';
-import { BarChart3, FileText, Zap } from 'lucide-react';
+import { BarChart3, FileText, Zap, KeyRound, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 
 const formatUsageDisplay = (count: number, limit: number, language: 'vi' | 'en' = 'vi'): string => {
     if (limit === -1) return language === 'vi' ? `${count} / Không giới hạn` : `${count} / Unlimited`;
@@ -14,6 +15,29 @@ const formatUsageDisplay = (count: number, limit: number, language: 'vi' | 'en' 
 function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi' | 'en' }) {
     const tl = (vi: string, en: string) => language === 'vi' ? vi : en;
     const { data: subscriptionInfo, isLoading, error, refetch } = useSubscriptionInfo();
+
+    // CONV key activation state
+    const [convKey, setConvKey] = useState('');
+    const [convKeyStatus, setConvKeyStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [convKeyMessage, setConvKeyMessage] = useState('');
+
+    const handleActivateKey = async () => {
+        const cleaned = convKey.trim().toUpperCase();
+        if (!cleaned) return;
+        setConvKeyStatus('loading');
+        setConvKeyMessage('');
+        try {
+            const result = await activateConvKey(cleaned);
+            setConvKeyStatus('success');
+            const expires = new Date(result.expires_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            setConvKeyMessage(tl(`Kích hoạt thành công! Gói ${result.plan_type.replace('_', ' ')} — hết hạn ${expires}`, `Activated! Plan ${result.plan_type.replace('_', ' ')} — expires ${expires}`));
+            setConvKey('');
+            refetch();
+        } catch (err: any) {
+            setConvKeyStatus('error');
+            setConvKeyMessage(err.message || tl('Kích hoạt thất bại', 'Activation failed'));
+        }
+    };
 
     if (isLoading) {
         return (
@@ -235,6 +259,59 @@ function AccountUsageTab({ isDark, language }: { isDark: boolean; language: 'vi'
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* ── CONV Key Activation ───────────────────────────────────────── */}
+            <div className={`p-6 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                    <KeyRound className={`w-5 h-5 ${isDark ? 'text-teal-400' : 'text-teal-600'}`} />
+                    <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {tl('Kích hoạt bằng mã CONV Key', 'Activate with CONV Key')}
+                    </h3>
+                </div>
+                <p className={`text-sm mb-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {tl('Nhập mã key dạng CONV-XXXX-XXXX-XXXX để mở khoá gói Conversations Premium.', 'Enter a CONV-XXXX-XXXX-XXXX key to unlock Conversations Premium.')}
+                </p>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={convKey}
+                        onChange={(e) => { setConvKey(e.target.value.toUpperCase()); setConvKeyStatus('idle'); setConvKeyMessage(''); }}
+                        onKeyDown={(e) => e.key === 'Enter' && handleActivateKey()}
+                        placeholder="CONV-XXXX-XXXX-XXXX"
+                        maxLength={19}
+                        className={`flex-1 px-4 py-2.5 rounded-lg border font-mono text-sm outline-none transition-all
+                            ${isDark
+                                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20'
+                                : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20'
+                            }`}
+                    />
+                    <button
+                        onClick={handleActivateKey}
+                        disabled={convKeyStatus === 'loading' || !convKey.trim()}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-all active:scale-95"
+                    >
+                        {convKeyStatus === 'loading' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <KeyRound className="w-4 h-4" />
+                        )}
+                        {tl('Kích hoạt', 'Activate')}
+                    </button>
+                </div>
+                {convKeyMessage && (
+                    <div className={`mt-3 flex items-start gap-2 text-sm px-4 py-3 rounded-lg ${
+                        convKeyStatus === 'success'
+                            ? isDark ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-700'
+                            : isDark ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-700'
+                    }`}>
+                        {convKeyStatus === 'success'
+                            ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            : <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        }
+                        {convKeyMessage}
+                    </div>
+                )}
             </div>
         </div>
     );
