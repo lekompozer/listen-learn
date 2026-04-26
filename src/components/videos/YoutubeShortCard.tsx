@@ -41,8 +41,8 @@ export default function YoutubeShortCard({
                 loading="lazy"
             />
 
-            {/* Bottom overlay */}
-            <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none z-30">
+            {/* Bottom overlay — sits below the iframe (z-10) so YT controls are visible */}
+            <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none z-10">
                 <p className="text-white font-semibold text-sm line-clamp-2 leading-snug">{item.title}</p>
                 <p className="text-white/70 text-xs mt-1">{item.channel || item.channel_name}</p>
                 <div className="flex items-center gap-2 mt-1">
@@ -62,7 +62,7 @@ export default function YoutubeShortCard({
                 </div>
             </div>
 
-            {/* Right-side controls (active card only) */}
+            {/* Right-side controls (active card only) — above iframe z-30 */}
             {isActive && (
                 <div className="absolute right-3 bottom-28 flex flex-col gap-3 items-center z-30">
                     {onSave && (

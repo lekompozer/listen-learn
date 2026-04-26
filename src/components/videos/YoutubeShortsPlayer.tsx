@@ -269,20 +269,17 @@ export default function YoutubeShortsPlayer({
                  */}
                 {!loading && firstItem && (
                     <div
-                        className="absolute left-0 right-0 z-10"
+                        className="absolute left-0 right-0 z-20"
                         style={{ top: `${activeIndex * 100}%`, height: '100%' }}
                     >
                         <iframe
                             ref={pooledIframeRef}
-                            src={`https://www.youtube-nocookie.com/embed/${firstItem.youtube_id}?autoplay=1&mute=1&controls=${showControls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${origin}`}
+                            src={`https://www.youtube-nocookie.com/embed/${firstItem.youtube_id}?autoplay=1&mute=1&controls=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${origin}`}
                             className="w-full h-full border-0"
                             allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                             allowFullScreen
                             onLoad={handleIframeLoad}
                         />
-                        {!showControls && (
-                            <div className="absolute bottom-0 inset-x-0 h-[160px] bg-gradient-to-t from-black via-black/70 to-transparent pointer-events-none z-10" />
-                        )}
                     </div>
                 )}
 
