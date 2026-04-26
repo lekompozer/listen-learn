@@ -12,6 +12,7 @@ import {
 import dynamic from 'next/dynamic';
 
 const SquadNotificationsDropdown = dynamic(() => import('@/components/study-buddy/SquadNotificationsDropdown'), { ssr: false });
+const LoginModal = dynamic(() => import('@/components/auth/LoginModal').then(m => ({ default: m.LoginModal })), { ssr: false });
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
 import type { TabType } from './ListenLearnApp';
@@ -102,10 +103,10 @@ interface LLHeaderProps {
 }
 
 export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeClick, isSidebarVisible, onToggleSidebar, isDictOpen, onDictToggle }: LLHeaderProps) {
-    const { user, isLoading, signIn, signOut } = useWordaiAuth();
+    const { user, isLoading, signOut } = useWordaiAuth();
     const { isVietnamese, toggleLanguage } = useLanguage();
     const { isDark, toggleTheme } = useTheme();
-    const [signingIn, setSigningIn] = useState(false);
+    const [showLoginModal, setShowLoginModal] = useState(false);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [avatarError, setAvatarError] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
@@ -166,248 +167,249 @@ export default function LLHeader({ activeTab, onTabChange, isPremium, onUpgradeC
     }, []);
 
     const handleLogin = async () => {
-        setSigningIn(true);
-        try {
-            await signIn();
-        } finally {
-            setSigningIn(false);
-        }
+        setShowLoginModal(true);
     };
 
     return (
-        <header
-            data-tauri-drag-region
-            style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-            onMouseDown={async (e) => {
-                if (e.button !== 0) return;
-                if ((e.target as HTMLElement).closest('button,a,input,select')) return;
-                try {
-                    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-                    await getCurrentWindow().startDragging();
-                } catch { /* web fallback */ }
-            }}
-            className={`flex-shrink-0 flex items-center justify-between pl-[15px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-white/85 border-gray-200/60'}`}
-        >
-            {/* Left: sidebar toggle + app title */}
-            <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-                {onToggleSidebar && (
-                    <button
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={onToggleSidebar}
-                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                        className={`p-1.5 rounded transition-colors flex-shrink-0 ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                        title={isSidebarVisible ? t('Ẩn thư viện', 'Hide library', isVietnamese) : t('Hiện thư viện', 'Show library', isVietnamese)}
-                    >
-                        {isSidebarVisible
-                            ? <PanelLeftClose className="w-4 h-4" />
-                            : <PanelLeftOpen className="w-4 h-4" />}
-                    </button>
-                )}
-                <span className={`text-xs font-semibold hidden sm:block ${isDark ? 'text-white/70' : 'text-gray-700'}`}>Listen &amp; Learn by WynAI</span>
-            </div>
-
-            {/* Center: tab buttons with tooltips */}
-            <div
-                className="flex items-center gap-1 ml-[160px]"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        <>
+            <header
+                data-tauri-drag-region
+                style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+                onMouseDown={async (e) => {
+                    if (e.button !== 0) return;
+                    if ((e.target as HTMLElement).closest('button,a,input,select')) return;
+                    try {
+                        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+                        await getCurrentWindow().startDragging();
+                    } catch { /* web fallback */ }
+                }}
+                className={`flex-shrink-0 flex items-center justify-between pl-[15px] pr-4 h-11 border-b select-none ${isDark ? 'bg-gray-900/80 border-white/5' : 'bg-white/85 border-gray-200/60'}`}
             >
-                {TABS.map(tab => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    const tooltip = isVietnamese ? tab.tooltipVi : tab.tooltipEn;
-                    const isCore = tab.id === 'conversations';
-                    return (
-                        <TabTooltip key={tab.id} text={tooltip} isDark={isDark}>
+                {/* Left: sidebar toggle + app title */}
+                <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+                    {onToggleSidebar && (
+                        <button
+                            onMouseDown={e => e.stopPropagation()}
+                            onClick={onToggleSidebar}
+                            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                            className={`p-1.5 rounded transition-colors flex-shrink-0 ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                            title={isSidebarVisible ? t('Ẩn thư viện', 'Hide library', isVietnamese) : t('Hiện thư viện', 'Show library', isVietnamese)}
+                        >
+                            {isSidebarVisible
+                                ? <PanelLeftClose className="w-4 h-4" />
+                                : <PanelLeftOpen className="w-4 h-4" />}
+                        </button>
+                    )}
+                    <span className={`text-xs font-semibold hidden sm:block ${isDark ? 'text-white/70' : 'text-gray-700'}`}>Listen &amp; Learn by WynAI</span>
+                </div>
+
+                {/* Center: tab buttons with tooltips */}
+                <div
+                    className="flex items-center gap-1 ml-[160px]"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                >
+                    {TABS.map(tab => {
+                        const Icon = tab.icon;
+                        const isActive = activeTab === tab.id;
+                        const tooltip = isVietnamese ? tab.tooltipVi : tab.tooltipEn;
+                        const isCore = tab.id === 'conversations';
+                        return (
+                            <TabTooltip key={tab.id} text={tooltip} isDark={isDark}>
+                                <button
+                                    onMouseDown={e => e.stopPropagation()}
+                                    onClick={() => onTabChange(tab.id)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all relative
+                                    ${isActive
+                                            ? 'bg-gradient-to-r from-[#007574] to-[#189593] text-white'
+                                            : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-black/10'}`}
+                                >
+                                    <Icon className="w-3.5 h-3.5" />
+                                    <span>{isVietnamese ? tab.labelVi : tab.labelEn}</span>
+                                    {isCore && !isActive && (
+                                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" />
+                                    )}
+                                </button>
+                            </TabTooltip>
+                        );
+                    })}
+                </div>
+
+                {/* Right: controls */}
+                <div
+                    className="flex items-center gap-2"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                >
+                    {/* Premium badge OR Upgrade button */}
+                    {user && (
+                        isPremium ? (
+                            <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-yellow-500 to-amber-400 text-gray-900 select-none">
+                                <Crown className="w-3.5 h-3.5" />
+                                Premium
+                            </span>
+                        ) : (
                             <button
                                 onMouseDown={e => e.stopPropagation()}
-                                onClick={() => onTabChange(tab.id)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all relative
-                                    ${isActive
-                                        ? 'bg-gradient-to-r from-[#007574] to-[#189593] text-white'
-                                        : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-black/10'}`}
+                                onClick={onUpgradeClick}
+                                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-yellow-500 to-amber-400 text-gray-900 hover:opacity-90 transition-opacity"
+                                title={isVietnamese ? 'Nâng cấp Premium' : 'Upgrade to Premium'}
                             >
-                                <Icon className="w-3.5 h-3.5" />
-                                <span>{isVietnamese ? tab.labelVi : tab.labelEn}</span>
-                                {isCore && !isActive && (
-                                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" />
-                                )}
+                                <Crown className="w-3.5 h-3.5" />
+                                <span>{isVietnamese ? 'Nâng cấp' : 'Upgrade'}</span>
                             </button>
-                        </TabTooltip>
-                    );
-                })}
-            </div>
+                        )
+                    )}
 
-            {/* Right: controls */}
-            <div
-                className="flex items-center gap-2"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-                {/* Premium badge OR Upgrade button */}
-                {user && (
-                    isPremium ? (
-                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-yellow-500 to-amber-400 text-gray-900 select-none">
-                            <Crown className="w-3.5 h-3.5" />
-                            Premium
-                        </span>
+                    {/* Dictionary toggle */}
+                    {onDictToggle && (
+                        <button
+                            onMouseDown={e => e.stopPropagation()}
+                            onClick={onDictToggle}
+                            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                            className={`p-1.5 rounded transition-colors ${isDictOpen
+                                ? isDark ? 'text-blue-400 bg-blue-500/20' : 'text-blue-600 bg-blue-100'
+                                : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                            title={isDictOpen
+                                ? t('Đóng từ điển', 'Close dictionary', isVietnamese)
+                                : t('Mở từ điển', 'Open dictionary', isVietnamese)}
+                        >
+                            <BookMarked className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+
+                    {/* Squad Notifications Bell */}
+                    <SquadNotificationsDropdown isDark={isDark} isVi={isVietnamese} />
+
+                    {/* Theme toggle */}
+                    <button
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={toggleTheme}
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                        className={`p-1.5 rounded transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                        title={isDark ? (isVietnamese ? 'Chế độ sáng' : 'Light mode') : (isVietnamese ? 'Chế độ tối' : 'Dark mode')}
+                    >
+                        {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {/* Language toggle */}
+                    <button
+                        onMouseDown={e => e.stopPropagation()}
+                        onClick={toggleLanguage}
+                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                        title="Toggle language"
+                    >
+                        <Globe className="w-3.5 h-3.5" />
+                        <span>{isVietnamese ? 'VI' : 'EN'}</span>
+                    </button>
+
+                    {/* Auth */}
+                    {isLoading ? (
+                        <div className="w-6 h-6 rounded-full bg-white/10 animate-pulse" />
+                    ) : user ? (
+                        <div ref={userMenuRef} className="relative">
+                            {/* User button — pulses blue when update available */}
+                            <button
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={() => setUserMenuOpen(o => !o)}
+                                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors
+                                ${updateStatus === 'available'
+                                        ? 'text-blue-400 bg-blue-500/10 animate-pulse hover:animate-none hover:bg-blue-500/20'
+                                        : isDark ? 'text-gray-300 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                            >
+                                {user.photoURL && !avatarError
+                                    ? <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" onError={() => setAvatarError(true)} />
+                                    : <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
+                                        {(user.displayName?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
+                                    </div>
+                                }
+                                <span className="max-w-[80px] truncate hidden sm:block">
+                                    {user.displayName?.split(' ').slice(-1)[0] ?? user.email?.split('@')[0]}
+                                </span>
+                                <ChevronDown className={`w-3 h-3 transition-transform ${userMenuOpen ? 'rotate-180' : ''} ${updateStatus === 'available' ? 'text-blue-400' : isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                            </button>
+
+                            {userMenuOpen && (
+                                <div
+                                    className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border z-50 py-1 ${isDark ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-200'}`}
+                                    onMouseDown={e => e.stopPropagation()}
+                                >
+                                    {/* User info */}
+                                    <div className={`px-3 py-2 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
+                                        <p className={`text-xs font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                            {user.displayName ?? user.email?.split('@')[0]}
+                                        </p>
+                                        <p className={`text-[11px] truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            {user.email}
+                                        </p>
+                                    </div>
+
+                                    {/* Update status */}
+                                    {updateStatus === 'available' ? (
+                                        <button
+                                            onClick={handleOpenDownload}
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/10 transition-colors"
+                                        >
+                                            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                            <div className="flex-1 text-left">
+                                                <div className="font-semibold">{isVietnamese ? `Tải bản mới v${updateVersion}` : `Download v${updateVersion}`}</div>
+                                                <div className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{isVietnamese ? 'Mở trình duyệt để tải' : 'Opens browser to download'}</div>
+                                            </div>
+                                            <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
+                                        </button>
+                                    ) : updateStatus === 'upToDate' ? (
+                                        <div className={`flex items-center gap-2 px-3 py-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            <span>{isVietnamese ? 'Đang dùng bản mới nhất' : 'Up to date'}</span>
+                                        </div>
+                                    ) : null}
+
+                                    {/* Upgrade / Enter key */}
+                                    <button
+                                        onClick={() => {
+                                            setUserMenuOpen(false);
+                                            window.dispatchEvent(new CustomEvent('ll:goto-usage-plan'));
+                                        }}
+                                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-teal-300 hover:bg-white/5' : 'text-teal-700 hover:bg-gray-50'}`}
+                                    >
+                                        <KeyRound className="w-3.5 h-3.5" />
+                                        <span>{t('Nhập CONV Key / Nâng cấp', 'Enter CONV Key / Upgrade', isVietnamese)}</span>
+                                    </button>
+
+                                    {/* Logout */}
+                                    <div className={`border-t ${isDark ? 'border-white/10' : 'border-gray-100'} mt-1 pt-1`}>
+                                        <button
+                                            onClick={() => { setUserMenuOpen(false); signOut(); }}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-red-400 hover:bg-white/5' : 'text-gray-600 hover:text-red-500 hover:bg-gray-50'}`}
+                                        >
+                                            <LogOut className="w-3.5 h-3.5" />
+                                            <span>{t('Đăng xuất', 'Sign out', isVietnamese)}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <button
                             onMouseDown={e => e.stopPropagation()}
-                            onClick={onUpgradeClick}
+                            onClick={handleLogin}
+                            disabled={isLoading}
                             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gradient-to-r from-yellow-500 to-amber-400 text-gray-900 hover:opacity-90 transition-opacity"
-                            title={isVietnamese ? 'Nâng cấp Premium' : 'Upgrade to Premium'}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors active:scale-95"
                         >
-                            <Crown className="w-3.5 h-3.5" />
-                            <span>{isVietnamese ? 'Nâng cấp' : 'Upgrade'}</span>
+                            <LogIn className="w-3.5 h-3.5" />
+                            {t('Đăng nhập', 'Login', isVietnamese)}
                         </button>
-                    )
-                )}
+                    )}
+                </div>
+            </header>
 
-                {/* Dictionary toggle */}
-                {onDictToggle && (
-                    <button
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={onDictToggle}
-                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                        className={`p-1.5 rounded transition-colors ${isDictOpen
-                            ? isDark ? 'text-blue-400 bg-blue-500/20' : 'text-blue-600 bg-blue-100'
-                            : isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                        title={isDictOpen
-                            ? t('Đóng từ điển', 'Close dictionary', isVietnamese)
-                            : t('Mở từ điển', 'Open dictionary', isVietnamese)}
-                    >
-                        <BookMarked className="w-3.5 h-3.5" />
-                    </button>
-                )}
-
-                {/* Squad Notifications Bell */}
-                <SquadNotificationsDropdown isDark={isDark} isVi={isVietnamese} />
-
-                {/* Theme toggle */}
-                <button
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={toggleTheme}
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    className={`p-1.5 rounded transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                    title={isDark ? (isVietnamese ? 'Chế độ sáng' : 'Light mode') : (isVietnamese ? 'Chế độ tối' : 'Dark mode')}
-                >
-                    {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-                </button>
-
-                {/* Language toggle */}
-                <button
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={toggleLanguage}
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${isDark ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                    title="Toggle language"
-                >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>{isVietnamese ? 'VI' : 'EN'}</span>
-                </button>
-
-                {/* Auth */}
-                {isLoading ? (
-                    <div className="w-6 h-6 rounded-full bg-white/10 animate-pulse" />
-                ) : user ? (
-                    <div ref={userMenuRef} className="relative">
-                        {/* User button — pulses blue when update available */}
-                        <button
-                            onMouseDown={e => e.stopPropagation()}
-                            onClick={() => setUserMenuOpen(o => !o)}
-                            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors
-                                ${updateStatus === 'available'
-                                    ? 'text-blue-400 bg-blue-500/10 animate-pulse hover:animate-none hover:bg-blue-500/20'
-                                    : isDark ? 'text-gray-300 hover:text-white hover:bg-white/10' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
-                        >
-                            {user.photoURL && !avatarError
-                                ? <img src={user.photoURL} alt="" className="w-5 h-5 rounded-full" onError={() => setAvatarError(true)} />
-                                : <div className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
-                                    {(user.displayName?.[0] ?? user.email?.[0] ?? '?').toUpperCase()}
-                                </div>
-                            }
-                            <span className="max-w-[80px] truncate hidden sm:block">
-                                {user.displayName?.split(' ').slice(-1)[0] ?? user.email?.split('@')[0]}
-                            </span>
-                            <ChevronDown className={`w-3 h-3 transition-transform ${userMenuOpen ? 'rotate-180' : ''} ${updateStatus === 'available' ? 'text-blue-400' : isDark ? 'text-gray-500' : 'text-gray-400'}`} />
-                        </button>
-
-                        {userMenuOpen && (
-                            <div
-                                className={`absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl border z-50 py-1 ${isDark ? 'bg-gray-800 border-white/10' : 'bg-white border-gray-200'}`}
-                                onMouseDown={e => e.stopPropagation()}
-                            >
-                                {/* User info */}
-                                <div className={`px-3 py-2 border-b ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
-                                    <p className={`text-xs font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                        {user.displayName ?? user.email?.split('@')[0]}
-                                    </p>
-                                    <p className={`text-[11px] truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                        {user.email}
-                                    </p>
-                                </div>
-
-                                {/* Update status */}
-                                {updateStatus === 'available' ? (
-                                    <button
-                                        onClick={handleOpenDownload}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-blue-400 hover:bg-blue-500/10 transition-colors"
-                                    >
-                                        <Download className="w-3.5 h-3.5 flex-shrink-0" />
-                                        <div className="flex-1 text-left">
-                                            <div className="font-semibold">{isVietnamese ? `Tải bản mới v${updateVersion}` : `Download v${updateVersion}`}</div>
-                                            <div className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{isVietnamese ? 'Mở trình duyệt để tải' : 'Opens browser to download'}</div>
-                                        </div>
-                                        <ExternalLink className="w-3 h-3 flex-shrink-0 opacity-60" />
-                                    </button>
-                                ) : updateStatus === 'upToDate' ? (
-                                    <div className={`flex items-center gap-2 px-3 py-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                                        <RefreshCw className="w-3.5 h-3.5" />
-                                        <span>{isVietnamese ? 'Đang dùng bản mới nhất' : 'Up to date'}</span>
-                                    </div>
-                                ) : null}
-
-                                {/* Upgrade / Enter key */}
-                                <button
-                                    onClick={() => {
-                                        setUserMenuOpen(false);
-                                        window.dispatchEvent(new CustomEvent('ll:goto-usage-plan'));
-                                    }}
-                                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-teal-300 hover:bg-white/5' : 'text-teal-700 hover:bg-gray-50'}`}
-                                >
-                                    <KeyRound className="w-3.5 h-3.5" />
-                                    <span>{t('Nhập CONV Key / Nâng cấp', 'Enter CONV Key / Upgrade', isVietnamese)}</span>
-                                </button>
-
-                                {/* Logout */}
-                                <div className={`border-t ${isDark ? 'border-white/10' : 'border-gray-100'} mt-1 pt-1`}>
-                                    <button
-                                        onClick={() => { setUserMenuOpen(false); signOut(); }}
-                                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-colors ${isDark ? 'text-gray-300 hover:text-red-400 hover:bg-white/5' : 'text-gray-600 hover:text-red-500 hover:bg-gray-50'}`}
-                                    >
-                                        <LogOut className="w-3.5 h-3.5" />
-                                        <span>{t('Đăng xuất', 'Sign out', isVietnamese)}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <button
-                        onMouseDown={e => e.stopPropagation()}
-                        onClick={handleLogin}
-                        disabled={signingIn}
-                        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors active:scale-95"
-                    >
-                        <LogIn className="w-3.5 h-3.5" />
-                        {signingIn
-                            ? t('Đang đăng nhập...', 'Signing in...', isVietnamese)
-                            : t('Đăng nhập', 'Login', isVietnamese)}
-                    </button>
-                )}
-            </div>
-        </header>
+            {/* Login / Register modal */}
+            <LoginModal
+                isOpen={showLoginModal}
+                onClose={() => setShowLoginModal(false)}
+            />
+        </>
     );
 }

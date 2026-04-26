@@ -1,7 +1,18 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import {
+    User,
+    signInWithPopup,
+    signInWithCredential,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    updateProfile,
+    sendEmailVerification,
+    GoogleAuthProvider,
+    signOut as firebaseSignOut,
+    onAuthStateChanged,
+} from 'firebase/auth';
 import { wordaiAuth, wordaiGoogleProvider, persistenceReady } from '@/lib/wordai-firebase';
 
 // Detect if running inside Tauri Desktop app
@@ -29,9 +40,28 @@ interface WordaiAuthContextType {
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     getValidToken: () => Promise<string>; // Get fresh token
+    signInWithEmail: (email: string, password: string) => Promise<void>;
+    registerWithEmail: (email: string, password: string, displayName: string) => Promise<void>; checkEmailVerified: (email: string, password: string) => Promise<boolean>;
+    resendVerificationEmail: (email: string, password: string) => Promise<void>;
 }
 
 const WordaiAuthContext = createContext<WordaiAuthContextType | undefined>(undefined);
+
+function mapFirebaseAuthError(code: string): string {
+    const messages: Record<string, string> = {
+        'auth/email-already-in-use': 'Email này đã được đăng ký. Vui lòng đăng nhập.',
+        'auth/invalid-email': 'Email không hợp lệ.',
+        'auth/weak-password': 'Mật khẩu quá yếu (tối thiểu 6 ký tự).',
+        'auth/user-not-found': 'Không tìm thấy tài khoản với email này.',
+        'auth/wrong-password': 'Mật khẩu không đúng.',
+        'auth/invalid-credential': 'Email hoặc mật khẩu không đúng.',
+        'auth/too-many-requests': 'Quá nhiều lần thử. Vui lòng thử lại sau ít phút.',
+        'auth/network-request-failed': 'Lỗi kết nối mạng. Kiểm tra internet.',
+        'auth/user-disabled': 'Tài khoản này đã bị vô hiệu hóa.',
+        'auth/operation-not-allowed': 'Phương thức đăng nhập này chưa được bật trên server.',
+    };
+    return messages[code] || `Lỗi đăng nhập (${code})`;
+}
 
 export function WordaiAuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -245,6 +275,77 @@ export function WordaiAuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const signInWithEmail = async (email: string, password: string) => {
+        setIsLoading(true);
+        try {
+            await persistenceReady;
+            const result = await signInWithEmailAndPassword(wordaiAuth, email, password);
+            setUser(result.user);
+        } catch (err: any) {
+            throw new Error(mapFirebaseAuthError(err.code));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const registerWithEmail = async (email: string, password: string, displayName: string) => {
+        setIsLoading(true);
+        try {
+            await persistenceReady;
+            const result = await createUserWithEmailAndPassword(wordaiAuth, email, password);
+            // Set display name first
+            await updateProfile(result.user, { displayName: displayName.trim() });
+            // Send verification email — Firebase sends it from noreply@wordai-6779e.firebaseapp.com
+            await sendEmailVerification(result.user);
+            // Sign out immediately — app access only allowed after email verified
+            await firebaseSignOut(wordaiAuth);
+            // DON'T call setUser — user must verify before being allowed in
+        } catch (err: any) {
+            throw new Error(mapFirebaseAuthError(err.code));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    /**
+     * Check if email is verified.
+     * Signs in with credentials, reloads user, checks emailVerified.
+     * If verified → sets user (logs in). If not → signs out and returns false.
+     */
+    const checkEmailVerified = async (email: string, password: string): Promise<boolean> => {
+        try {
+            await persistenceReady;
+            const result = await signInWithEmailAndPassword(wordaiAuth, email, password);
+            // Force reload to get latest emailVerified status from Firebase server
+            await result.user.reload();
+            const fresh = wordaiAuth.currentUser;
+            if (fresh?.emailVerified) {
+                setUser(fresh);
+                return true;
+            }
+            // Not yet verified — sign out and tell the caller
+            await firebaseSignOut(wordaiAuth);
+            return false;
+        } catch (err: any) {
+            throw new Error(mapFirebaseAuthError(err.code));
+        }
+    };
+
+    /**
+     * Resend verification email.
+     * Signs in temporarily to get a valid idToken, sends the email, then signs out.
+     */
+    const resendVerificationEmail = async (email: string, password: string): Promise<void> => {
+        try {
+            await persistenceReady;
+            const result = await signInWithEmailAndPassword(wordaiAuth, email, password);
+            await sendEmailVerification(result.user);
+            await firebaseSignOut(wordaiAuth);
+        } catch (err: any) {
+            throw new Error(mapFirebaseAuthError(err.code));
+        }
+    };
+
     const refreshProfile = async () => {
         console.log('Refreshing profile...');
     };
@@ -274,7 +375,11 @@ export function WordaiAuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         refreshProfile,
-        getValidToken
+        getValidToken,
+        signInWithEmail,
+        registerWithEmail,
+        checkEmailVerified,
+        resendVerificationEmail,
     };
 
     return (

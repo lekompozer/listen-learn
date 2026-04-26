@@ -436,8 +436,8 @@ pub fn run() {
             .min_inner_size(800.0, 600.0)
             .center()
             .resizable(true)
-            // Spoof Safari UA so YouTube iframe accepts the embedded player
-            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15")
+            // Spoof Safari UA so YouTube iframe accepts the embedded player; append WynAI-Desktop identifier
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15 WynAI-Desktop/1.0")
             .initialization_script(
                 "window.__TAURI_DESKTOP__ = true; \
                  window.__WORDAI_ERRORS__ = []; \
