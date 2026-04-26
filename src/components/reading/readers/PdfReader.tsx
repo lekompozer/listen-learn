@@ -312,8 +312,9 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
             let displayMsg = '⚠️ Lỗi nhận dạng chữ (OCR)';
 
             if (msg.includes('Tesseract not found')) {
-                const isWindows = navigator.userAgent.toLowerCase().includes('windows');
-                displayMsg = isWindows
+                // Detect platform from the Rust error message (more reliable than userAgent in Tauri WebView2)
+                const isWindowsError = msg.includes('UB-Mannheim');
+                displayMsg = isWindowsError
                     ? '⚠️ Tesseract OCR chưa được cài đặt. Vui lòng tải và cài đặt từ:\n\n👉 https://github.com/UB-Mannheim/tesseract/wiki\n\n(Lưu ý: Bạn chọn tải file .exe bản mới nhất (32/64 bit tuỳ máy), khi cài đặt nhớ chọn "Additional language data" và tick chọn "Vietnamese" nhé!)'
                     : '⚠️ Tesseract OCR chưa được cài đặt trên Linux.\n\n👉 Mở terminal chạy lệnh: sudo apt install tesseract-ocr tesseract-ocr-vie';
             }
