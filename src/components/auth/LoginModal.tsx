@@ -140,8 +140,11 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     }, []);
 
     useEffect(() => {
-        if (user && isOpen) onClose();
-    }, [user, isOpen, onClose]);
+        // Không auto-close ngay lập tức nếu đang trong quá trình Register (Firebase tự login tạm thời rồi logout)
+        if (user && isOpen && !isSubmitting && screen === 'form') {
+            onClose();
+        }
+    }, [user, isOpen, onClose, isSubmitting, screen]);
 
     useEffect(() => {
         if (!googleLoading) { setLoadingSeconds(0); return; }
@@ -209,7 +212,10 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
             const verified = await checkEmailVerified(email.trim(), password);
             if (verified) {
                 setVerifySuccess(true);
-                // user state update will auto-close modal
+                // Delay 1 chút để user thấy màn hình Success
+                setTimeout(() => {
+                    onClose();
+                }, 1500);
             } else {
                 setError(t(
                     'Email chưa được xác nhận. Kiểm tra hộp thư và bấm link trong email.',
