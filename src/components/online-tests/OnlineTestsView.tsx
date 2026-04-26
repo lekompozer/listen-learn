@@ -79,8 +79,9 @@ export default function OnlineTestsView() {
     const t = (vi: string, en: string) => isVietnamese ? vi : en;
 
     const [viewMode, setViewMode] = useState<ViewMode>('community');
-    const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
-    const [selectedTestSlug, setSelectedTestSlug] = useState<string | null>(null);
+    const [selectedTestId, setSelectedTestId] = useState<string | null>(null);   // community/marketplace test
+    const [selectedTestSlug, setSelectedTestSlug] = useState<string | null>(null); // community/marketplace test slug
+    const [myOwnTestId, setMyOwnTestId] = useState<string | null>(null);           // user's own test (private ok)
 
     // Test flow: null = browsing, string = active test/results
     const [takingTestId, setTakingTestId] = useState<string | null>(null);
@@ -141,7 +142,7 @@ export default function OnlineTestsView() {
     };
 
     const renderContent = () => {
-        // Test detail view (selected from community or sidebar)
+        // Community/marketplace test detail view
         if (selectedTestId || selectedTestSlug) {
             return (
                 <PublicTestView
@@ -271,11 +272,18 @@ export default function OnlineTestsView() {
                         <TestSidebar
                             isDark={isDark}
                             language={language}
-                            selectedTestId={selectedTestId}
-                            onTestSelect={(id) => { setSelectedTestId(id); setSelectedTestSlug(null); }}
+                            selectedTestId={myOwnTestId || selectedTestId}
+                            onTestSelect={(id) => {
+                                // Own tests: open directly in TestTakingView (avoid marketplace endpoint)
+                                setMyOwnTestId(id);
+                                setSelectedTestId(null);
+                                setSelectedTestSlug(null);
+                                if (user) setTakingTestId(id);
+                                else openUrl(`https://wynai.pro/online-test/take?testId=${id}`);
+                            }}
                             onOpenManualTestModal={() => setShowCreateManual(true)}
                             onOpenGenerateFromAIModal={() => setShowGenerateFromAI(true)}
-                            onCommunityTestsClick={() => { setSelectedTestId(null); setSelectedTestSlug(null); setViewMode('community'); }}
+                            onCommunityTestsClick={() => { setSelectedTestId(null); setSelectedTestSlug(null); setMyOwnTestId(null); setViewMode('community'); }}
                             contextMenuHook={contextMenuHook}
                             refreshTrigger={sidebarRefreshTrigger}
                         />
