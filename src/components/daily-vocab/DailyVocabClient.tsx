@@ -1017,20 +1017,26 @@ export default function DailyVocabClient({ embedMode = false, onScrolledCards, f
         return () => observer.disconnect();
     }, [loadingFeed, baseInfiniteWords, cards.length, loadMore, debugLog]);
 
-    // Load saved from localStorage
+    // Load saved from localStorage — keyed by user uid so each user has their own saved list
+    const savedVocabKey = user?.uid ? `wordai_dailyvocab_saved_${user.uid}` : null;
     useEffect(() => {
+        if (!savedVocabKey) { setSavedEntries([]); setSavedIds(new Set()); return; }
         try {
-            const raw = localStorage.getItem('wordai_dailyvocab_saved');
+            const raw = localStorage.getItem(savedVocabKey);
             if (raw) {
                 const entries: SavedVocabEntry[] = JSON.parse(raw);
                 setSavedEntries(entries);
                 setSavedIds(new Set(entries.map((e) => e.wordId)));
+            } else {
+                setSavedEntries([]);
+                setSavedIds(new Set());
             }
         } catch { /* ignore */ }
-    }, []);
+    }, [savedVocabKey]);
 
     const persistSaved = (entries: SavedVocabEntry[]) => {
-        try { localStorage.setItem('wordai_dailyvocab_saved', JSON.stringify(entries)); } catch { /* ignore */ }
+        if (!savedVocabKey) return;
+        try { localStorage.setItem(savedVocabKey, JSON.stringify(entries)); } catch { /* ignore */ }
     };
 
     const toggleSave = useCallback((word: VocabWord) => {

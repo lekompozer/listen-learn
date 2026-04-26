@@ -24,8 +24,9 @@ interface SavedVocabEntry {
     savedAt: number;
 }
 
-function getLocalSavedVocab(): SavedVocabEntry[] {
-    try { return JSON.parse(localStorage.getItem('wordai_dailyvocab_saved') ?? '[]'); }
+function getLocalSavedVocab(uid?: string): SavedVocabEntry[] {
+    const key = uid ? `wordai_dailyvocab_saved_${uid}` : 'wordai_dailyvocab_saved';
+    try { return JSON.parse(localStorage.getItem(key) ?? '[]'); }
     catch { return []; }
 }
 
@@ -278,10 +279,10 @@ export function SavedViewEmbed({ isDark }: { isDark: boolean }) {
 
     const loadVocab = useCallback(async () => {
         setLoading(true); setError(null);
-        try { setVocabEntries(getLocalSavedVocab()); }
+        try { setVocabEntries(getLocalSavedVocab(user?.uid)); }
         catch { setError('Failed to load saved vocab'); }
         finally { setLoading(false); }
-    }, []);
+    }, [user?.uid]);
 
     const reload = tab === 'words' ? loadWords : tab === 'grammar' ? loadGrammar : tab === 'vocab' ? loadVocab : loadVideos;
 

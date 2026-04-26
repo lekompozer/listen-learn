@@ -499,6 +499,7 @@ pub fn run() {
             reading::reading_delete_book,
             reading::reading_save_position,
             reading::reading_read_file,
+            reading::reading_set_user,
             ocr::ocr_extract_text,
             ocr::ocr_extract_text_base64,
         ])

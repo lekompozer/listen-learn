@@ -544,6 +544,19 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
     const handleSendMessage = useCallback(async () => {
         if (!requirements.trim()) return;
 
+        // ── Auth gate: require login before any AI chat ──────────────────────────
+        if (!user) {
+            // Inject a system message nudging the user to log in
+            const loginMsg: AIEditMessage = {
+                type: 'ai',
+                content: '🔒 Vui lòng **đăng nhập** để sử dụng AI Chat.\n\nPlease **sign in** to use AI Chat.',
+                timestamp: new Date(),
+            };
+            setAiChatMessages(prev => [...prev, loginMsg]);
+            setRequirements('');
+            return;
+        }
+
 
 
         // 🔧 FIX: Save requirements and clear immediately (before any async operations)

@@ -20,7 +20,7 @@
  *   6. If true → setUser → modal closes ✅
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import {
     Shield, Eye, EyeOff, Loader2, X, Mail, Lock, User as UserIcon,
@@ -33,6 +33,58 @@ interface LoginModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
+
+// ── Module-level backdrop — stable reference so React never remounts it on re-renders.
+// If defined inside LoginModal, every keystroke (state update) creates a new function
+// type → React unmounts + remounts → input loses focus, video restarts.
+interface LoginBackdropProps {
+    onClose: () => void;
+    videoRef: (el: HTMLVideoElement | null) => void;
+    tagline: string;
+    children: React.ReactNode;
+}
+const LoginBackdrop = memo(function LoginBackdrop({ onClose, videoRef, tagline, children }: LoginBackdropProps) {
+    return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black overflow-hidden">
+                <video
+                    ref={videoRef}
+                    autoPlay loop muted playsInline
+                    className="absolute inset-0 w-full h-full object-cover opacity-80"
+                    src="https://static.wordai.pro/login/video-login1.mp4"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-transparent" />
+            </div>
+            <button onClick={onClose}
+                className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/30 text-white/70 hover:text-white hover:bg-black/50 transition-colors backdrop-blur-sm">
+                <X className="w-5 h-5" />
+            </button>
+            <div className="relative z-10 w-full max-w-[1100px] mx-4 min-h-[560px] md:min-h-[620px] bg-transparent rounded-[24px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] flex flex-col md:flex-row overflow-hidden border border-white/10">
+                {/* Left branding */}
+                <div className="hidden md:flex md:w-1/2 relative flex-col p-12 bg-transparent">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+                    <div className="relative z-10 text-white h-full flex flex-col">
+                        <div className="mb-auto">
+                            <span className="font-black tracking-widest text-xl uppercase">Listen &amp; Learn</span>
+                        </div>
+                        <div className="mt-auto">
+                            <h2 className="text-4xl lg:text-5xl font-extrabold mb-4 tracking-tight drop-shadow-sm">WynAI</h2>
+                            <p className="text-xl font-medium mb-6 text-white/90 drop-shadow-sm">{tagline}</p>
+                            <div className="w-12 h-[3px] bg-white rounded-full mb-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+                            <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/80 leading-relaxed">
+                                Listen · Speak · Learn<br />— powered by AI.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {/* Right form panel */}
+                <div className="w-full md:w-1/2 bg-white/[0.82] backdrop-blur-2xl p-8 md:p-12 lg:p-16 flex flex-col justify-center relative shadow-[-20px_0_40px_-20px_rgba(0,0,0,0.12)] border-l border-white/20">
+                    {children}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 type AuthTab = 'login' | 'register';
 type Screen = 'form' | 'verifying';
@@ -187,60 +239,12 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
     if (!isOpen) return null;
 
-    // Video bg layer — rendered once, ref-controlled to force play in WKWebView
-    const videoBg = (
-        <div className="absolute inset-0 bg-black overflow-hidden">
-            <video
-                ref={setVideoRef}
-                autoPlay loop muted playsInline
-                className="absolute inset-0 w-full h-full object-cover opacity-80"
-                /* Use remote CDN URI to bypass Tauri custom schema byte-range limits on large local MP4s across Windows/Mac/Linux */
-                src="https://static.wordai.pro/login/video-login1.mp4"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-transparent" />
-        </div>
-    );
-
-    // ─── Shared layout wrapper (video bg + card) ────────────────────────────────
-    const Backdrop = ({ children }: { children: React.ReactNode }) => (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-            {videoBg}
-            <button onClick={onClose}
-                className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/30 text-white/70 hover:text-white hover:bg-black/50 transition-colors backdrop-blur-sm">
-                <X className="w-5 h-5" />
-            </button>
-            <div className="relative z-10 w-full max-w-[1100px] mx-4 min-h-[560px] md:min-h-[620px] bg-transparent rounded-[24px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] flex flex-col md:flex-row overflow-hidden border border-white/10">
-                {/* Left branding */}
-                <div className="hidden md:flex md:w-1/2 relative flex-col p-12 bg-transparent">
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-                    <div className="relative z-10 text-white h-full flex flex-col">
-                        <div className="mb-auto">
-                            <span className="font-black tracking-widest text-xl uppercase">Listen &amp; Learn</span>
-                        </div>
-                        <div className="mt-auto">
-                            <h2 className="text-4xl lg:text-5xl font-extrabold mb-4 tracking-tight drop-shadow-sm">WynAI</h2>
-                            <p className="text-xl font-medium mb-6 text-white/90 drop-shadow-sm">
-                                {t('Học tiếng Anh thông minh — mọi lúc, mọi nơi', 'Smart English learning — anytime, anywhere')}
-                            </p>
-                            <div className="w-12 h-[3px] bg-white rounded-full mb-6 shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
-                            <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/80 leading-relaxed">
-                                Listen · Speak · Learn<br />— powered by AI.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                {/* Right form panel */}
-                <div className="w-full md:w-1/2 bg-white/[0.82] backdrop-blur-2xl p-8 md:p-12 lg:p-16 flex flex-col justify-center relative shadow-[-20px_0_40px_-20px_rgba(0,0,0,0.12)] border-l border-white/20">
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
+    const tagline = t('Học tiếng Anh thông minh — mọi lúc, mọi nơi', 'Smart English learning — anytime, anywhere');
 
     // ─── Screen: Verifying email ────────────────────────────────────────────────
     if (screen === 'verifying') {
         return createPortal(
-            <Backdrop>
+            <LoginBackdrop onClose={onClose} videoRef={setVideoRef} tagline={tagline}>
                 <div className="w-full max-w-sm mx-auto text-center">
                     <div className="md:hidden mb-6">
                         <span className="font-black text-xl tracking-widest uppercase text-slate-900">Listen &amp; Learn</span>
@@ -299,14 +303,14 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                         </>
                     )}
                 </div>
-            </Backdrop>,
+            </LoginBackdrop>,
             document.body,
         );
     }
 
     // ─── Screen: Login / Register form ─────────────────────────────────────────
     return createPortal(
-        <Backdrop>
+        <LoginBackdrop onClose={onClose} videoRef={setVideoRef} tagline={tagline}>
             <div className="w-full max-w-sm mx-auto">
                 <div className="md:hidden mb-8 text-center">
                     <span className="font-black text-2xl tracking-widest uppercase text-slate-900">Listen &amp; Learn</span>
@@ -412,7 +416,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                     )}
                 </p>
             </div>
-        </Backdrop>,
+        </LoginBackdrop>,
         document.body,
     );
 }

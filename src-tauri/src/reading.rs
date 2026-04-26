@@ -1,14 +1,34 @@
 /// reading.rs — Local book library for Listen & Learn Reading feature.
 ///
-/// Books are stored in: $APP_LOCAL_DATA/reading/files/<uuid>.<ext>
-/// Metadata index:       $APP_LOCAL_DATA/reading/library.json
+/// Books are stored in: $APP_LOCAL_DATA/reading/<uid>/files/<uuid>.<ext>
+/// Metadata index:       $APP_LOCAL_DATA/reading/<uid>/library.json
 ///
+/// Each Firebase user gets their own isolated reading library.
 /// All file I/O is in Rust — no tauri-plugin-fs needed, no extra permissions.
 /// Frontend gets back `asset://` URLs that Tauri streams directly from disk.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::Manager;
+
+// ─── Per-user state ─────────────────────────────────────────────────────────────
+// The current Firebase UID. Empty string = unauthenticated (library is empty).
+static CURRENT_UID: Mutex<String> = Mutex::new(String::new());
+
+/// Called by the frontend when the user logs in or out.
+/// uid = "" means logged out → all reading commands return empty / error.
+#[tauri::command]
+pub fn reading_set_user(uid: String) {
+    if let Ok(mut stored) = CURRENT_UID.lock() {
+        log::info!("[Reading] set_user uid={:?}", uid);
+        *stored = uid;
+    }
+}
+
+fn current_uid() -> String {
+    CURRENT_UID.lock().map(|g| g.clone()).unwrap_or_default()
+}
 
 // ─── Data model ────────────────────────────────────────────────────────────────
 
@@ -49,8 +69,13 @@ struct Library {
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 fn reading_dir(app: &tauri::AppHandle) -> tauri::Result<PathBuf> {
+    let uid = current_uid();
     let base = app.path().app_local_data_dir()?;
-    Ok(base.join("reading"))
+    if uid.is_empty() {
+        // Unauthenticated — return a path that won't exist (never create it)
+        return Ok(base.join("reading").join("__anonymous__"));
+    }
+    Ok(base.join("reading").join(&uid))
 }
 
 fn files_dir(app: &tauri::AppHandle) -> tauri::Result<PathBuf> {
@@ -130,6 +155,9 @@ pub async fn reading_import_file(
     src_path: String,
     original_name: String,
 ) -> Result<Book, String> {
+    if current_uid().is_empty() {
+        return Err("Not authenticated".into());
+    }
     let src = PathBuf::from(&src_path);
     if !src.exists() {
         return Err(format!("File not found: {src_path}"));
@@ -176,6 +204,10 @@ pub async fn reading_import_file(
 /// List all books in the library, sorted by lastReadAt desc (most recent first).
 #[tauri::command]
 pub async fn reading_list_books(app: tauri::AppHandle) -> Result<Vec<Book>, String> {
+    // Not authenticated — return empty list (don't expose other users' books)
+    if current_uid().is_empty() {
+        return Ok(vec![]);
+    }
     let mut lib = load_library(&app).map_err(|e| e.to_string())?;
 
     // Re-check files still exist; also recompute assetUrl from filePath (migration fix)

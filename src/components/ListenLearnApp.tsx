@@ -12,6 +12,11 @@ import { OnboardingWelcome } from './OnboardingWelcome';
 import { useWordaiAuth } from '@/contexts/WordaiAuthContext';
 import { useLanguage, useTheme } from '@/contexts/AppContext';
 import toast from 'react-hot-toast';
+import { initSpeakStorage } from '@/hooks/useSpeakConversations';
+import { initSavedVideosStorage } from '@/services/conversationLearningService';
+
+const isTauriDesktop = () =>
+    typeof window !== 'undefined' && !!(window as any).__TAURI_DESKTOP__;
 
 const SongLearningTab = dynamic(() => import('@/components/songs/SongLearningTab').then(m => ({ default: m.SongLearningTab })), { ssr: false });
 const DailyVocabTab = dynamic(() => import('@/components/daily-vocab/DailyVocabTab').then(m => ({ default: m.DailyVocabTab })), { ssr: false });
@@ -142,6 +147,24 @@ export default function ListenLearnApp() {
         if (user) {
             checkPremiumStatus();
             checkConversationsPremiumStatus();
+            // Init per-user local storage (Speak + Saved Videos)
+            initSpeakStorage(user.uid);
+            initSavedVideosStorage(user.uid);
+            // Sync reading library to this user (Tauri only)
+            if (isTauriDesktop()) {
+                import('@tauri-apps/api/core').then(({ invoke }) => {
+                    invoke('reading_set_user', { uid: user.uid }).catch(() => { });
+                });
+            }
+        } else {
+            // Logged out — clear user-scoped storage references
+            initSpeakStorage('');
+            initSavedVideosStorage('');
+            if (isTauriDesktop()) {
+                import('@tauri-apps/api/core').then(({ invoke }) => {
+                    invoke('reading_set_user', { uid: '' }).catch(() => { });
+                });
+            }
         }
     }, [user, checkPremiumStatus, checkConversationsPremiumStatus]);
 

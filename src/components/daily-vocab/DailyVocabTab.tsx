@@ -55,10 +55,11 @@ const WYNCODE_URLS: Record<string, string> = {
 };
 
 // ─── Download section (mirrors /download page card) ───────────────────────────
-function DownloadSection({ isDark, name, subtitle, description, accentFrom, accentTo, iconEmoji, iconSrc, urls }: {
+function DownloadSection({ isDark, name, subtitle, description, accentFrom, accentTo, iconEmoji, iconSrc, urls, statusBadge }: {
     isDark: boolean; name: string; subtitle: string; description: string;
     accentFrom: string; accentTo: string; iconEmoji?: string; iconSrc?: string;
     urls: Record<string, string>;
+    statusBadge?: string; // e.g. "DEV" — shown as orange pill next to the title
 }) {
     const openUrl = useCallback(async (url: string, platformLabel: string, platformKey: string) => {
         if (analytics) {
@@ -99,7 +100,14 @@ function DownloadSection({ isDark, name, subtitle, description, accentFrom, acce
                             </div>
                             <div>
                                 <p className={`text-sm font-semibold uppercase tracking-[0.18em] ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>{subtitle}</p>
-                                <h2 className={`text-3xl font-black ${isDark ? 'text-white' : 'text-slate-950'}`}>{name}</h2>
+                                <div className="flex items-center gap-2">
+                                    <h2 className={`text-3xl font-black ${isDark ? 'text-white' : 'text-slate-950'}`}>{name}</h2>
+                                    {statusBadge && (
+                                        <span className="rounded-full bg-orange-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-widest text-white shadow-sm">
+                                            {statusBadge}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -357,6 +365,7 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true }: DailyVocabTab
                         accentTo="to-purple-600"
                         iconSrc="/icon-WynCodeAI-Header.png"
                         urls={WYNCODE_URLS}
+                        statusBadge="DEV"
                     />
                 )}
             </div>
