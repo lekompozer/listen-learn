@@ -59,6 +59,10 @@ const TestGenerationPollingPopup = dynamic(
     () => import('./TestGenerationPollingPopup').then(m => ({ default: m.TestGenerationPollingPopup })),
     { ssr: false }
 );
+const TestQuestionsList = dynamic(
+    () => import('./TestQuestionsList').then(m => ({ default: m.TestQuestionsList })),
+    { ssr: false }
+);
 
 type ViewMode = 'community' | 'my-tests' | 'shared-tests' | 'my-public-tests' | 'test-history' | 'public';
 
@@ -155,6 +159,18 @@ export default function OnlineTestsView() {
                         setSelectedTestSlug(null);
                     }}
                     onStartTest={handleStartTest}
+                />
+            );
+        }
+
+        // Own test detail view (shows 5 action buttons incl. Start Test)
+        if (myOwnTestId) {
+            return (
+                <TestQuestionsList
+                    testId={myOwnTestId}
+                    isDark={isDark}
+                    language={language}
+                    onStartTest={(id) => setTakingTestId(id)}
                 />
             );
         }
@@ -274,12 +290,10 @@ export default function OnlineTestsView() {
                             language={language}
                             selectedTestId={myOwnTestId || selectedTestId}
                             onTestSelect={(id) => {
-                                // Own tests: open directly in TestTakingView (avoid marketplace endpoint)
+                                // Show TestQuestionsList detail page first, don't start immediately
                                 setMyOwnTestId(id);
                                 setSelectedTestId(null);
                                 setSelectedTestSlug(null);
-                                if (user) setTakingTestId(id);
-                                else openUrl(`https://wynai.pro/online-test/take?testId=${id}`);
                             }}
                             onOpenManualTestModal={() => setShowCreateManual(true)}
                             onOpenGenerateFromAIModal={() => setShowGenerateFromAI(true)}

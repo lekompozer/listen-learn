@@ -186,8 +186,8 @@ function VocabNavRail({ isDark, section, onSelect }: {
     const openOnlineTests = useCallback(async () => {
         try {
             const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('open_url', { url: 'https://www.wordai.pro/community-tests' });
-        } catch { window.open('https://www.wordai.pro/community-tests', '_blank'); }
+            await invoke('open_url', { url: 'https://www.wynai.pro/community-tests' });
+        } catch { window.open('https://www.wynai.pro/community-tests', '_blank'); }
     }, []);
 
     const base = `flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition-all`;

@@ -41,13 +41,15 @@ interface TestQuestionsListProps {
     isDark: boolean;
     language: 'vi' | 'en';
     testStatus?: 'pending' | 'generating' | 'ready' | 'failed' | 'draft' | 'loading'; // Pass status from parent
+    onStartTest?: (testId: string) => void; // Override default router.push navigation
 }
 
 export const TestQuestionsList: React.FC<TestQuestionsListProps> = ({
     testId,
     isDark,
     language,
-    testStatus: parentTestStatus // Rename to avoid conflict
+    testStatus: parentTestStatus, // Rename to avoid conflict
+    onStartTest,
 }) => {
     const t = (vi: string, en: string) => language === 'en' ? en : vi;
     const router = useRouter();
@@ -473,7 +475,13 @@ export const TestQuestionsList: React.FC<TestQuestionsListProps> = ({
 
                     {/* Bắt đầu thi - Xanh dương */}
                     <button
-                        onClick={() => router.push(`/online-test/take?testId=${testId}`)}
+                        onClick={() => {
+                            if (onStartTest && testId) {
+                                onStartTest(testId);
+                            } else {
+                                router.push(`/online-test/take?testId=${testId}`);
+                            }
+                        }}
                         className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${isDark
                             ? 'bg-blue-600 hover:bg-blue-700 text-white'
                             : 'bg-blue-500 hover:bg-blue-600 text-white'
