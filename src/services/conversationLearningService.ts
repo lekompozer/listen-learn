@@ -1299,6 +1299,30 @@ export interface ActivateConvKeyResult {
     activated_at: string;
 }
 
+export interface ConversationSubscriptionStatus {
+    is_premium: boolean;
+    plan_type?: '3_months' | '6_months' | '12_months' | string;
+    expires_at?: string | null;
+    price_tier?: 'tier_1' | 'tier_2' | 'no_code' | string;
+    subscription_id?: string;
+}
+
+/**
+ * Get current conversation learning subscription status
+ * GET /api/v1/conversations/subscription/me
+ */
+export async function getConversationSubscriptionStatus(): Promise<ConversationSubscriptionStatus> {
+    const token = await getAuthToken();
+    const res = await fetch(`${CONVERSATION_BASE}/subscription/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw Object.assign(new Error(err.message || 'Failed to load conversation subscription status'), { status: res.status, detail: err });
+    }
+    return res.json();
+}
+
 /**
  * Activate a CONV software key
  * POST /api/v1/conversations/subscription/activate-key
