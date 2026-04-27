@@ -63,7 +63,6 @@ export const ChatMessages = React.memo<ChatMessagesProps>(({
                             <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>
                                 {t('Xin chào! Tôi là Trợ lý AI. Tôi có thể giúp bạn hỏi về tài liệu, đoạn văn bản, code hoặc bất kỳ câu hỏi nào trong học tập và làm việc.', 'Hello! I am an AI assistant. I can help you ask about documents, text excerpts, code, or any questions related to learning and work.')}
                                 {' '}
-                                {t('Bạn có thể bôi đen văn bản trong tài liệu và hỏi tôi về đoạn đấy.', 'You can select text in your document and ask me about it.')}
                             </p>
                         </div>
                     </div>

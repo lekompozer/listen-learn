@@ -15,6 +15,7 @@
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 
 const s3 = new S3Client({
@@ -39,6 +40,7 @@ if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
 
 async function upload(filePath, r2Key, contentType) {
     const body = fs.readFileSync(filePath);
+    const sha256 = crypto.createHash('sha256').update(body).digest('hex');
     await s3.send(new PutObjectCommand({
         Bucket: BUCKET,
         Key: r2Key,
@@ -48,6 +50,9 @@ async function upload(filePath, r2Key, contentType) {
     }));
     const url = `${PUBLIC_URL}/${r2Key}`;
     console.log(`  ✅ Uploaded → ${url}`);
+    if (filePath.endsWith('.exe') || filePath.endsWith('.msi')) {
+        console.log(`     SHA256   → ${sha256}  ← paste this into MS Partner Center`);
+    }
     return url;
 }
 

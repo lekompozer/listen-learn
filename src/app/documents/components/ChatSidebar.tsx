@@ -12,14 +12,8 @@ import {
     type JanLocalConversation,
 } from '@/services/jan/janLocalHistoryService';
 
-// ── Gemma 4 Free (Cloudflare Workers AI) ───────────────────────────────
-// On desktop (Tauri): routed through Rust to avoid CORS — invoke('call_gemma4')
-// On web: direct fetch (requires backend proxy for production)
-const CF_ACCOUNT_ID = process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID || '';
-const CF_AI_TOKEN = process.env.NEXT_PUBLIC_CLOUDFLARE_WORKER_AI_API_KEY || '';
-const GEMMA4_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+// ── Gemma 4 usage tracking (kept for UI display — quota now enforced server-side) ──
 const GEMMA4_DAILY_KEY = 'll_gemma4_daily_chat';
-const GEMMA4_DAILY_LIMIT = 10;
 
 function getGemma4DailyUsage(): number {
     try {
@@ -36,26 +30,6 @@ function incrementGemma4DailyUsage(): void {
         const current = getGemma4DailyUsage();
         localStorage.setItem(GEMMA4_DAILY_KEY, JSON.stringify({ date: today, count: current + 1 }));
     } catch { /* non-fatal */ }
-}
-function canUseGemma4(): boolean { return getGemma4DailyUsage() < GEMMA4_DAILY_LIMIT; }
-async function callGemma4Direct(
-    messages: { role: string; content: string }[]
-): Promise<string> {
-    // Desktop: call Rust command (no CORS)
-    if (typeof window !== 'undefined' && (window as any).__TAURI_DESKTOP__) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        return await invoke<string>('call_gemma4', { messages });
-    }
-    // Web: direct fetch (add server proxy if CORS issues arise)
-    const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${GEMMA4_MODEL}`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CF_AI_TOKEN}` },
-        body: JSON.stringify({ messages, max_tokens: 4000 }),
-    });
-    if (!res.ok) throw new Error(`Gemma4 API error: ${res.status}`);
-    const data = await res.json();
-    return data?.result?.response || data?.choices?.[0]?.message?.content || '';
 }
 
 // Desktop detection (SSR-safe)
@@ -725,43 +699,105 @@ const ChatSidebarComponent: React.FC<ChatSidebarProps> = ({
             return;
         }
 
-        // ── Gemma 4 Free (Cloudflare Workers AI — client-side) ──
+        // ── Gemma 4 — Tauri desktop: Rust invoke | Web: backend /api/ai/chat/stream ──
         if (aiProvider === 'gemma4') {
-            if (!canUseGemma4()) {
-                const limitMsg: AIEditMessage = {
-                    type: 'ai',
-                    content: `⚠️ Bạn đã dùng hết ${GEMMA4_DAILY_LIMIT} lần miễn phí hôm nay. Vui lòng chuyển sang DeepSeek hoặc thử lại vào ngày mai.\n\nYou've used all ${GEMMA4_DAILY_LIMIT} free Gemma 4 turns for today. Please switch to another model or try again tomorrow.`,
-                    timestamp: new Date(),
-                };
-                setAiChatMessages(prev => [...prev, limitMsg]);
-                setIsStreaming(false);
-                return;
-            }
             try {
-                const selectionCtx = savedSelection?.text?.trim()
-                    ? `\n\n[Đoạn văn bản được chọn / Selected text]:\n${savedSelection.text.substring(0, 3000)}`
-                    : '';
-                const systemContent = `Bạn là trợ lý AI thông minh hỗ trợ người dùng học tập và làm việc. Bạn có thể giúp người dùng hỏi về tài liệu, đoạn văn bản đính kèm, code, hoặc bất kỳ câu hỏi nào liên quan đến học tập và công việc. Hãy trả lời ngắn gọn, rõ ràng và hữu ích.${selectionCtx}\n\nYou are a smart AI assistant supporting learning and work. You can help users ask about documents, attached text excerpts, code, or any questions related to learning and work. Be concise, clear, and helpful.${selectionCtx}`;
-                const historyMessages = conversationHistoryRef.current.map(m => ({
-                    role: m.role as 'user' | 'assistant',
-                    content: m.content,
-                }));
-                const messages = [
-                    { role: 'system' as const, content: systemContent },
-                    ...historyMessages,
-                    { role: 'user' as const, content: userQuery },
-                ];
-                const reply = await callGemma4Direct(messages);
+                let accumulated = '';
+
+                // Desktop: use Rust command (credentials baked in binary)
+                if (typeof window !== 'undefined' && (window as any).__TAURI_DESKTOP__) {
+                    const selectionCtx = savedSelection?.text?.trim()
+                        ? `\n\n[Selected text]:\n${savedSelection.text.substring(0, 3000)}`
+                        : '';
+                    const historyMessages = conversationHistoryRef.current.map(m => ({
+                        role: m.role as 'user' | 'assistant',
+                        content: m.content,
+                    }));
+                    const messages = [
+                        { role: 'system' as const, content: `You are a helpful AI assistant.${selectionCtx}` },
+                        ...historyMessages,
+                        { role: 'user' as const, content: userQuery },
+                    ];
+                    const { invoke } = await import('@tauri-apps/api/core');
+                    accumulated = await invoke<string>('call_gemma4', { messages });
+                } else {
+                    // Web: stream through backend
+                    const { firebaseTokenManager } = await import('@/services/firebaseTokenManager');
+                    const token = await firebaseTokenManager.getValidToken();
+                    if (!token) throw new Error('Authentication required');
+
+                    const conversationHistory = conversationHistoryRef.current.map(m => ({
+                        role: m.role as 'user' | 'assistant',
+                        content: m.content,
+                    }));
+
+                    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ai.wordai.pro';
+                    const resp = await fetch(`${API_BASE}/api/ai/chat/stream`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                            provider: 'gemma4',
+                            userMessage: userQuery,
+                            conversationHistory,
+                            stream: true,
+                        }),
+                    });
+
+                    if (!resp.ok) {
+                        const errData = await resp.json().catch(() => ({}));
+                        const errMsg: AIEditMessage = {
+                            type: 'ai',
+                            content: resp.status === 402
+                                ? '⚠️ Bạn đã hết điểm để dùng Gemma 4. Vui lòng nạp thêm hoặc chuyển sang model khác.'
+                                : `Gemma 4 Error: ${errData?.detail || errData?.message || `HTTP ${resp.status}`}`,
+                            timestamp: new Date(),
+                        };
+                        setAiChatMessages(prev => [...prev, errMsg]);
+                        setIsStreaming(false);
+                        return;
+                    }
+
+                    const reader = resp.body?.getReader();
+                    const decoder = new TextDecoder();
+                    let sseBuffer = '';
+
+                    if (reader) {
+                        try {
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                sseBuffer += decoder.decode(value, { stream: true });
+                                const lines = sseBuffer.split('\n');
+                                sseBuffer = lines.pop() ?? '';
+                                for (const line of lines) {
+                                    if (!line.startsWith('data: ')) continue;
+                                    const data = line.slice(6).trim();
+                                    if (data === '[DONE]') break;
+                                    try {
+                                        const chunk = JSON.parse(data);
+                                        if (chunk.type === 'text' && chunk.content) {
+                                            accumulated += chunk.content;
+                                            setStreamingContent(prev => prev + chunk.content);
+                                        }
+                                    } catch { /* skip malformed */ }
+                                }
+                            }
+                        } finally {
+                            reader.releaseLock();
+                        }
+                    }
+                }
+
+                const replyText = accumulated?.trim() || '(Gemma 4 did not return a response — please try again)';
                 incrementGemma4DailyUsage();
                 setGemma4Usage(getGemma4DailyUsage());
-                const replyText = reply?.trim() || '(Gemma 4 did not return a response — please try again)';
                 const aiMsg: AIEditMessage = { type: 'ai', content: replyText, timestamp: new Date() };
                 setAiChatMessages(prev => [...prev, aiMsg]);
-                if (reply?.trim()) {
+                if (accumulated?.trim()) {
                     setConversationHistory(prev => [
                         ...prev,
                         { role: 'user', content: userQuery },
-                        { role: 'assistant', content: reply },
+                        { role: 'assistant', content: accumulated },
                     ]);
                 }
             } catch (err: any) {
