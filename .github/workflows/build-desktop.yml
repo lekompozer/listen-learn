@@ -34,7 +34,7 @@ jobs:
 
           # Windows x64
           - platform: windows-latest
-            args: '--bundles nsis,msi'
+            args: '--bundles nsis'
             rust_target: ''
             artifact_name: WynAI-ListenLearn-windows
             bundle_path: src-tauri/target/release/bundle
