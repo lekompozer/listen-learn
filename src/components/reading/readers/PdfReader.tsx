@@ -148,7 +148,8 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                     await page.render({ canvasContext: ctx, viewport }).promise;
 
                     const textContent = await page.getTextContent();
-                    (pdfjsLib as any).renderTextLayer({ textContent, container: textLayer, viewport, textDivs: [] });
+                    const renderTask = (pdfjsLib as any).renderTextLayer({ textContentSource: textContent, container: textLayer, viewport });
+                    if (renderTask?.promise) await renderTask.promise;
                 } catch (e) {
                     console.error(`[PdfReader] page ${pageNum}:`, e);
                 }
@@ -399,8 +400,13 @@ export default function PdfReader({ book, isDark }: PdfReaderProps) {
                     transform-origin: 0% 0%;
                     -webkit-user-select: text !important;
                     user-select: text !important;
+                    pointer-events: auto !important;
                 }
                 .pdf-text-layer > span::selection {
+                    background: rgba(99,102,241,0.35);
+                    color: transparent;
+                }
+                .pdf-text-layer > span::-moz-selection {
                     background: rgba(99,102,241,0.35);
                     color: transparent;
                 }
