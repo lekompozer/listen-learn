@@ -34,7 +34,7 @@ jobs:
 
           # Windows x64
           - platform: windows-latest
-            args: '--bundles nsis'
+            args: '--bundles nsis,msix'
             rust_target: ''
             artifact_name: WynAI-ListenLearn-windows
             bundle_path: src-tauri/target/release/bundle
@@ -141,7 +141,8 @@ jobs:
             ### Download
             - 🍎 **macOS Apple Silicon**: `WynAI-ListenLearn-mac-arm64.dmg`
             - 🍎 **macOS Intel**: `WynAI-ListenLearn-mac-x64.dmg`
-            - 🪟 **Windows**: `WynAI-ListenLearn-windows-setup.exe`
+            - 🪟 **Windows (direct)**: `WynAI-ListenLearn-windows-setup.exe`
+            - 🪟 **Windows (MS Store)**: `WynAI-ListenLearn-windows.msix`
             - 🐧 **Linux**: `WynAI-ListenLearn-linux.AppImage`
 
             ### Install notes (macOS)
