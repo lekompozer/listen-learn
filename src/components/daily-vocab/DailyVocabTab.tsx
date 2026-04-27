@@ -21,10 +21,6 @@ const DailyVocabClient = dynamic(
     () => import('@/components/daily-vocab/DailyVocabClient'),
     { ssr: false, loading: () => null }
 );
-const OnlineTestsView = dynamic(
-    () => import('@/components/online-tests/OnlineTestsView'),
-    { ssr: false }
-);
 
 type VocabSection = 'daily-vocab' | 'usage-plan' | 'ai-chat' | 'wynai-music' | 'wyncode' | 'ai-learning' | 'online-tests' | 'saved' | 'speak' | 'study-buddy' | 'reading';
 
@@ -187,6 +183,13 @@ function VocabNavRail({ isDark, section, onSelect }: {
         } catch { window.open('https://wordai.pro/blog', '_blank'); }
     }, []);
 
+    const openOnlineTests = useCallback(async () => {
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('open_url', { url: 'https://www.wordai.pro/community-tests' });
+        } catch { window.open('https://www.wordai.pro/community-tests', '_blank'); }
+    }, []);
+
     const base = `flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-semibold transition-all`;
     const active = isDark ? 'bg-teal-600/20 text-teal-300' : 'bg-teal-50 text-teal-700';
     const inactive = isDark ? 'text-gray-300 hover:bg-white/5 hover:text-white' : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900';
@@ -202,7 +205,12 @@ function VocabNavRail({ isDark, section, onSelect }: {
                 {/* QUICK ACTIONS */}
                 <div className="space-y-1 mt-3">
                     <p className={`px-3 text-[10px] font-semibold uppercase tracking-[0.24em] mb-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Quick Actions</p>
-                    {QUICK_ACTIONS.map(({ id, label, icon: Icon }) => (
+                    <button onClick={openOnlineTests} className={`${base} ${inactive}`}>
+                        <Award className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">Online Tests</span>
+                        <ExternalLink className="w-3 h-3 ml-auto opacity-40" />
+                    </button>
+                    {QUICK_ACTIONS.filter(a => a.id !== 'online-tests').map(({ id, label, icon: Icon }) => (
                         <button key={id} onClick={() => onSelect(id)} className={`${base} ${section === id ? active : inactive}`}>
                             <Icon className="w-4 h-4 flex-shrink-0" />
                             <span className="truncate">{label}</span>
@@ -313,10 +321,6 @@ export function DailyVocabTab({ isDark, isSidebarVisible = true, onConvKeyActiva
 
                 {section === 'usage-plan' && (
                     <UsagePlanEmbed isDark={isDark} onConvKeyActivated={onConvKeyActivated} />
-                )}
-
-                {section === 'online-tests' && (
-                    <OnlineTestsView />
                 )}
 
                 {section === 'ai-chat' && (
