@@ -28,10 +28,10 @@ if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
     exit 1
 fi
 
-# Build Next.js static export first
+# Build Next.js static export first (TAURI_BUILD=1 enables output: 'export' in next.config.ts)
 echo "📦 Building Next.js static export..."
 cd "$ROOT_DIR"
-npm run build
+TAURI_BUILD=1 npm run build
 
 echo "🦀 Building Tauri desktop app..."
 npx tauri build

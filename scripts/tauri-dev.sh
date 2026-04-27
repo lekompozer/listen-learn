@@ -12,9 +12,9 @@ lsof -ti:3002 | xargs kill -9 2>/dev/null || true
 # Remove Next.js dev lock if present
 rm -f "$ROOT_DIR/.next/dev/lock"
 
-# Start Next.js in background
+# Start Next.js in background (TAURI_BUILD=1 enables output: 'export' in next.config.ts)
 echo "🟡 Starting Next.js on port 3002..."
-npm run dev:port3002 &
+TAURI_BUILD=1 npm run dev:port3002 &
 NEXT_PID=$!
 
 # Cleanup on exit
